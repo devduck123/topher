@@ -127,6 +127,34 @@ final class SpeechTranscriptionSessionTests: XCTestCase {
     XCTAssertEqual(runtime.receivedInputCount, 1)
   }
 
+  func testMicrophoneTapCanExecuteAwayFromMainActor() async throws {
+    let format = AVAudioFormat(
+      commonFormat: .pcmFormatFloat32,
+      sampleRate: 48_000,
+      channels: 1,
+      interleaved: false
+    )!
+    let buffer = try generatedBuffer(format: format)
+    let callbackRan = expectation(description: "Audio callback ran")
+    let callbackState = CallbackState()
+    let tap = makeMicrophoneTapBlock { _ in
+      callbackState.record(isMainThread: Thread.isMainThread)
+      callbackRan.fulfill()
+    }
+    let invocation = TapInvocation(
+      tap: tap,
+      buffer: buffer,
+      time: AVAudioTime(sampleTime: 0, atRate: format.sampleRate)
+    )
+
+    DispatchQueue(label: "dev.topher.tests.audio-tap").async {
+      invocation.run()
+    }
+
+    await fulfillment(of: [callbackRan], timeout: 1)
+    XCTAssertEqual(callbackState.wasMainThread, false)
+  }
+
   private func makeSession(
     runtime: RuntimeProbe,
     capture: CaptureProbe
@@ -162,6 +190,37 @@ private struct PassthroughConverter: SpeechAudioConverting {
 
   func flush() throws -> [AVAudioPCMBuffer] {
     []
+  }
+}
+
+private final class CallbackState: @unchecked Sendable {
+  private let lock = NSLock()
+  private var recordedMainThread: Bool?
+
+  var wasMainThread: Bool? {
+    lock.withLock { recordedMainThread }
+  }
+
+  func record(isMainThread: Bool) {
+    lock.withLock {
+      recordedMainThread = isMainThread
+    }
+  }
+}
+
+private final class TapInvocation: @unchecked Sendable {
+  private let tap: AVAudioNodeTapBlock
+  private let buffer: AVAudioPCMBuffer
+  private let time: AVAudioTime
+
+  init(tap: @escaping AVAudioNodeTapBlock, buffer: AVAudioPCMBuffer, time: AVAudioTime) {
+    self.tap = tap
+    self.buffer = buffer
+    self.time = time
+  }
+
+  func run() {
+    tap(buffer, time)
   }
 }
 

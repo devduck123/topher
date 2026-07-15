@@ -127,6 +127,20 @@ struct MicrophoneCapture {
   }
 }
 
+/// Creates the Core Audio tap outside main-actor isolation.
+///
+/// AVAudioEngine invokes its tap on a real-time audio queue. Keeping the block
+/// explicitly `@Sendable` prevents Swift from inheriting `MainActor` from the
+/// caller that owns the engine.
+func makeMicrophoneTapBlock(
+  receive: @escaping @Sendable (AVAudioPCMBuffer) -> Void
+) -> AVAudioNodeTapBlock {
+  let tap: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+    receive(buffer)
+  }
+  return tap
+}
+
 @MainActor
 private final class LiveMicrophoneCapture {
   private let engine = AVAudioEngine()
@@ -145,11 +159,8 @@ private final class LiveMicrophoneCapture {
 
     let inputNode = engine.inputNode
     let format = try inputFormat()
-    inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format) {
-      buffer,
-      _ in
-      receive(buffer)
-    }
+    let tap = makeMicrophoneTapBlock(receive: receive)
+    inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format, block: tap)
     tapIsInstalled = true
 
     do {

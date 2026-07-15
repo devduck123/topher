@@ -16,7 +16,8 @@ local dogfooding. Installation in `/Applications`, launch, and process liveness
 were verified for the strictly checked Release bundle. A live Core Audio
 callback-isolation failure was captured, fixed, and covered by an off-main
 regression test. Accuracy, latency, permission-recovery, sleep/wake, and
-repeated-session acceptance remain open.
+repeated-session acceptance remain explicit post-merge dogfood gates; this
+source merge is not evidence that those paths passed.
 The comparative speech benchmark is still open.
 
 ## Implemented in this slice

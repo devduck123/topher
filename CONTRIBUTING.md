@@ -65,7 +65,10 @@ manual acceptance note; unit tests should use injected native seams.
 4. Run formatting, tests, and proportional app-bundle validation.
 5. Update the relevant product, architecture, decision, risk, or evidence doc.
 6. Open a draft pull request and record manual checks still pending.
-7. Merge only after CI and required live acceptance pass.
+7. Merge after CI and required live acceptance pass. For an explicitly
+   experimental source-only merge, the owner may defer a live gate only when
+   the evidence record names the unverified behavior and no release, tag, or
+   distribution claim treats it as passed.
 
 Do not commit build products, local speech assets, recordings, crash reports,
 Xcode user state, certificates, provisioning profiles, `.env` files, or local

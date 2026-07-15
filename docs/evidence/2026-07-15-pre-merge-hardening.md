@@ -3,8 +3,9 @@
 Date: 2026-07-15
 
 This record covers the automated repair pass after the initial installed-app
-speech integration. It does not replace the pending interactive acceptance on
-the user's installed bundle.
+speech integration and the final source-merge gate. It separates verified
+evidence from physical-microphone dogfooding so an experimental source merge is
+not mistaken for a tested or distributable release.
 
 ## Correctness changes
 
@@ -42,9 +43,32 @@ Xcode emitted only its existing App Intents metadata message because Topher
 does not link `AppIntents.framework`; it emitted no Topher compiler or analyzer
 warning.
 
-## Interactive acceptance still required
+## Installed candidate verification
 
-Before merging, install/run the current patched build and verify:
+The Release candidate built from source commit `a78b1a5` was installed at
+`/Applications/Topher.app` and checked independently of Xcode:
+
+- Deep, strict `codesign` verification passed after installation.
+- The installed executable exactly matched the built candidate with SHA-256
+  `ca3e79014467039fe4a5f5add381964dadb855431b37f09e292293f22da5186b`.
+- The installed Mach-O contains both arm64 and x86_64 slices.
+- Hardened Runtime is enabled with an ad-hoc signature. The only Release
+  entitlement is `com.apple.security.device.audio-input`.
+- Bundle identifier, version/build, minimum macOS version, agent-app setting,
+  and microphone usage description matched the checked project configuration.
+- The installed app launched as `/Applications/Topher.app`, remained alive
+  during the verification window, and produced no new Topher diagnostic crash
+  report. The only report present remained the 2026-07-14 pre-fix crash used to
+  drive the callback-isolation repair.
+
+This verifies build/install integrity and launch stability. It does not verify
+recognition accuracy or the end-to-end physical shortcut and microphone path.
+
+## Deferred interactive dogfood
+
+The repository owner explicitly deferred physical-microphone acceptance while
+feature exploration continues. Before describing 0.3.0 as tested or
+release-quality, run the installed candidate and verify:
 
 1. Fresh microphone grant and deny -> System Settings -> grant recovery.
 2. Preparing feedback appears immediately while another app is focused, and
@@ -55,5 +79,11 @@ Before merging, install/run the current patched build and verify:
    stuck capture, duplicate execution, or a new crash report.
 5. Relaunch once and repeat a supported command.
 
+Record the macOS version, input device, shortcut, command corpus, pass/fail
+counts, any clipped or duplicate result, and the timestamps of matching
+metadata-only Unified Log events. Do not record raw audio or transcript text in
+diagnostics.
+
 The 100-session run, external audio routes, sleep/wake, speech-engine benchmark,
-Developer ID signing, and notarization remain later gates.
+Developer ID signing, and notarization remain later gates. Deferring them is an
+explicit experimental-merge tradeoff, not evidence that they passed.

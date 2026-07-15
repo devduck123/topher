@@ -4,5 +4,21 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 *.xcresult
+*.xcarchive
+*.ips
+*.crash
 .topher-local/
+.topher-local/recordings/
 .DS_Store
+
+# Credentials and Apple signing material must never enter source control.
+.env
+.env.*
+!.env.example
+*.key
+*.p8
+*.p12
+*.pfx
+*.pem
+*.mobileprovision
+*.provisionprofile

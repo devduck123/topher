@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+.topher-local/
+.DS_Store

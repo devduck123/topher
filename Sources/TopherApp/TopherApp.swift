@@ -13,8 +13,16 @@ struct TopherApp: App {
   @StateObject private var model = TopherModel()
 
   var body: some Scene {
-    MenuBarExtra("Topher", systemImage: model.phase.symbolName) {
+    MenuBarExtra {
       MenuContentView(model: model)
+    } label: {
+      Image(systemName: model.phase.symbolName)
+        .accessibilityLabel("Topher")
+        .background {
+          VoiceFeedbackHUDPresenter(phase: model.phase)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+        }
     }
     .menuBarExtraStyle(.window)
   }

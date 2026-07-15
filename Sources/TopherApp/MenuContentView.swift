@@ -10,7 +10,7 @@ struct MenuContentView: View {
       HStack(spacing: 10) {
         Image(systemName: model.phase.symbolName)
           .font(.title2)
-          .symbolEffect(.pulse, isActive: model.phase == .listening)
+          .symbolEffect(.pulse, isActive: model.phase.isListening)
 
         VStack(alignment: .leading, spacing: 2) {
           Text(model.phase.title)
@@ -29,18 +29,45 @@ struct MenuContentView: View {
         name: .pushToTalk
       )
 
-      VStack(alignment: .leading, spacing: 6) {
-        Text("Mock transcript")
+      HStack(spacing: 8) {
+        Image(
+          systemName: model.voiceReadiness == .ready
+            ? "mic.circle.fill"
+            : "mic.circle"
+        )
+        .foregroundStyle(model.voiceReadiness == .ready ? .green : .secondary)
+
+        Text(model.voiceReadiness.title)
           .font(.caption)
           .foregroundStyle(.secondary)
 
-        TextField("Open Safari or search YouTube…", text: $model.mockTranscript)
+        Spacer()
+
+        if model.voiceReadiness.canPrepare {
+          Button("Enable Voice") {
+            model.prepareVoiceInput()
+          }
+          .controlSize(.small)
+        } else if model.voiceReadiness.needsSettings {
+          Button("Open Settings") {
+            model.openMicrophoneSettings()
+          }
+          .controlSize(.small)
+        }
+      }
+
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Manual transcript (development fallback)")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+
+        TextField("Open Safari or search YouTube…", text: $model.manualTranscript)
           .textFieldStyle(.roundedBorder)
           .onSubmit(model.runManually)
       }
 
       HStack {
-        Text("Hold to simulate")
+        Text("Hold to talk")
           .padding(.horizontal, 10)
           .padding(.vertical, 5)
           .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
@@ -54,6 +81,7 @@ struct MenuContentView: View {
           model.runManually()
         }
         .keyboardShortcut(.return, modifiers: [])
+        .disabled(model.phase.isBusy)
 
         Spacer()
 
@@ -64,5 +92,13 @@ struct MenuContentView: View {
     }
     .padding(16)
     .frame(width: 360)
+    .onAppear {
+      model.refreshVoiceReadiness()
+    }
+    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification))
+    {
+      _ in
+      model.refreshVoiceReadiness()
+    }
   }
 }

@@ -15,6 +15,12 @@
 		A00000000000000000000033 /* TopherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000023 /* TopherApp.swift */; };
 		A00000000000000000000034 /* TopherModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000024 /* TopherModel.swift */; };
 		A00000000000000000000035 /* WebOpenCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000025 /* WebOpenCapability.swift */; };
+		A00000000000000000000036 /* MicrophonePermissionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000026 /* MicrophonePermissionClient.swift */; };
+		A00000000000000000000037 /* SpeechAssetPreparationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000027 /* SpeechAssetPreparationClient.swift */; };
+		A00000000000000000000038 /* SpeechAudioConversion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000028 /* SpeechAudioConversion.swift */; };
+		A00000000000000000000039 /* SpeechTranscriptionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000029 /* SpeechTranscriptionSession.swift */; };
+		A0000000000000000000003A /* VoiceTranscriptionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002A /* VoiceTranscriptionClient.swift */; };
+		A0000000000000000000003B /* VoiceFeedbackHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002C /* VoiceFeedbackHUD.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +31,13 @@
 		A00000000000000000000023 /* TopherApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopherApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000024 /* TopherModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopherModel.swift; sourceTree = "<group>"; };
 		A00000000000000000000025 /* WebOpenCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebOpenCapability.swift; sourceTree = "<group>"; };
+		A00000000000000000000026 /* MicrophonePermissionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionClient.swift; sourceTree = "<group>"; };
+		A00000000000000000000027 /* SpeechAssetPreparationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAssetPreparationClient.swift; sourceTree = "<group>"; };
+		A00000000000000000000028 /* SpeechAudioConversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAudioConversion.swift; sourceTree = "<group>"; };
+		A00000000000000000000029 /* SpeechTranscriptionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechTranscriptionSession.swift; sourceTree = "<group>"; };
+		A0000000000000000000002A /* VoiceTranscriptionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTranscriptionClient.swift; sourceTree = "<group>"; };
+		A0000000000000000000002B /* Topher.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Topher.entitlements; sourceTree = "<group>"; };
+		A0000000000000000000002C /* VoiceFeedbackHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceFeedbackHUD.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,8 +75,15 @@
 				A00000000000000000000020 /* ApplicationOpenCapability.swift */,
 				A00000000000000000000021 /* KeyboardShortcut.swift */,
 				A00000000000000000000022 /* MenuContentView.swift */,
+				A00000000000000000000026 /* MicrophonePermissionClient.swift */,
+				A00000000000000000000027 /* SpeechAssetPreparationClient.swift */,
+				A00000000000000000000028 /* SpeechAudioConversion.swift */,
+				A00000000000000000000029 /* SpeechTranscriptionSession.swift */,
+				A0000000000000000000002B /* Topher.entitlements */,
 				A00000000000000000000023 /* TopherApp.swift */,
 				A00000000000000000000024 /* TopherModel.swift */,
+				A0000000000000000000002C /* VoiceFeedbackHUD.swift */,
+				A0000000000000000000002A /* VoiceTranscriptionClient.swift */,
 				A00000000000000000000025 /* WebOpenCapability.swift */,
 			);
 			name = TopherApp;
@@ -149,8 +169,14 @@
 				A00000000000000000000030 /* ApplicationOpenCapability.swift in Sources */,
 				A00000000000000000000031 /* KeyboardShortcut.swift in Sources */,
 				A00000000000000000000032 /* MenuContentView.swift in Sources */,
+				A00000000000000000000036 /* MicrophonePermissionClient.swift in Sources */,
+				A00000000000000000000037 /* SpeechAssetPreparationClient.swift in Sources */,
+				A00000000000000000000038 /* SpeechAudioConversion.swift in Sources */,
+				A00000000000000000000039 /* SpeechTranscriptionSession.swift in Sources */,
 				A00000000000000000000033 /* TopherApp.swift in Sources */,
 				A00000000000000000000034 /* TopherModel.swift in Sources */,
+				A0000000000000000000003B /* VoiceFeedbackHUD.swift in Sources */,
+				A0000000000000000000003A /* VoiceTranscriptionClient.swift in Sources */,
 				A00000000000000000000035 /* WebOpenCapability.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -206,10 +232,11 @@
 		A0000000000000000000000E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Sources/TopherApp/Topher.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -217,11 +244,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Topher;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Topher uses the microphone only while you hold your push-to-talk shortcut to transcribe commands on this Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.topher.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -232,11 +260,12 @@
 		A0000000000000000000000F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Sources/TopherApp/Topher.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -244,11 +273,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Topher;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Topher uses the microphone only while you hold your push-to-talk shortcut to transcribe commands on this Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.topher.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

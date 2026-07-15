@@ -1,6 +1,6 @@
 # Focused technical investigation
 
-Status: 2026-07-14
+Status: 2026-07-15
 
 ## Recommendation
 
@@ -39,13 +39,20 @@ extension to the current slice.
 | Extra project generators | No XcodeGen or Tuist |
 | Installed MVP applications | Safari, Google Chrome, and Visual Studio Code bundle IDs resolve locally |
 
-The initial Command Line Tools limitation is resolved. With full Xcode selected,
-SwiftPM builds the complete product and all 24 XCTest cases pass. The Xcode
-project builds Debug and Release application bundles. The verified Release is a
-universal `Topher.app` with fixed identifier `dev.topher.app`, `LSUIElement`, a
-hardened runtime, no release entitlements, and a valid local ad-hoc signature.
-It is installed in `/Applications`, remains running, and its launch logs confirm
-that AppKit created the status-item scene.
+The initial Command Line Tools limitation is resolved. At the 0.2.0 baseline,
+full Xcode built the SwiftPM product with all 24 tests and produced Debug and
+Release application bundles. That verified Release was a universal `Topher.app`
+with fixed identifier `dev.topher.app`, `LSUIElement`, a hardened runtime, no
+Release entitlements, and a valid local ad-hoc signature. Installation in
+`/Applications`, launch, status-item creation, and process liveness were
+verified.
+
+The current 0.3.0 speech branch passes 62 tests and adds only the Release
+audio-input entitlement required for microphone capture. See the dated
+[speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
+installed bundle and live callback verification, and the
+[pre-merge hardening evidence](evidence/2026-07-15-pre-merge-hardening.md) for
+the latest automated lifecycle and HUD checks.
 
 Live framework probes, run outside the restricted build sandbox, returned:
 
@@ -116,6 +123,27 @@ the shared `TopherApp` scheme for `.app` builds. The similarly named SwiftPM
 executable remains a compiler/test convenience and does not replace bundle
 validation.
 
+### Current security and distribution posture
+
+The Xcode target explicitly enables Hardened Runtime and disables App Sandbox.
+Those settings are independent: Hardened Runtime constrains the signed process,
+but the current application is not sandboxed. The Release signature is local
+and ad hoc, with only `com.apple.security.device.audio-input`; Debug also has
+Xcode's development-only `com.apple.security.get-task-allow`. The only current
+TCC request is microphone access. There is no Accessibility, Automation/Apple
+Events, Screen Recording, or legacy `SFSpeechRecognizer` authorization request.
+
+Google/YouTube navigation uses validated fixed HTTPS destinations and delegates
+them to the default browser through `NSWorkspace`. Topher has no direct network
+client, embedded web view, browser extension/native-messaging host, or browser
+page/tab capture implementation. The destination browser—not Topher—performs
+the resulting network request.
+
+This is a local-dogfood posture, not a distribution design. Revisit App Sandbox
+and capability entitlements before adding direct network or browser-content
+access. Adopt a stable Developer ID identity, verify permission persistence, and
+notarize before distributing Topher to other Macs.
+
 ## Speech technology comparison
 
 No candidate has been selected because no representative user recordings were
@@ -180,28 +208,32 @@ is untrusted data and must never share the user-instruction channel.
 
 ## Permissions
 
-Slice 1 requests no privacy permissions. Opening registered applications and
-reading the frontmost application do not require Accessibility.
+The 0.3.0 direct-Apple speech integration adds
+`NSMicrophoneUsageDescription` and the Hardened Runtime
+[`com.apple.security.device.audio-input`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.audio-input)
+entitlement. Topher asks only on an explicit voice action; the privacy string
+does not replace the resource-access entitlement. A focused permission manager
+reports not-determined/authorized/denied/restricted state, handles the one
+request, opens the Microphone settings pane, and refreshes on app activation.
 
-When speech is integrated:
-
-- Add `NSMicrophoneUsageDescription` and the Hardened Runtime
-  [`com.apple.security.device.audio-input`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.audio-input)
-  entitlement, then ask only on the user's first voice action. The privacy
-  string does not replace the resource-access entitlement.
-- A direct `SpeechAnalyzer`/`SpeechTranscriber` pipeline stays on device and does
-  not require `SFSpeechRecognizer` server authorization according to Apple's
-  [speech permission guidance](https://developer.apple.com/documentation/speech/asking-permission-to-use-speech-recognition).
-- Add `NSSpeechRecognitionUsageDescription` only if a selected implementation
-  actually invokes `SFSpeechRecognizer`.
-- Do not add Accessibility or Screen Recording usage descriptions before those
-  capabilities exist.
-
-A small permission manager becomes warranted in the speech slice, when there is
-one real permission to explain, inspect, request, and recover. Adding it now
-would be speculative.
+The direct `SpeechAnalyzer`/`SpeechTranscriber` pipeline stays on device and does
+not require `SFSpeechRecognizer` server authorization according to Apple's
+[speech permission guidance](https://developer.apple.com/documentation/speech/asking-permission-to-use-speech-recognition).
+Accordingly, the current target has no `NSSpeechRecognitionUsageDescription`.
+Add it only if a future selected implementation actually invokes
+`SFSpeechRecognizer`. Do not add Accessibility or Screen Recording usage
+descriptions before those capabilities exist.
 
 ## Context and browser path
+
+The canonical cross-channel product contract is now documented in
+[Interaction modes](product/interaction-modes.md), and the shared source,
+context, policy, capability, and result design is in
+[Request lifecycle and context](architecture/request-lifecycle.md). In
+particular, global assistant commands, focused-field dictation, local wake
+detection, and remote chat ingress are distinct modes. A source-aware boundary
+routes each request kind before typed proposals converge on shared downstream
+controls.
 
 Do not create a general `ContextBroker` yet. The first context command can query
 `NSWorkspace.frontmostApplication` directly behind a small read-only provider.
@@ -240,21 +272,28 @@ stay below structured app/browser interfaces in the execution hierarchy.
 
 ## What exists now versus what waits
 
-Authored and locally type-checked now:
+Authored, tested, and built now:
 
 - `TopherCommand`, fixed `ApplicationTarget`, deterministic resolver, and policy.
 - Fixed `WebsiteTarget`, `SearchProvider`, and bounded `SearchQuery` values.
 - Native application-open and web-navigation capabilities with risk/access
   metadata and small injected `NSWorkspace` facades.
 - One observable UI state model.
-- Menu-bar UI, mock PTT lifecycle, manual transcript input, and typed outcome.
-- Parser, query validation, policy, and native capability unit tests. The
-  facades let lookup, URL handoff, success, and failure be tested without
-  launching applications or the default browser.
+- Direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine` capture,
+  `AVAudioConverter`, runtime asset preparation, and microphone permission
+  boundaries.
+- Real push-to-talk start/partial/finalize/cancel behavior with listening and
+  finalization watchdogs, generation guards, and immediate stream recovery.
+- Menu-bar UI, transient non-activating voice HUD, manual transcript fallback,
+  and typed outcome.
+- Parser, query validation, policy, native capability, permission, asset,
+  conversion, transcription-session, and lifecycle-race tests. Injected facades
+  keep unit tests from launching applications, opening a browser, or using a
+  real microphone.
 
 Waits for measured need:
 
-- Audio/transcriber protocols, permission manager, context broker, capability
-  registry collection, model-provider abstraction, overlay panel, browser page
-  or tab adapter, accessibility/screen providers, wake word, and persistent
+- Comparative speech adapters and the measured user-voice corpus, context
+  broker, capability registry collection, model-provider abstraction, browser
+  page or tab adapter, accessibility/screen providers, wake word, and persistent
   history.

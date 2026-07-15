@@ -43,17 +43,27 @@ Console.app can stream them too; filter on the subsystem `dev.topher.app`.
 The control path records only these event shapes:
 
 - Push-to-talk started, ended, or timed out.
+- Microphone permission denied or restricted.
+- Local speech asset preparation failed.
+- Voice capture failed to start, its result stream stopped/failed, or
+  finalization failed/timed out.
+- Voice capture completed without usable speech.
 - A fixed registered capability identifier started.
 - A capability completed or failed.
 - An unsupported command was rejected.
 
 It intentionally does not record:
 
-- The manual transcript or future speech transcript.
+- The manual transcript, live partials, or final speech transcript.
 - Search terms, URLs, page contents, or browser history.
 - Raw audio.
 - Application names or bundle identifiers selected by a command.
 - Detailed errors that might contain user data.
+
+Raw microphone buffers are passed to Apple's local speech analyzer and are not
+written to an audio file or project-owned cache. Speech text exists transiently
+in Topher's process memory and visible UI until command processing or later UI
+state replaces it. “Not logged” is not the same as “never held in memory.”
 
 For searches, the query is still transmitted to the selected provider when the
 default browser opens Google or YouTube, and normal browser history or provider

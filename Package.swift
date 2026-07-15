@@ -24,7 +24,8 @@ let package = Package(
       dependencies: [
         "TopherCore",
         .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
-      ]
+      ],
+      exclude: ["Topher.entitlements"]
     ),
     .testTarget(
       name: "TopherCoreTests",

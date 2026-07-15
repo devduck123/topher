@@ -151,14 +151,26 @@ Post-fix verification:
 
 ## Privacy boundary checked in source and tests
 
+- Build settings enable Hardened Runtime and disable App Sandbox; Hardened
+  Runtime does not make the current target sandboxed.
+- The Release signature contains only
+  `com.apple.security.device.audio-input`. Debug additionally receives Xcode's
+  development-only `com.apple.security.get-task-allow` entitlement.
 - The target requests microphone capture only. It has no Accessibility,
-  Automation/Apple Events, Screen Recording, or App Sandbox network entitlement.
+  Automation/Apple Events, or Screen Recording permission.
 - The direct `SpeechAnalyzer` path does not call `SFSpeechRecognizer` and does
   not request its legacy authorization.
+- Current web navigation delegates fixed HTTPS URLs to the default browser via
+  `NSWorkspace`. Topher has no direct network client, embedded browser,
+  extension/native-messaging host, or browser-page/tab capture implementation.
 - Raw audio is not persisted.
 - Transcript text, search text, URLs, application names, and detailed framework
   errors are not sent to Unified Logging.
 - Unified Logging receives only fixed lifecycle/capability metadata.
+- The installed build is locally ad-hoc signed, not Developer ID signed or
+  notarized. App Sandbox, capability entitlements, signing, and notarization
+  must be revisited before direct network/browser-content access or broader
+  distribution.
 
 ## Pending installed-app acceptance
 

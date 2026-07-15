@@ -8,7 +8,7 @@ speech-to-action loop survives the reliability slice.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. `swift test` passes all 54 tests and the SwiftPM product builds.
+2. `swift test` passes all 62 tests and the SwiftPM product builds.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
@@ -56,14 +56,17 @@ pretending the permanent engine decision has been made.
   microphone permission manager.
 - Complete: `NSMicrophoneUsageDescription` and only the Hardened Runtime
   `com.apple.security.device.audio-input` entitlement needed by capture.
+  Hardened Runtime is enabled; App Sandbox is currently disabled and must be
+  revisited before broader capabilities or distribution.
 - Complete: the manager names the feature and reason, exposes authorization
   state, requests only from a user voice action, explains denied/restricted
-  recovery, provide a verified route to the correct System Settings pane,
+  recovery, provides a verified route to the correct System Settings pane,
   and refreshes state when Topher becomes active.
 - Complete: no speech-recognition authorization because the current direct path
   does not use `SFSpeechRecognizer`.
-- Complete: hotkey down starts capture and key-up explicitly finalizes it; live
-  partials appear in the menu and transient cross-app HUD.
+- Complete: hotkey down starts capture and key-up explicitly finalizes it. A
+  voice-only cross-app HUD covers preparation, listening, finalization,
+  execution, and transient outcomes; finalized text replaces stale partials.
 - Complete: 30-second listening and 8-second finalization watchdogs, immediate
   stream failure recovery, stale-generation rejection, and regression tests for
   key-up/cancellation races.

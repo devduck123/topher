@@ -9,7 +9,7 @@ allowlisted Google/YouTube navigation.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development build passes all 54 Swift tests and automated
+Status: the 0.3.0 development build passes all 62 Swift tests and automated
 Debug/Release app-bundle checks. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -27,7 +27,7 @@ The comparative speech benchmark is still open.
   permission and local assets are ready; key up stops capture and explicitly
   finalizes the transcript.
 - Live partial text in Topher and a transient, non-activating cross-app voice
-  HUD while listening/finalizing.
+  HUD for preparation, listening, finalization, execution, and outcomes.
 - A 30-second listening watchdog, an 8-second finalization watchdog, immediate
   stream-error recovery, and generation guards against late results.
 - Direct Apple on-device transcription for fixed `en_US`, with on-demand asset
@@ -115,16 +115,38 @@ system or application shortcut.
 ## Voice privacy and permissions
 
 Topher asks for microphone access only from an explicit voice action. Its app
-bundle contains `NSMicrophoneUsageDescription` and only the Hardened Runtime
-audio-input entitlement needed for capture. The direct `SpeechAnalyzer` path
-does not request legacy `SFSpeechRecognizer` authorization, Accessibility,
-Automation, Screen Recording, or Apple Events access.
+bundle contains `NSMicrophoneUsageDescription`; the Release signature contains
+only the `com.apple.security.device.audio-input` entitlement needed for capture.
+The direct `SpeechAnalyzer` path does not request legacy `SFSpeechRecognizer`
+authorization, Accessibility, Automation/Apple Events, or Screen Recording
+access.
 
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
 not written to disk. Partial/final transcripts exist transiently in process
 memory and UI so the requested command can run; Topher does not persist or log
 them. Denied microphone access links to the macOS Microphone privacy pane and is
 rechecked when Topher becomes active again.
+
+## Current macOS security posture
+
+Hardened Runtime is enabled, while App Sandbox is currently disabled. These are
+separate protections: the current local build must not be described as
+sandboxed merely because Hardened Runtime is on. Debug and Release use local
+ad-hoc signing; Debug also receives Xcode's development-only
+`com.apple.security.get-task-allow` entitlement. There is no Developer ID
+signature or notarized release.
+
+The current web commands construct allowlisted HTTPS destinations and hand them
+to the user's default browser through `NSWorkspace`. Topher itself has no direct
+network client, embedded browser, Chrome extension/native-messaging host,
+browser-page or tab capture, Accessibility provider, or screen-capture
+implementation. The browser performs the external request and maintains its
+normal history when the user explicitly runs a search or navigation command.
+
+Before Topher adds direct networking, browser-content adapters, broader local
+data access, or distribution to other Macs, revisit the App Sandbox decision,
+capability-specific entitlements, stable Developer ID signing, notarization,
+and the corresponding permission and denial-recovery tests.
 
 ## Logs and diagnostics
 
@@ -160,6 +182,7 @@ and the macOS-to-web-development mental model.
 - [Implementation plan](docs/implementation-plan.md)
 - [Risk register](docs/risks.md)
 - [Local diagnostics](docs/local-diagnostics.md)
+- [Latest pre-merge verification](docs/evidence/2026-07-15-pre-merge-hardening.md)
 - [Decision records](docs/decisions/0001-native-macos-26.md)
 - [Contributing and macOS development practices](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)

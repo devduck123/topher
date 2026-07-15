@@ -19,7 +19,7 @@ struct TopherApp: App {
       Image(systemName: model.phase.symbolName)
         .accessibilityLabel("Topher")
         .background {
-          VoiceFeedbackHUDPresenter(phase: model.phase)
+          VoiceFeedbackHUDPresenter(feedback: model.voiceFeedback)
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
         }

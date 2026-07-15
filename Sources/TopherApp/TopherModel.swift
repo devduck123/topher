@@ -136,17 +136,29 @@ final class TopherModel: ObservableObject {
 
     var needsSettings: Bool {
       switch self {
-      case .denied, .restricted:
+      case .denied:
         true
-      case .checking, .needsPermission, .needsAssets, .preparing, .ready, .unavailable:
+      case .checking, .needsPermission, .needsAssets, .preparing, .ready, .restricted,
+        .unavailable:
         false
       }
     }
   }
 
+  enum VoiceFeedback: Equatable {
+    case hidden
+    case preparing(String)
+    case listening(String)
+    case finalizing(String)
+    case executing(String)
+    case success(String)
+    case failure(String)
+  }
+
   @Published var manualTranscript = "Open Safari."
   @Published private(set) var phase: Phase = .idle
   @Published private(set) var voiceReadiness: VoiceReadiness
+  @Published private(set) var voiceFeedback: VoiceFeedback = .hidden
 
   private let resolver: CommandResolver
   private let policy: CommandPolicy
@@ -157,16 +169,22 @@ final class TopherModel: ObservableObject {
   private let voiceTranscription: VoiceTranscriptionClient
   private let listeningTimeout: Duration
   private let finalizationTimeout: Duration
+  private let voiceFeedbackResultDuration: Duration
   private let logger = Logger(subsystem: "dev.topher.app", category: "control-path")
 
   private var shortcutEventsTask: Task<Void, Never>?
   private var voiceLifecycleTask: Task<Void, Never>?
   private var voiceEventsTask: Task<Void, Never>?
   private var listeningTimeoutTask: Task<Void, Never>?
+  private var voiceReadinessRefreshTask: Task<Void, Never>?
+  private var voiceFeedbackDismissalTask: Task<Void, Never>?
   private var isPushToTalkHeld = false
   private var isVoiceCleanupPending = false
   private var voiceGeneration: UInt64 = 0
+  private var voiceReadinessGeneration: UInt64 = 0
+  private var voiceFeedbackGeneration: UInt64 = 0
   private var finalVoiceTranscript = ""
+  private var activePermissionFailure: MicrophonePermissionState?
 
   init(
     resolver: CommandResolver = .init(),
@@ -178,6 +196,7 @@ final class TopherModel: ObservableObject {
     voiceTranscription: VoiceTranscriptionClient? = nil,
     listeningTimeout: Duration = .seconds(30),
     finalizationTimeout: Duration = .seconds(8),
+    voiceFeedbackResultDuration: Duration = .seconds(3),
     listenForShortcutEvents: Bool = true
   ) {
     self.resolver = resolver
@@ -189,6 +208,7 @@ final class TopherModel: ObservableObject {
     self.voiceTranscription = voiceTranscription ?? .live()
     self.listeningTimeout = listeningTimeout
     self.finalizationTimeout = finalizationTimeout
+    self.voiceFeedbackResultDuration = voiceFeedbackResultDuration
     voiceReadiness = Self.permissionReadiness(self.microphonePermission.currentState)
 
     if listenForShortcutEvents {
@@ -216,19 +236,31 @@ final class TopherModel: ObservableObject {
     voiceLifecycleTask?.cancel()
     voiceEventsTask?.cancel()
     listeningTimeoutTask?.cancel()
+    voiceReadinessRefreshTask?.cancel()
+    voiceFeedbackDismissalTask?.cancel()
   }
 
   func refreshVoiceReadiness() {
+    invalidateVoiceReadinessRefresh()
+    let token = voiceReadinessGeneration
     let permissionState = microphonePermission.currentState
     guard permissionState == .authorized else {
       voiceReadiness = Self.permissionReadiness(permissionState)
+      reconcilePhase(with: permissionState)
       return
     }
 
+    reconcilePhase(with: permissionState)
     voiceReadiness = .checking
-    Task { [weak self] in
-      guard let self else { return }
+    let speechAssets = speechAssets
+    voiceReadinessRefreshTask = Task { [weak self] in
       let assetState = await speechAssets.readiness()
+      guard
+        let self,
+        !Task.isCancelled,
+        voiceReadinessGeneration == token,
+        microphonePermission.currentState == .authorized
+      else { return }
       voiceReadiness = Self.assetReadiness(assetState)
     }
   }
@@ -236,13 +268,14 @@ final class TopherModel: ObservableObject {
   func prepareVoiceInput() {
     guard !phase.isBusy, !isVoiceCleanupPending else { return }
     isPushToTalkHeld = false
-    startVoicePreparation(startWhenReady: false)
+    hideVoiceFeedback()
+    startVoicePreparation(startWhenReady: false, presentsGlobalFeedback: false)
   }
 
   func beginPushToTalk() {
     guard !phase.isBusy, !isVoiceCleanupPending, !isPushToTalkHeld else { return }
     isPushToTalkHeld = true
-    startVoicePreparation(startWhenReady: true)
+    startVoicePreparation(startWhenReady: true, presentsGlobalFeedback: true)
   }
 
   func endPushToTalk() {
@@ -252,6 +285,13 @@ final class TopherModel: ObservableObject {
     listeningTimeoutTask?.cancel()
     listeningTimeoutTask = nil
     phase = .finalizingVoice
+    let visibleTranscript =
+      if case .listening(let transcript) = voiceFeedback {
+        transcript
+      } else {
+        finalVoiceTranscript
+      }
+    presentVoiceFeedback(.finalizing(visibleTranscript))
     logger.info("Push-to-talk ended")
 
     let token = voiceGeneration
@@ -266,12 +306,14 @@ final class TopherModel: ObservableObject {
         let transcript = finalVoiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         clearVoiceResultState()
         guard !transcript.isEmpty else {
-          phase = .failure("I didn’t hear a command. Hold the shortcut and try again.")
+          let message = "I didn’t hear a command. Hold the shortcut and try again."
+          phase = .failure(message)
+          presentVoiceResult(.failure(message))
           logger.notice("Voice capture completed without speech")
           return
         }
 
-        processTranscript(transcript)
+        processTranscript(transcript, source: .voice)
       case .failed:
         await failAndCancelVoice(
           token: token,
@@ -290,11 +332,13 @@ final class TopherModel: ObservableObject {
 
   func runManually() {
     guard !phase.isBusy, !isVoiceCleanupPending else { return }
+    activePermissionFailure = nil
+    hideVoiceFeedback()
     phase = .transcribing
     let transcript = manualTranscript
     Task { [weak self] in
       await Task.yield()
-      self?.processTranscript(transcript)
+      self?.processTranscript(transcript, source: .manual)
     }
   }
 
@@ -308,42 +352,75 @@ final class TopherModel: ObservableObject {
     NSWorkspace.shared.open(url)
   }
 
-  private func startVoicePreparation(startWhenReady: Bool) {
+  private func startVoicePreparation(
+    startWhenReady: Bool,
+    presentsGlobalFeedback: Bool
+  ) {
     voiceLifecycleTask?.cancel()
     listeningTimeoutTask?.cancel()
+    invalidateVoiceReadinessRefresh()
     clearVoiceResultState()
+    activePermissionFailure = nil
     phase = .preparingVoice
+    if presentsGlobalFeedback {
+      presentVoiceFeedback(.preparing("Checking microphone access…"))
+    }
     voiceGeneration &+= 1
     let token = voiceGeneration
 
     voiceLifecycleTask = Task { [weak self] in
       guard let self else { return }
-      await prepareAndMaybeStartVoice(token: token, startWhenReady: startWhenReady)
+      await prepareAndMaybeStartVoice(
+        token: token,
+        startWhenReady: startWhenReady,
+        presentsGlobalFeedback: presentsGlobalFeedback
+      )
     }
   }
 
-  private func prepareAndMaybeStartVoice(token: UInt64, startWhenReady: Bool) async {
+  private func prepareAndMaybeStartVoice(
+    token: UInt64,
+    startWhenReady: Bool,
+    presentsGlobalFeedback: Bool
+  ) async {
     let initialPermission = microphonePermission.currentState
     let permissionState = await microphonePermission.requestAuthorization()
     guard voiceGeneration == token else { return }
+    invalidateVoiceReadinessRefresh()
 
     switch permissionState {
     case .authorized:
       voiceReadiness = .checking
+      if presentsGlobalFeedback {
+        presentVoiceFeedback(.preparing("Checking the local speech model…"))
+      }
     case .notDetermined:
+      activePermissionFailure = .notDetermined
       voiceReadiness = .needsPermission
-      phase = .failure("Microphone access is required for push-to-talk.")
+      let message = "Microphone access is required for push-to-talk."
+      phase = .failure(message)
+      if presentsGlobalFeedback {
+        presentVoiceResult(.failure(message))
+      }
       return
     case .denied:
+      activePermissionFailure = .denied
       voiceReadiness = .denied
-      phase = .failure(
-        "Allow Topher in System Settings → Privacy & Security → Microphone."
-      )
+      let message = "Microphone denied. Open Topher’s menu to open Microphone Settings."
+      phase = .failure(message)
+      if presentsGlobalFeedback {
+        presentVoiceResult(.failure(message))
+      }
       logger.notice("Microphone permission denied")
       return
     case .restricted:
+      activePermissionFailure = .restricted
       voiceReadiness = .restricted
-      phase = .failure("Microphone access is restricted on this Mac.")
+      let message = "Microphone access is restricted by this Mac’s administrator or policy."
+      phase = .failure(message)
+      if presentsGlobalFeedback {
+        presentVoiceResult(.failure(message))
+      }
       logger.notice("Microphone permission restricted")
       return
     }
@@ -366,17 +443,28 @@ final class TopherModel: ObservableObject {
         let finalState = try await speechAssets.prepare { [weak self] state in
           guard let self, voiceGeneration == token else { return }
           voiceReadiness = Self.assetReadiness(state)
+          if presentsGlobalFeedback {
+            presentVoiceFeedback(.preparing(voiceReadiness.title))
+          }
         }
         guard voiceGeneration == token else { return }
         voiceReadiness = Self.assetReadiness(finalState)
         guard case .ready = finalState else {
-          phase = .failure("The local English speech model isn’t ready yet.")
+          let message = "The local English speech model isn’t ready yet."
+          phase = .failure(message)
+          if presentsGlobalFeedback {
+            presentVoiceResult(.failure(message))
+          }
           return
         }
       } catch {
         guard voiceGeneration == token else { return }
         voiceReadiness = .needsAssets
-        phase = .failure("Couldn’t prepare the local speech model. Try again.")
+        let message = "Couldn’t prepare the local speech model. Try again."
+        phase = .failure(message)
+        if presentsGlobalFeedback {
+          presentVoiceResult(.failure(message))
+        }
         logger.error("Speech asset preparation failed")
         return
       }
@@ -385,12 +473,20 @@ final class TopherModel: ObservableObject {
     let permissionWasRequested = initialPermission == .notDetermined
     if !startWhenReady || permissionWasRequested || preparedAssetsThisAttempt {
       voiceReadiness = .ready
-      phase = .success("Voice input is ready. Hold your shortcut again to speak.")
+      let message = "Voice input is ready. Hold your shortcut again to speak."
+      phase = .success(message)
+      if presentsGlobalFeedback {
+        presentVoiceResult(.success(message))
+      }
       return
     }
 
     guard isPushToTalkHeld else {
-      phase = .success("Released before listening started. Hold the shortcut again.")
+      let message = "Released before listening started. Hold the shortcut again."
+      phase = .success(message)
+      if presentsGlobalFeedback {
+        presentVoiceResult(.failure(message))
+      }
       return
     }
 
@@ -399,7 +495,11 @@ final class TopherModel: ObservableObject {
       guard voiceGeneration == token, isPushToTalkHeld else {
         await voiceTranscription.cancel()
         if voiceGeneration == token {
-          phase = .success("Released before listening started. Hold the shortcut again.")
+          let message = "Released before listening started. Hold the shortcut again."
+          phase = .success(message)
+          if presentsGlobalFeedback {
+            presentVoiceResult(.failure(message))
+          }
         }
         return
       }
@@ -408,19 +508,28 @@ final class TopherModel: ObservableObject {
       guard voiceGeneration == token, isPushToTalkHeld else {
         await voiceTranscription.cancel()
         if voiceGeneration == token {
-          phase = .success("Released before listening started. Hold the shortcut again.")
+          let message = "Released before listening started. Hold the shortcut again."
+          phase = .success(message)
+          if presentsGlobalFeedback {
+            presentVoiceResult(.failure(message))
+          }
         }
         return
       }
 
       phase = .listening("")
+      presentVoiceFeedback(.listening(""))
       logger.info("Push-to-talk started")
       consumeVoiceEvents(events, token: token)
       scheduleListeningTimeout(token: token)
     } catch {
       await voiceTranscription.cancel()
       guard voiceGeneration == token else { return }
-      phase = .failure("Couldn’t start voice input. Try the shortcut again.")
+      let message = "Couldn’t start voice input. Try the shortcut again."
+      phase = .failure(message)
+      if presentsGlobalFeedback {
+        presentVoiceResult(.failure(message))
+      }
       logger.error("Voice capture failed to start")
     }
   }
@@ -440,9 +549,16 @@ final class TopherModel: ObservableObject {
           case .partial(let transcript):
             if phase.isListening {
               phase = .listening(transcript)
+              presentVoiceFeedback(.listening(transcript))
             }
           case .final(let transcript):
             finalVoiceTranscript = transcript
+            if phase == .finalizingVoice {
+              presentVoiceFeedback(.finalizing(transcript))
+            } else if phase.isListening {
+              phase = .listening(transcript)
+              presentVoiceFeedback(.listening(transcript))
+            }
           }
         }
 
@@ -529,7 +645,9 @@ final class TopherModel: ObservableObject {
     listeningTimeoutTask = nil
     isPushToTalkHeld = false
     isVoiceCleanupPending = true
+    activePermissionFailure = nil
     phase = .failure(message)
+    presentVoiceResult(.failure(message))
     clearVoiceResultState()
     switch logEvent {
     case .transcriptionFailed:
@@ -548,15 +666,22 @@ final class TopherModel: ObservableObject {
     isVoiceCleanupPending = false
   }
 
-  private func processTranscript(_ transcript: String) {
+  private func processTranscript(_ transcript: String, source: TranscriptSource) {
+    activePermissionFailure = nil
     let command = resolver.resolve(transcript)
 
     guard policy.evaluate(command) == .allowed else {
-      phase = .failure(
-        "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
-      )
+      let message = "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
+      phase = .failure(message)
+      if source == .voice {
+        presentVoiceResult(.failure(message))
+      }
       logger.notice("Rejected an unsupported command")
       return
+    }
+
+    if source == .voice {
+      presentVoiceFeedback(.executing(transcript))
     }
 
     switch command {
@@ -567,7 +692,7 @@ final class TopherModel: ObservableObject {
       )
       Task {
         let outcome = await applicationOpener.execute(target)
-        apply(outcome)
+        apply(outcome, source: source)
       }
     case .openWebsite(let target):
       phase = .executing
@@ -577,7 +702,7 @@ final class TopherModel: ObservableObject {
       Task {
         await Task.yield()
         let outcome = await webOpener.execute(target)
-        apply(outcome)
+        apply(outcome, source: source)
       }
     case .searchWeb(let provider, let query):
       phase = .executing
@@ -587,21 +712,100 @@ final class TopherModel: ObservableObject {
       Task {
         await Task.yield()
         let outcome = await webOpener.execute(provider: provider, query: query)
-        apply(outcome)
+        apply(outcome, source: source)
       }
     case .unsupported:
-      phase = .failure("Unsupported command.")
+      let message = "Unsupported command."
+      phase = .failure(message)
+      if source == .voice {
+        presentVoiceResult(.failure(message))
+      }
     }
   }
 
-  private func apply(_ outcome: ActionOutcome) {
+  private func apply(_ outcome: ActionOutcome, source: TranscriptSource) {
     switch outcome {
     case .succeeded(let message):
       phase = .success(message)
+      if source == .voice {
+        presentVoiceResult(.success(message))
+      }
       logger.info("Capability completed")
     case .failed(let message):
       phase = .failure(message)
+      if source == .voice {
+        presentVoiceResult(.failure(message))
+      }
       logger.error("Capability failed")
+    }
+  }
+
+  private func presentVoiceResult(_ feedback: VoiceFeedback) {
+    presentVoiceFeedback(feedback, dismissAfter: voiceFeedbackResultDuration)
+  }
+
+  private func presentVoiceFeedback(
+    _ feedback: VoiceFeedback,
+    dismissAfter duration: Duration? = nil
+  ) {
+    voiceFeedbackDismissalTask?.cancel()
+    voiceFeedbackGeneration &+= 1
+    let token = voiceFeedbackGeneration
+    voiceFeedback = feedback
+
+    guard let duration else {
+      voiceFeedbackDismissalTask = nil
+      return
+    }
+
+    voiceFeedbackDismissalTask = Task { [weak self] in
+      do {
+        try await Task.sleep(for: duration)
+      } catch {
+        return
+      }
+
+      guard let self, voiceFeedbackGeneration == token else { return }
+      voiceFeedback = .hidden
+      voiceFeedbackDismissalTask = nil
+    }
+  }
+
+  private func hideVoiceFeedback() {
+    voiceFeedbackDismissalTask?.cancel()
+    voiceFeedbackDismissalTask = nil
+    voiceFeedbackGeneration &+= 1
+    voiceFeedback = .hidden
+  }
+
+  private func invalidateVoiceReadinessRefresh() {
+    voiceReadinessRefreshTask?.cancel()
+    voiceReadinessRefreshTask = nil
+    voiceReadinessGeneration &+= 1
+  }
+
+  private func reconcilePhase(with permissionState: MicrophonePermissionState) {
+    guard !phase.isBusy else { return }
+
+    switch permissionState {
+    case .authorized:
+      guard activePermissionFailure != nil else { return }
+      activePermissionFailure = nil
+      hideVoiceFeedback()
+      phase = .idle
+    case .denied:
+      activePermissionFailure = .denied
+      phase = .failure(
+        "Allow Topher in System Settings → Privacy & Security → Microphone."
+      )
+    case .restricted:
+      activePermissionFailure = .restricted
+      phase = .failure("Microphone access is restricted by this Mac’s administrator or policy.")
+    case .notDetermined:
+      if activePermissionFailure != nil {
+        activePermissionFailure = nil
+        phase = .idle
+      }
     }
   }
 
@@ -640,6 +844,11 @@ final class TopherModel: ObservableObject {
       .ready
     }
   }
+}
+
+private enum TranscriptSource: Equatable, Sendable {
+  case manual
+  case voice
 }
 
 private enum VoiceFinalizationOutcome: Equatable, Sendable {

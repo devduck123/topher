@@ -1,6 +1,6 @@
 # Focused technical investigation
 
-Status: 2026-07-14
+Status: 2026-07-15
 
 ## Recommendation
 
@@ -47,10 +47,12 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.3.0 speech branch passes 54 tests and adds only the Release
+The current 0.3.0 speech branch passes 62 tests and adds only the Release
 audio-input entitlement required for microphone capture. See the dated
 [speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
-current bundle and live callback verification.
+installed bundle and live callback verification, and the
+[pre-merge hardening evidence](evidence/2026-07-15-pre-merge-hardening.md) for
+the latest automated lifecycle and HUD checks.
 
 Live framework probes, run outside the restricted build sandbox, returned:
 
@@ -120,6 +122,27 @@ links the local `TopherCore` package product plus pinned KeyboardShortcuts. Use
 the shared `TopherApp` scheme for `.app` builds. The similarly named SwiftPM
 executable remains a compiler/test convenience and does not replace bundle
 validation.
+
+### Current security and distribution posture
+
+The Xcode target explicitly enables Hardened Runtime and disables App Sandbox.
+Those settings are independent: Hardened Runtime constrains the signed process,
+but the current application is not sandboxed. The Release signature is local
+and ad hoc, with only `com.apple.security.device.audio-input`; Debug also has
+Xcode's development-only `com.apple.security.get-task-allow`. The only current
+TCC request is microphone access. There is no Accessibility, Automation/Apple
+Events, Screen Recording, or legacy `SFSpeechRecognizer` authorization request.
+
+Google/YouTube navigation uses validated fixed HTTPS destinations and delegates
+them to the default browser through `NSWorkspace`. Topher has no direct network
+client, embedded web view, browser extension/native-messaging host, or browser
+page/tab capture implementation. The destination browser—not Topher—performs
+the resulting network request.
+
+This is a local-dogfood posture, not a distribution design. Revisit App Sandbox
+and capability entitlements before adding direct network or browser-content
+access. Adopt a stable Developer ID identity, verify permission persistence, and
+notarize before distributing Topher to other Macs.
 
 ## Speech technology comparison
 

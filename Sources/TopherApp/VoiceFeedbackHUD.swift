@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct VoiceFeedbackHUDPresenter: NSViewRepresentable {
-  let phase: TopherModel.Phase
+  let feedback: TopherModel.VoiceFeedback
 
   func makeCoordinator() -> Coordinator {
     Coordinator()
@@ -10,12 +10,12 @@ struct VoiceFeedbackHUDPresenter: NSViewRepresentable {
 
   func makeNSView(context: Context) -> NSView {
     let view = NSView(frame: .zero)
-    context.coordinator.update(for: phase)
+    context.coordinator.update(for: feedback)
     return view
   }
 
   func updateNSView(_ nsView: NSView, context: Context) {
-    context.coordinator.update(for: phase)
+    context.coordinator.update(for: feedback)
   }
 
   static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -25,7 +25,6 @@ struct VoiceFeedbackHUDPresenter: NSViewRepresentable {
   @MainActor
   final class Coordinator {
     private let panel = VoiceFeedbackPanel()
-    private var cachedTranscript = ""
     private var displayScreen: NSScreen?
     private var isVoicePhaseActive = false
 
@@ -33,24 +32,33 @@ struct VoiceFeedbackHUDPresenter: NSViewRepresentable {
       configurePanel()
     }
 
-    func update(for phase: TopherModel.Phase) {
-      switch phase {
+    func update(for feedback: TopherModel.VoiceFeedback) {
+      switch feedback {
+      case .hidden:
+        hide()
+      case .preparing(let detail):
+        if !isVoicePhaseActive {
+          displayScreen = currentScreen()
+        }
+        present(.preparing(detail: detail))
       case .listening(let transcript):
         if !isVoicePhaseActive {
           displayScreen = currentScreen()
         }
-        cachedTranscript = transcript
-        present(.listening(transcript: cachedTranscript))
-      case .finalizingVoice:
-        present(.transcribing(transcript: cachedTranscript))
-      case .idle, .preparingVoice, .transcribing, .executing, .success, .failure:
-        hide()
+        present(.listening(transcript: transcript))
+      case .finalizing(let transcript):
+        present(.finalizing(transcript: transcript))
+      case .executing(let transcript):
+        present(.executing(transcript: transcript))
+      case .success(let message):
+        present(.success(message: message))
+      case .failure(let message):
+        present(.failure(message: message))
       }
     }
 
     func hide() {
       panel.orderOut(nil)
-      cachedTranscript = ""
       displayScreen = nil
       isVoicePhaseActive = false
     }
@@ -118,28 +126,76 @@ private final class VoiceFeedbackPanel: NSPanel {
 }
 
 private enum VoiceFeedbackHUDState: Equatable {
+  case preparing(detail: String)
   case listening(transcript: String)
-  case transcribing(transcript: String)
+  case finalizing(transcript: String)
+  case executing(transcript: String)
+  case success(message: String)
+  case failure(message: String)
 
   var title: String {
     switch self {
+    case .preparing:
+      "Preparing voice"
     case .listening:
       "Listening"
-    case .transcribing:
+    case .finalizing:
       "Finalizing"
+    case .executing:
+      "Running command"
+    case .success:
+      "Done"
+    case .failure:
+      "Couldn’t complete command"
     }
   }
 
-  var transcript: String {
+  var detail: String {
     switch self {
-    case .listening(let transcript), .transcribing(let transcript):
+    case .preparing(let detail):
+      detail
+    case .listening(let transcript), .finalizing(let transcript), .executing(let transcript):
       transcript
+    case .success(let message), .failure(let message):
+      message
     }
   }
 
-  var isListening: Bool {
-    if case .listening = self { return true }
-    return false
+  var trailingText: String {
+    switch self {
+    case .preparing:
+      "Wait to speak"
+    case .listening:
+      "Release to run"
+    case .finalizing:
+      "One moment"
+    case .executing:
+      "Working"
+    case .success, .failure:
+      ""
+    }
+  }
+
+  var symbolName: String? {
+    switch self {
+    case .preparing, .finalizing, .executing, .listening:
+      nil
+    case .success:
+      "checkmark.circle.fill"
+    case .failure:
+      "exclamationmark.triangle.fill"
+    }
+  }
+
+  var symbolColor: Color {
+    switch self {
+    case .success:
+      .green
+    case .failure:
+      .orange
+    case .preparing, .listening, .finalizing, .executing:
+      .accentColor
+    }
   }
 }
 
@@ -155,12 +211,20 @@ private struct VoiceFeedbackHUD: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 10) {
-        if state.isListening {
+        switch state {
+        case .listening:
           VoiceWaveform()
-        } else {
+        case .preparing, .finalizing, .executing:
           ProgressView()
             .controlSize(.small)
             .frame(width: 38, height: 20)
+        case .success, .failure:
+          if let symbolName = state.symbolName {
+            Image(systemName: symbolName)
+              .font(.system(size: 18, weight: .semibold))
+              .foregroundStyle(state.symbolColor)
+              .frame(width: 38, height: 20)
+          }
         }
 
         Text(state.title)
@@ -168,14 +232,16 @@ private struct VoiceFeedbackHUD: View {
 
         Spacer(minLength: 0)
 
-        Text(state.isListening ? "Release to run" : "One moment")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        if !state.trailingText.isEmpty {
+          Text(state.trailingText)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
       }
 
-      Text(state.transcript.isEmpty ? "Speak now…" : state.transcript)
+      Text(detailText)
         .font(.system(size: 15, weight: .medium, design: .rounded))
-        .foregroundStyle(state.transcript.isEmpty ? .secondary : .primary)
+        .foregroundStyle(state.detail.isEmpty ? .secondary : .primary)
         .lineLimit(2)
         .truncationMode(.tail)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,7 +255,14 @@ private struct VoiceFeedbackHUD: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(state.title)
-    .accessibilityValue(state.transcript)
+    .accessibilityValue(detailText)
+  }
+
+  private var detailText: String {
+    if case .listening = state, state.detail.isEmpty {
+      return "Speak now…"
+    }
+    return state.detail
   }
 }
 

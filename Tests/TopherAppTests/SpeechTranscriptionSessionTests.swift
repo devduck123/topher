@@ -112,6 +112,85 @@ final class SpeechTranscriptionSessionTests: XCTestCase {
     XCTAssertFalse(newEvents.contains(.partial("Open Mail")))
   }
 
+  func testResultStreamFailureImmediatelyStopsCaptureAndAllowsAnotherHold() async throws {
+    let failedRuntime = RuntimeProbe()
+    let recoveredRuntime = RuntimeProbe()
+    let factory = RuntimeFactoryProbe(runtimes: [failedRuntime, recoveredRuntime])
+    let capture = CaptureProbe()
+    let session = AppleSpeechTranscriptionSession(
+      runtimeFactory: { try factory.next() },
+      microphone: capture.client,
+      converterFactory: { _, _ in PassthroughConverter() }
+    )
+    let buffer = try generatedBuffer(format: capture.format)
+
+    try await session.prepare()
+    let failedStream = try await session.start()
+    let failedCollection = Task { try await collect(failedStream) }
+    capture.emit(buffer)
+    await waitUntil { failedRuntime.receivedInputCount == 1 }
+
+    failedRuntime.fail(RuntimeProbeError.recognitionFailed)
+
+    do {
+      _ = try await failedCollection.value
+      XCTFail("A failed recognition stream must fail the public event stream")
+    } catch {
+      XCTAssertEqual(error as? RuntimeProbeError, .recognitionFailed)
+    }
+    await waitUntil {
+      capture.stopCount == 1 && failedRuntime.cancelCount == 1
+    }
+
+    capture.emit(buffer)
+    await Task.yield()
+    XCTAssertEqual(failedRuntime.receivedInputCount, 1)
+
+    try await session.prepare()
+    let recoveredStream = try await session.start()
+    let recoveredCollection = Task { try await collect(recoveredStream) }
+    recoveredRuntime.yield(.init(text: "Open Safari", isFinal: true))
+    try await session.finish()
+
+    let recoveredEvents = try await recoveredCollection.value
+    XCTAssertEqual(recoveredEvents.last, .final("Open Safari"))
+  }
+
+  func testCancelledFinalizerDoesNotAwaitTheNextGenerationResultsTask() async throws {
+    let oldRuntime = RuntimeProbe(finishBehavior: .suspend)
+    let newRuntime = RuntimeProbe()
+    let factory = RuntimeFactoryProbe(runtimes: [oldRuntime, newRuntime])
+    let session = AppleSpeechTranscriptionSession(
+      runtimeFactory: { try factory.next() },
+      microphone: CaptureProbe().client,
+      converterFactory: { _, _ in PassthroughConverter() }
+    )
+    let oldFinishCompleted = expectation(description: "Old finalizer completed")
+
+    try await session.prepare()
+    _ = try await session.start()
+    let oldFinishTask = Task {
+      do {
+        try await session.finish()
+      } catch {
+        XCTFail("Cancellation of the old generation should make its finalizer return")
+      }
+      oldFinishCompleted.fulfill()
+    }
+    await waitUntil { oldRuntime.isFinishSuspended }
+
+    await session.cancel()
+    try await session.prepare()
+    _ = try await session.start()
+    oldRuntime.resumeFinish()
+
+    await fulfillment(of: [oldFinishCompleted], timeout: 1)
+
+    await session.cancel()
+    await oldFinishTask.value
+    XCTAssertEqual(newRuntime.cancelCount, 1)
+  }
+
   func testCapturedBufferIsForwardedAsAnalyzerInput() async throws {
     let runtime = RuntimeProbe()
     let capture = CaptureProbe()
@@ -171,6 +250,23 @@ final class SpeechTranscriptionSessionTests: XCTestCase {
     buffer.frameLength = 64
     return buffer
   }
+
+  private func waitUntil(
+    timeout: Duration = .seconds(1),
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    _ condition: @escaping @MainActor () -> Bool
+  ) async {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+
+    while !condition(), clock.now < deadline {
+      await Task.yield()
+      try? await Task.sleep(for: .milliseconds(1))
+    }
+
+    XCTAssertTrue(condition(), "Condition was not satisfied before timeout", file: file, line: line)
+  }
 }
 
 private func collect(
@@ -226,6 +322,11 @@ private final class TapInvocation: @unchecked Sendable {
 
 @MainActor
 private final class RuntimeProbe {
+  enum FinishBehavior: Equatable {
+    case immediate
+    case suspend
+  }
+
   let format = AVAudioFormat(
     commonFormat: .pcmFormatInt16,
     sampleRate: 16_000,
@@ -235,16 +336,21 @@ private final class RuntimeProbe {
 
   private let stream: AsyncThrowingStream<SpeechRecognitionUpdate, any Error>
   private let continuation: AsyncThrowingStream<SpeechRecognitionUpdate, any Error>.Continuation
+  private let finishBehavior: FinishBehavior
   private var inputTask: Task<Void, Never>?
+  private var finishWaiter: CheckedContinuation<Void, Never>?
   private(set) var prepareCount = 0
   private(set) var startCount = 0
   private(set) var finishCount = 0
   private(set) var cancelCount = 0
   private(set) var receivedInputCount = 0
 
-  init() {
+  init(finishBehavior: FinishBehavior = .immediate) {
     (stream, continuation) = AsyncThrowingStream.makeStream(of: SpeechRecognitionUpdate.self)
+    self.finishBehavior = finishBehavior
   }
+
+  var isFinishSuspended: Bool { finishWaiter != nil }
 
   var client: SpeechAnalysisRuntime {
     SpeechAnalysisRuntime(
@@ -261,6 +367,9 @@ private final class RuntimeProbe {
       },
       finish: {
         self.finishCount += 1
+        if self.finishBehavior == .suspend {
+          await withCheckedContinuation { self.finishWaiter = $0 }
+        }
         self.continuation.finish()
         await self.inputTask?.value
       },
@@ -275,6 +384,23 @@ private final class RuntimeProbe {
   func yield(_ update: SpeechRecognitionUpdate) {
     continuation.yield(update)
   }
+
+  func fail(_ error: any Error) {
+    continuation.finish(throwing: error)
+  }
+
+  func resumeFinish() {
+    guard let finishWaiter else {
+      XCTFail("Finish is not suspended")
+      return
+    }
+    self.finishWaiter = nil
+    finishWaiter.resume()
+  }
+}
+
+private enum RuntimeProbeError: Error, Equatable, Sendable {
+  case recognitionFailed
 }
 
 @MainActor

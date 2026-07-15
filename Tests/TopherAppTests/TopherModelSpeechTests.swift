@@ -28,6 +28,7 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.voiceReadiness, .needsPermission)
 
     model.beginPushToTalk()
+    XCTAssertEqual(model.voiceFeedback, .preparing("Checking microphone access…"))
 
     await waitUntil {
       model.phase == .success("Voice input is ready. Hold your shortcut again to speak.")
@@ -38,6 +39,10 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(voice.startCount, 0)
     XCTAssertEqual(voice.finishCount, 0)
     XCTAssertEqual(voice.cancelCount, 0)
+    XCTAssertEqual(
+      model.voiceFeedback,
+      .success("Voice input is ready. Hold your shortcut again to speak.")
+    )
   }
 
   func testAuthorizedPushToTalkShowsPartialAndExecutesFinalCommandOnce() async {
@@ -60,9 +65,11 @@ final class TopherModelSpeechTests: XCTestCase {
 
     model.beginPushToTalk()
     await waitUntil { model.phase == .listening("") }
+    XCTAssertEqual(model.voiceFeedback, .listening(""))
 
     voice.yield(.partial("Open Saf"))
     await waitUntil { model.phase == .listening("Open Saf") }
+    XCTAssertEqual(model.voiceFeedback, .listening("Open Saf"))
 
     voice.yield(.final("Open Safari."))
     model.endPushToTalk()
@@ -74,6 +81,7 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(voice.startCount, 1)
     XCTAssertEqual(voice.finishCount, 1)
     XCTAssertEqual(voice.cancelCount, 0)
+    XCTAssertEqual(model.voiceFeedback, .success("Opened Safari."))
   }
 
   func testCanonicalInstalledLocaleStartsOnFirstAuthorizedHold() async {
@@ -212,16 +220,174 @@ final class TopherModelSpeechTests: XCTestCase {
 
     model.beginPushToTalk()
 
-    await waitUntil {
-      model.phase
-        == .failure("Allow Topher in System Settings → Privacy & Security → Microphone.")
-    }
+    let deniedMessage = "Microphone denied. Open Topher’s menu to open Microphone Settings."
+    await waitUntil { model.phase == .failure(deniedMessage) }
     XCTAssertEqual(model.voiceReadiness, .denied)
     XCTAssertFalse(didCheckAssets)
     XCTAssertEqual(voice.prepareCount, 0)
     XCTAssertEqual(voice.startCount, 0)
     XCTAssertEqual(voice.finishCount, 0)
     XCTAssertEqual(voice.cancelCount, 0)
+    XCTAssertEqual(model.voiceFeedback, .failure(deniedMessage))
+  }
+
+  func testFinalTranscriptReplacesStalePartialInFinalizingFeedback() async {
+    let voice = VoiceHarness(finishBehavior: .keepStreamOpen)
+    var openedTarget: String?
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { bundleIdentifier in
+            openedTarget = bundleIdentifier
+            return URL(fileURLWithPath: "/Applications/Safari.app")
+          },
+          openApplication: { _ in }
+        )
+      )
+    )
+
+    model.beginPushToTalk()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.partial("Open Chrome"))
+    await waitUntil { model.voiceFeedback == .listening("Open Chrome") }
+
+    model.endPushToTalk()
+    await waitUntil { model.voiceFeedback == .finalizing("Open Chrome") }
+    voice.yield(.final("Open Safari."))
+    await waitUntil { model.voiceFeedback == .finalizing("Open Safari.") }
+    voice.completeStream()
+
+    await waitUntil { model.phase == .success("Opened Safari.") }
+    XCTAssertEqual(openedTarget, ApplicationTarget.safari.bundleIdentifier)
+    XCTAssertEqual(model.voiceFeedback, .success("Opened Safari."))
+  }
+
+  func testManualAndMenuPreparationDoNotPresentCrossAppVoiceFeedback() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+          openApplication: { _ in }
+        )
+      )
+    )
+
+    model.runManually()
+    await waitUntil { model.phase == .success("Opened Safari.") }
+    XCTAssertEqual(model.voiceFeedback, .hidden)
+
+    model.prepareVoiceInput()
+    await waitUntil {
+      model.phase == .success("Voice input is ready. Hold your shortcut again to speak.")
+    }
+    XCTAssertEqual(model.voiceFeedback, .hidden)
+  }
+
+  func testDeniedPermissionRecoversCoherentlyAfterSettingsGrant() async {
+    var authorizationStatus = AVAuthorizationStatus.denied
+    let permission = MicrophonePermissionClient(
+      environment: MicrophonePermissionEnvironment(
+        authorizationStatus: { authorizationStatus },
+        requestAccess: {
+          XCTFail("A recorded permission decision must not display a prompt")
+          return false
+        }
+      )
+    )
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission,
+      speechAssets: readySpeechAssets(),
+      voice: voice
+    )
+
+    model.beginPushToTalk()
+    let deniedMessage = "Microphone denied. Open Topher’s menu to open Microphone Settings."
+    await waitUntil { model.phase == .failure(deniedMessage) }
+    XCTAssertEqual(model.voiceFeedback, .failure(deniedMessage))
+
+    authorizationStatus = .authorized
+    model.refreshVoiceReadiness()
+
+    await waitUntil { model.voiceReadiness == .ready }
+    XCTAssertEqual(model.phase, .idle)
+    XCTAssertEqual(model.voiceFeedback, .hidden)
+  }
+
+  func testRestrictedPermissionExplainsPolicyWithoutSettingsRecovery() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.restricted),
+      speechAssets: readySpeechAssets(),
+      voice: voice
+    )
+
+    model.beginPushToTalk()
+
+    let message = "Microphone access is restricted by this Mac’s administrator or policy."
+    await waitUntil { model.phase == .failure(message) }
+    XCTAssertEqual(model.voiceReadiness, .restricted)
+    XCTAssertFalse(model.voiceReadiness.needsSettings)
+    XCTAssertEqual(model.voiceFeedback, .failure(message))
+  }
+
+  func testStaleReadinessCompletionCannotOverwriteNewPermissionState() async {
+    var authorizationStatus = AVAuthorizationStatus.authorized
+    let assets = SuspendedSpeechAssets()
+    let permission = MicrophonePermissionClient(
+      environment: MicrophonePermissionEnvironment(
+        authorizationStatus: { authorizationStatus },
+        requestAccess: {
+          XCTFail("A recorded permission decision must not display a prompt")
+          return false
+        }
+      )
+    )
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission,
+      speechAssets: assets.client,
+      voice: voice
+    )
+    await waitUntil { assets.isReadinessSuspended }
+
+    authorizationStatus = .denied
+    model.refreshVoiceReadiness()
+    XCTAssertEqual(model.voiceReadiness, .denied)
+
+    assets.resumeReadiness(with: "en_US")
+    await Task.yield()
+
+    XCTAssertEqual(model.voiceReadiness, .denied)
+    XCTAssertEqual(
+      model.phase,
+      .failure("Allow Topher in System Settings → Privacy & Security → Microphone.")
+    )
+  }
+
+  func testVoiceResultFeedbackDismissesWithoutChangingMenuOutcome() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.denied),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      voiceFeedbackResultDuration: .milliseconds(20)
+    )
+
+    model.beginPushToTalk()
+    let message = "Microphone denied. Open Topher’s menu to open Microphone Settings."
+    await waitUntil { model.voiceFeedback == .failure(message) }
+    await waitUntil { model.voiceFeedback == .hidden }
+
+    XCTAssertEqual(model.phase, .failure(message))
+    XCTAssertEqual(model.voiceReadiness, .denied)
   }
 
   func testListeningTimeoutCancelsTranscription() async {
@@ -338,7 +504,8 @@ final class TopherModelSpeechTests: XCTestCase {
     applicationOpener: ApplicationOpenCapability? = nil,
     webOpener: WebOpenCapability? = nil,
     listeningTimeout: Duration = .seconds(1),
-    finalizationTimeout: Duration = .seconds(1)
+    finalizationTimeout: Duration = .seconds(1),
+    voiceFeedbackResultDuration: Duration = .seconds(1)
   ) -> TopherModel {
     TopherModel(
       applicationOpener: applicationOpener ?? inertApplicationOpener(),
@@ -348,6 +515,7 @@ final class TopherModelSpeechTests: XCTestCase {
       voiceTranscription: voice.client,
       listeningTimeout: listeningTimeout,
       finalizationTimeout: finalizationTimeout,
+      voiceFeedbackResultDuration: voiceFeedbackResultDuration,
       listenForShortcutEvents: false
     )
   }
@@ -485,6 +653,10 @@ private final class VoiceHarness {
     continuation.finish(throwing: error)
   }
 
+  func completeStream() {
+    continuation.finish()
+  }
+
   func resumeCancel() {
     guard let cancelWaiter else {
       XCTFail("Cancel is not suspended")
@@ -496,5 +668,39 @@ private final class VoiceHarness {
 
   private enum HarnessError: Error {
     case deallocated
+  }
+}
+
+@MainActor
+private final class SuspendedSpeechAssets {
+  private var readinessContinuation: CheckedContinuation<String?, Never>?
+
+  var isReadinessSuspended: Bool {
+    readinessContinuation != nil
+  }
+
+  var client: SpeechAssetPreparationClient {
+    SpeechAssetPreparationClient(
+      environment: SpeechAssetPreparationEnvironment(
+        isTranscriberAvailable: { true },
+        supportedLocaleIdentifier: { [weak self] _ in
+          guard let self else { return nil }
+          return await withCheckedContinuation { continuation in
+            readinessContinuation = continuation
+          }
+        },
+        inventoryStatus: { _ in .installed },
+        installAssets: { _, _ in
+          XCTFail("Installed assets must not start an installation")
+          return false
+        }
+      )
+    )
+  }
+
+  func resumeReadiness(with localeIdentifier: String?) {
+    let continuation = readinessContinuation
+    readinessContinuation = nil
+    continuation?.resume(returning: localeIdentifier)
   }
 }

@@ -67,16 +67,6 @@ struct MenuContentView: View {
       }
 
       HStack {
-        Text("Hold to talk")
-          .padding(.horizontal, 10)
-          .padding(.vertical, 5)
-          .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-          .gesture(
-            DragGesture(minimumDistance: 0)
-              .onChanged { _ in model.beginPushToTalk() }
-              .onEnded { _ in model.endPushToTalk() }
-          )
-
         Button("Run") {
           model.runManually()
         }

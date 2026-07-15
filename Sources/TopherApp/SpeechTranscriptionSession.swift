@@ -214,7 +214,6 @@ final class AppleSpeechTranscriptionSession {
   private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
   private var eventContinuation: AsyncThrowingStream<TranscriptionEvent, any Error>.Continuation?
   private var resultsTask: Task<Void, Never>?
-  private var resultsError: (any Error)?
   private var finalizedText = ""
   private var volatileText = ""
 
@@ -288,7 +287,6 @@ final class AppleSpeechTranscriptionSession {
     eventContinuation = eventBuilder
     finalizedText = ""
     volatileText = ""
-    resultsError = nil
     phase = .active
 
     let updates = runtime.updates()
@@ -298,11 +296,10 @@ final class AppleSpeechTranscriptionSession {
           guard let self, isCurrent(token) else { return }
           apply(update)
         }
-      } catch is CancellationError {
-        return
       } catch {
+        guard !Task.isCancelled else { return }
         guard let self, isCurrent(token) else { return }
-        resultsError = error
+        await failResults(error, token: token)
       }
     }
 
@@ -339,6 +336,7 @@ final class AppleSpeechTranscriptionSession {
     }
 
     let token = generation
+    let currentResultsTask = resultsTask
     phase = .finishing
     microphone.stop()
 
@@ -348,12 +346,9 @@ final class AppleSpeechTranscriptionSession {
       }
       inputContinuation.finish()
       try await runtime.finish()
-      await resultsTask?.value
+      await currentResultsTask?.value
 
       guard isCurrent(token, phase: .finishing) else { return }
-      if let resultsError {
-        throw resultsError
-      }
 
       eventContinuation?.yield(.final(combinedTranscript))
       eventContinuation?.finish()
@@ -362,7 +357,9 @@ final class AppleSpeechTranscriptionSession {
       if isCurrent(token) {
         eventContinuation?.finish(throwing: error)
         await runtime.cancel()
-        resetState()
+        if isCurrent(token) {
+          resetState()
+        }
       }
       throw error
     }
@@ -419,6 +416,16 @@ final class AppleSpeechTranscriptionSession {
     resetState()
   }
 
+  private func failResults(_ error: any Error, token: UInt64) async {
+    guard isCurrent(token) else { return }
+
+    // Publish the framework failure before cancellation closes the stream
+    // normally. `cancel()` synchronously stops capture and closes analyzer input
+    // before awaiting the framework's asynchronous teardown.
+    eventContinuation?.finish(throwing: error)
+    await cancel()
+  }
+
   private func cancelIfCurrent(_ token: UInt64) async {
     guard isCurrent(token) else { return }
     await cancel()
@@ -447,7 +454,6 @@ final class AppleSpeechTranscriptionSession {
     eventContinuation = nil
     resultsTask?.cancel()
     resultsTask = nil
-    resultsError = nil
     finalizedText = ""
     volatileText = ""
   }

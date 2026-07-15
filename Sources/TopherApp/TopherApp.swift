@@ -18,6 +18,7 @@ struct TopherApp: App {
     } label: {
       Image(systemName: model.phase.symbolName)
         .accessibilityLabel("Topher")
+        .accessibilityValue(model.phase.title)
         .background {
           VoiceFeedbackHUDPresenter(feedback: model.voiceFeedback)
             .frame(width: 0, height: 0)

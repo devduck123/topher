@@ -25,7 +25,7 @@ struct MenuContentView: View {
       Divider()
 
       KeyboardShortcuts.Recorder(
-        "Push to talk:",
+        "Assistant command shortcut:",
         name: .pushToTalk
       )
 

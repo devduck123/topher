@@ -25,6 +25,9 @@ struct VoiceFeedbackHUDPresenter: NSViewRepresentable {
   @MainActor
   final class Coordinator {
     private let panel = VoiceFeedbackPanel()
+    private let hostingView = NSHostingView(
+      rootView: VoiceFeedbackHUDRoot(state: .preparing(detail: ""))
+    )
     private var displayScreen: NSScreen?
     private var isVoicePhaseActive = false
 
@@ -72,14 +75,12 @@ struct VoiceFeedbackHUDPresenter: NSViewRepresentable {
       panel.isMovable = false
       panel.isOpaque = false
       panel.level = .statusBar
+      panel.contentView = hostingView
     }
 
     private func present(_ state: VoiceFeedbackHUDState) {
       isVoicePhaseActive = true
-      panel.contentView = NSHostingView(
-        rootView: VoiceFeedbackHUD(state: state)
-          .frame(width: VoiceFeedbackHUDMetrics.width, height: VoiceFeedbackHUDMetrics.height)
-      )
+      hostingView.rootView = VoiceFeedbackHUDRoot(state: state)
       positionPanel()
 
       if !panel.isVisible {
@@ -203,6 +204,15 @@ private enum VoiceFeedbackHUDMetrics {
   static let width: CGFloat = 384
   static let height: CGFloat = 104
   static let bottomInset: CGFloat = 32
+}
+
+private struct VoiceFeedbackHUDRoot: View {
+  let state: VoiceFeedbackHUDState
+
+  var body: some View {
+    VoiceFeedbackHUD(state: state)
+      .frame(width: VoiceFeedbackHUDMetrics.width, height: VoiceFeedbackHUDMetrics.height)
+  }
 }
 
 private struct VoiceFeedbackHUD: View {

@@ -32,13 +32,29 @@ The current push-to-talk implementation already covers a subset:
 
 ```text
 global shortcut
-  -> local speech transcript
-  -> CommandResolver
-  -> TopherCommand
-  -> CommandPolicy
-  -> native capability
+  -> PushToTalkCaptureController
+  -> raw finalized local transcript
+  -> TopherModel request-kind routing
+  -> AssistantCommandProcessor
+     -> CommandResolver
+     -> CommandResolution.resolved(TopherCommand) or unsupported
+     -> CommandPolicy
+     -> exactly one registered native capability
   -> visible result
 ```
+
+`PushToTalkCaptureController` owns microphone permission, speech assets,
+capture, partial/final transcript state, timeouts, generation guards, and
+cleanup. It returns the raw finalized text and has no command resolver,
+dictation formatter, capability, or user-facing outcome policy. `TopherModel`
+currently routes that result to assistant commands; a future dictation shortcut
+will select a dictation processor at this boundary instead.
+
+`AssistantCommandProcessor` owns the deterministic resolver-to-policy-to-
+capability transaction. Unsupported input is a `CommandResolution`, not an
+executable `TopherCommand`, and never crosses the policy boundary. Once an
+allowed command is resolved, the processor awaits one typed capability exactly
+once and returns its typed outcome to the presentation layer.
 
 Do not introduce every future type now. The model below defines boundaries to
 preserve as real providers and channels are added.
@@ -68,11 +84,12 @@ received remotely while the Mac is unattended.
 ## Request-kind routing and intention resolution
 
 Assistant commands and focused-field dictation are different request kinds.
-Assistant commands enter `CommandResolver` and become typed command proposals.
-Dictation never enters `CommandResolver`; its dedicated processor may format
-transcribed prose and propose insertion into a revalidated focused editable
-element. Both paths converge on typed proposals, independent policy,
-confirmation rules, registered capabilities, and typed results.
+Assistant commands enter `AssistantCommandProcessor`, whose resolver produces a
+typed command proposal or an unsupported outcome. Dictation never enters
+`CommandResolver`; its dedicated processor may format transcribed prose and
+propose insertion into a revalidated focused editable element. Both paths
+converge on typed proposals, independent policy, confirmation rules, registered
+capabilities, and typed results.
 
 For assistant commands, resolution should remain layered:
 

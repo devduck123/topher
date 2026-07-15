@@ -8,7 +8,7 @@ speech-to-action loop survives the reliability slice.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. `swift test` passes all 62 tests and the SwiftPM product builds.
+2. `swift test` passes all 92 tests and the SwiftPM product builds.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
@@ -70,6 +70,10 @@ pretending the permanent engine decision has been made.
 - Complete: 30-second listening and 8-second finalization watchdogs, immediate
   stream failure recovery, stale-generation rejection, and regression tests for
   key-up/cancellation races.
+- Complete: capture lifecycle is isolated in `PushToTalkCaptureController` and
+  returns raw final text without selecting command versus dictation behavior.
+- Complete: payload-free signpost intervals measure voice preparation, capture,
+  and finalization without recording speech or transcript content.
 - Complete: manual transcript fallback remains available.
 - Complete: raw audio is never written and transcript text is not persisted or
   logged.
@@ -87,6 +91,13 @@ dependency, and installed-app denial/error recovery is verified.
 
 - Complete in 0.2.0: allowlisted Google/YouTube home navigation plus Google,
   general web, and YouTube search through fixed HTTPS endpoints.
+- Complete in this foundation slice: an allowlisted Notion target verified as
+  bundle identifier `notion.id`; bounded variants including “Navigate Chrome,”
+  “Switch to Chrome,” and “Pull up YouTube”; negative parsing cases remain
+  fail-closed.
+- Complete in this foundation slice: `CommandResolution` separates unsupported
+  input from executable `TopherCommand`, and `AssistantCommandProcessor` owns
+  resolution, policy, and exactly-one capability dispatch.
 - Add validated explicit HTTPS URL opening only if a later use case needs it.
 - Add application discovery plus explicit aliases without accepting arbitrary
   model-provided bundle IDs.

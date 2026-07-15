@@ -7,10 +7,11 @@ structured application logger whose sink is supplied by the operating system:
 |---|---|
 | Unified Logging | Platform log aggregation |
 | Subsystem `dev.topher.app` | Service or application name |
-| Category `control-path` | Logger namespace |
+| Categories `control-path` and `voice-capture` | Logger namespaces |
 | `log stream` | Follow/tail live events |
 | `log show` | Query retained events |
 | Xcode debug console | Local development console |
+| `OSSignposter` intervals | Trace spans for latency investigation |
 
 There is no file such as `topher.log`, no local diagnostics database, and no
 remote telemetry backend in this slice. macOS owns retention and rotation.
@@ -40,7 +41,7 @@ Console.app can stream them too; filter on the subsystem `dev.topher.app`.
 
 ## Current event inventory
 
-The control path records only these event shapes:
+The control path and voice-capture logger record only these event shapes:
 
 - Push-to-talk started, ended, or timed out.
 - Microphone permission denied or restricted.
@@ -51,6 +52,19 @@ The control path records only these event shapes:
 - A fixed registered capability identifier started.
 - A capability completed or failed.
 - An unsupported command was rejected.
+
+The `voice-capture` category also emits three payload-free signpost interval
+names:
+
+- `VoicePreparation`: permission, speech-model readiness, and engine
+  preparation before listening.
+- `VoiceCapture`: the active microphone hold.
+- `VoiceFinalization`: key-up through final transcript completion or timeout.
+
+They are timing spans, not transcript records: no signpost payload contains raw
+audio, partial/final text, query text, target name, URL, or error detail. Use
+Instruments with an os_signpost-compatible template when a phase-level latency
+trace is needed; normal `log stream` remains the quickest lifecycle check.
 
 It intentionally does not record:
 

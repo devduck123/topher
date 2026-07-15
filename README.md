@@ -4,12 +4,14 @@ Topher is a local-first macOS assistant. This repository currently contains a
 small but end-to-end voice-command path: a native menu-bar UI, configurable
 global push-to-talk, on-device English transcription, deterministic typed
 command resolution, policy validation, native application launching, and
-allowlisted Google/YouTube navigation.
+allowlisted Google/YouTube navigation. The capture and command-processing
+boundaries are now independent so later dictation and context-aware requests
+can reuse capture without inheriting command authority.
 
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development build passes all 62 Swift tests and automated
+Status: the 0.3.0 development build passes all 92 Swift tests and automated
 Debug/Release app-bundle checks. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -34,7 +36,14 @@ The comparative speech benchmark is still open.
 - Direct Apple on-device transcription for fixed `en_US`, with on-demand asset
   preparation and no raw-audio file writes.
 - Manual execution for development without speech.
-- Typed, allowlisted commands for Chrome, Safari, and Visual Studio Code.
+- A dedicated capture controller that owns permission, assets, microphone
+  lifetime, finalization, timeouts, and cancellation while returning raw text
+  without deciding what it means.
+- A dedicated assistant-command processor that resolves, checks policy, and
+  awaits exactly one registered capability.
+- Typed, allowlisted commands for Chrome, Notion, Safari, and Visual Studio
+  Code, including bounded phrasing such as “Navigate Chrome,” “Switch to
+  Chrome,” and “Pull up YouTube.”
 - Typed, allowlisted navigation to Google and YouTube.
 - Google, general web, and YouTube searches built from fixed HTTPS endpoints.
 - Native launch through `NSWorkspace`.
@@ -105,8 +114,8 @@ For an interactive smoke test:
    is ready.
 4. Say “Open Safari,” release, and confirm the HUD changes from listening to
    finalizing before Safari opens exactly once.
-5. Try “Go to YouTube,” “Search YouTube for C++ and Swift,” and “Search Google
-   for best local speech model.”
+5. Try “Open Notion,” “Navigate Chrome,” “Pull up YouTube,” “Search YouTube for
+   C++ and Swift,” and “Search Google for best local speech model.”
 6. Speak unknown text and confirm it fails closed.
 7. Use the manual transcript field and **Run** as a development fallback.
 
@@ -152,9 +161,11 @@ and the corresponding permission and denial-recovery tests.
 ## Logs and diagnostics
 
 Topher writes metadata-only events to macOS Unified Logging under subsystem
-`dev.topher.app` and category `control-path`. It does not create an app-owned log
-file or database, and it does not log the manual transcript, search query, URL,
-raw audio, application name, or detailed error text.
+`dev.topher.app` and categories `control-path` and `voice-capture`. It also emits
+payload-free signpost intervals for voice preparation, capture, and
+finalization. It does not create an app-owned log file or database, and it does
+not log the manual transcript, search query, URL, raw audio, application name,
+or detailed error text.
 
 Stream new events while testing:
 
@@ -183,7 +194,8 @@ and the macOS-to-web-development mental model.
 - [Implementation plan](docs/implementation-plan.md)
 - [Risk register](docs/risks.md)
 - [Local diagnostics](docs/local-diagnostics.md)
-- [Latest pre-merge verification](docs/evidence/2026-07-15-pre-merge-hardening.md)
+- [Latest foundation verification](docs/evidence/2026-07-15-assistant-pipeline-foundation.md)
+- [Speech pre-merge verification](docs/evidence/2026-07-15-pre-merge-hardening.md)
 - [Decision records](docs/decisions/0001-native-macos-26.md)
 - [Contributing and macOS development practices](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)

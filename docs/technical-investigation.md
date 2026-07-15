@@ -47,7 +47,7 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.3.0 speech branch passes 62 tests and adds only the Release
+The current 0.3.0 development branch passes 92 tests and adds only the Release
 audio-input entitlement required for microphone capture. See the dated
 [speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
 installed bundle and live callback verification, and the
@@ -179,17 +179,18 @@ The current control path is intentionally concrete:
 
 ```text
 shortcut/manual input
-  → deterministic CommandResolver
-  → TopherCommand
-  → CommandPolicy
-  → registered native capability
+  → AssistantCommandProcessor
+    → deterministic CommandResolver
+    → CommandResolution.resolved(TopherCommand) or unsupported
+    → CommandPolicy
+    → exactly one registered native capability
   → typed outcome and visible state
 ```
 
-`ApplicationTarget` is an enum with three application-owned bundle IDs. Unknown
-names do not become strings passed to `NSWorkspace`; they become
-`unsupported`. This is both smaller and safer than generalized application
-discovery in Slice 1.
+`ApplicationTarget` is an enum with four application-owned bundle IDs: Chrome,
+Notion, Safari, and Visual Studio Code. Unknown names do not become strings
+passed to `NSWorkspace`; they become an unsupported `CommandResolution`. This
+is both smaller and safer than generalized application discovery.
 
 Later resolution should remain layered:
 
@@ -274,22 +275,26 @@ stay below structured app/browser interfaces in the execution hierarchy.
 
 Authored, tested, and built now:
 
-- `TopherCommand`, fixed `ApplicationTarget`, deterministic resolver, and policy.
+- `TopherCommand`, fixed `ApplicationTarget`, deterministic resolver, policy,
+  and an `AssistantCommandProcessor` that owns exactly-one dispatch.
 - Fixed `WebsiteTarget`, `SearchProvider`, and bounded `SearchQuery` values.
 - Native application-open and web-navigation capabilities with risk/access
   metadata and small injected `NSWorkspace` facades.
-- One observable UI state model.
+- One observable presentation/routing model, with capture and command execution
+  delegated to focused lifecycle components.
 - Direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine` capture,
   `AVAudioConverter`, runtime asset preparation, and microphone permission
   boundaries.
 - Real push-to-talk start/partial/finalize/cancel behavior with listening and
   finalization watchdogs, generation guards, and immediate stream recovery.
+- Payload-free preparation, capture, and finalization signpost intervals for
+  local latency investigation.
 - Menu-bar UI, transient non-activating voice HUD, manual transcript fallback,
   and typed outcome.
 - Parser, query validation, policy, native capability, permission, asset,
-  conversion, transcription-session, and lifecycle-race tests. Injected facades
-  keep unit tests from launching applications, opening a browser, or using a
-  real microphone.
+  conversion, transcription-session, capture-controller, command-processor,
+  and lifecycle-race tests. Injected facades keep unit tests from launching
+  applications, opening a browser, or using a real microphone.
 
 Waits for measured need:
 

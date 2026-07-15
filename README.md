@@ -6,13 +6,18 @@ global push-to-talk, on-device English transcription, deterministic typed
 command resolution, policy validation, native application launching, and
 allowlisted Google/YouTube navigation.
 
-Status: the 0.3.0 development build passes all 53 Swift tests and automated
+Topher is open source under the [MIT License](LICENSE). It is an early personal
+project, not a notarized application release for general installation.
+
+Status: the 0.3.0 development build passes all 54 Swift tests and automated
 Debug/Release app-bundle checks. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
-local dogfooding. The strictly verified Release bundle is installed and running
-from `/Applications`; microphone/TCC, accuracy, and latency acceptance on the
-user's voice remains the release gate. The comparative speech benchmark is
-still open.
+local dogfooding. Installation in `/Applications`, launch, and process liveness
+were verified for the strictly checked Release bundle. A live Core Audio
+callback-isolation failure was captured, fixed, and covered by an off-main
+regression test. Accuracy, latency, permission-recovery, sleep/wake, and
+repeated-session acceptance remain open.
+The comparative speech benchmark is still open.
 
 ## Implemented in this slice
 
@@ -36,6 +41,23 @@ still open.
 - Safe rejection of unknown text and applications.
 - XCTest coverage for parsing, policy, native capabilities, audio conversion,
   permission/assets, transcription, cancellation, and push-to-talk races.
+
+## Current interaction boundary
+
+Topher's global shortcut already works while another application is focused;
+the menu does not need to be open. The current hold is a **push-to-talk assistant
+command**: release sends the transient transcript through Topher's typed command
+resolver and policy.
+
+It is not yet general-purpose text dictation into the focused field. Always-on
+wake listening, remote chat requests, conversational follow-ups, browser-page
+reading, Accessibility context, and screen understanding are also not
+implemented. They are separate modes and trust boundaries rather than flags on
+the current command path.
+
+See [Interaction modes](docs/product/interaction-modes.md) and
+[Request lifecycle and context](docs/architecture/request-lifecycle.md) for the
+canonical product and architecture contracts.
 
 ## Where the AI is (and is not)
 
@@ -131,9 +153,13 @@ and the macOS-to-web-development mental model.
 
 ## Read next
 
+- [Interaction modes](docs/product/interaction-modes.md)
+- [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)
 - [Speech benchmark plan](docs/speech-benchmark.md)
 - [Implementation plan](docs/implementation-plan.md)
 - [Risk register](docs/risks.md)
 - [Local diagnostics](docs/local-diagnostics.md)
 - [Decision records](docs/decisions/0001-native-macos-26.md)
+- [Contributing and macOS development practices](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)

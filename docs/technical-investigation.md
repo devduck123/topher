@@ -39,13 +39,18 @@ extension to the current slice.
 | Extra project generators | No XcodeGen or Tuist |
 | Installed MVP applications | Safari, Google Chrome, and Visual Studio Code bundle IDs resolve locally |
 
-The initial Command Line Tools limitation is resolved. With full Xcode selected,
-SwiftPM builds the complete product and all 24 XCTest cases pass. The Xcode
-project builds Debug and Release application bundles. The verified Release is a
-universal `Topher.app` with fixed identifier `dev.topher.app`, `LSUIElement`, a
-hardened runtime, no release entitlements, and a valid local ad-hoc signature.
-It is installed in `/Applications`, remains running, and its launch logs confirm
-that AppKit created the status-item scene.
+The initial Command Line Tools limitation is resolved. At the 0.2.0 baseline,
+full Xcode built the SwiftPM product with all 24 tests and produced Debug and
+Release application bundles. That verified Release was a universal `Topher.app`
+with fixed identifier `dev.topher.app`, `LSUIElement`, a hardened runtime, no
+Release entitlements, and a valid local ad-hoc signature. Installation in
+`/Applications`, launch, status-item creation, and process liveness were
+verified.
+
+The current 0.3.0 speech branch passes 54 tests and adds only the Release
+audio-input entitlement required for microphone capture. See the dated
+[speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
+current bundle and live callback verification.
 
 Live framework probes, run outside the restricted build sandbox, returned:
 
@@ -197,6 +202,15 @@ Add it only if a future selected implementation actually invokes
 descriptions before those capabilities exist.
 
 ## Context and browser path
+
+The canonical cross-channel product contract is now documented in
+[Interaction modes](product/interaction-modes.md), and the shared source,
+context, policy, capability, and result design is in
+[Request lifecycle and context](architecture/request-lifecycle.md). In
+particular, global assistant commands, focused-field dictation, local wake
+detection, and remote chat ingress are distinct modes. A source-aware boundary
+routes each request kind before typed proposals converge on shared downstream
+controls.
 
 Do not create a general `ContextBroker` yet. The first context command can query
 `NSWorkspace.frontmostApplication` directly behind a small read-only provider.

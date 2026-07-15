@@ -8,12 +8,12 @@ speech-to-action loop survives the reliability slice.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. `swift test` passes all 53 tests and the SwiftPM product builds.
+2. `swift test` passes all 54 tests and the SwiftPM product builds.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
-   in `/Applications`, passes strict signature validation, launches as a UI
-   element, creates its status-item scene, and remains running.
+   in `/Applications`; strict signature validation, launch as a UI element,
+   status-item creation, and process liveness were verified.
 
 The original 0.2.0 installed bundle completed the no-permission matrix. The
 microphone-specific Xcode-versus-`/Applications` matrix remains part of the
@@ -45,7 +45,7 @@ closed, and the key-down/up lifecycle works as expected.
 Exit: a measured decision record names one engine and its fallback behavior;
 the main app remains runnable without speech.
 
-## Slice 3: speech-connected command loop — implemented, live acceptance open
+## Slice 3: speech-connected command loop — implemented, acceptance in progress
 
 Topher now integrates the direct Apple candidate for dogfooding before the
 comparative benchmark closes. This makes the real loop testable without
@@ -70,8 +70,12 @@ pretending the permanent engine decision has been made.
 - Complete: manual transcript fallback remains available.
 - Complete: raw audio is never written and transcript text is not persisted or
   logged.
-- Pending: install 0.3.0, exercise first-run grant/denial/settings recovery, and
-  measure the seven-command corpus on the user's microphone and voice.
+- Complete: install the hardened 0.3.0 Release in `/Applications`, exercise the
+  live global hold, capture the initial Core Audio actor-isolation crash, fix it,
+  and add an off-main callback regression test.
+- Pending: complete the grant/denial/settings recovery matrix, measure the
+  seven-command corpus, and exercise sleep/wake, audio-route changes, and 100
+  repeated holds on the user's microphone and voice.
 
 Exit: the seven-command corpus reaches the accepted local bar without a network
 dependency, and installed-app denial/error recovery is verified.
@@ -110,3 +114,46 @@ it does not, remove the model path.
 
 Exit: the core loop recovers without restarting Topher and meets the measured
 latency/resource bar.
+
+## Future interaction and context gates
+
+These are documented now so their trust boundaries remain clear, but they are
+not parallel implementation projects. The canonical contracts are
+[Interaction modes](product/interaction-modes.md) and
+[Request lifecycle and context](architecture/request-lifecycle.md).
+
+### First context slice
+
+- Add a read-only active-application provider for “What app am I using?”
+- Request no Accessibility or Screen Recording permission.
+- Introduce a shared context coordinator only after a second provider creates
+  real freshness, selection, or cancellation behavior to coordinate.
+
+### Global text dictation
+
+- Use a distinct shortcut or explicit mode, never the command shortcut.
+- Benchmark punctuation, endpointing, insertion, undo, and app compatibility.
+- Request Accessibility only when direct focused-field insertion is enabled.
+- Never press Return, submit, or send automatically.
+
+### Structured browser context
+
+- Add a narrow Chrome adapter that returns typed tab and DOM data.
+- Treat extension/page messages as untrusted and never execute arbitrary
+  JavaScript from a model or page.
+- Prefer browser data before Accessibility or screenshots.
+
+### Remote chat ingress
+
+- Normalize one read-only adapter into a source-aware request envelope.
+- Store provider credentials in Keychain and authenticate/allowlist identities.
+- Add expiry, replay protection, rate limiting, and source-aware policy.
+- Require preview and confirmation before sending or other remote mutation.
+
+### Local wake phrase
+
+- Evaluate only after the core loop meets reliability and idle-resource gates.
+- Continuously detect only the local wake phrase, not ambient transcription.
+- Keep only the detector's bounded in-memory rolling audio, continuously discard
+  it, and never persist, log, transmit, or transcribe it before a confirmed wake.
+- Provide a persistent enabled indicator and kill switch.

@@ -2,8 +2,10 @@
 
 Date: 2026-07-14
 
-Status: automated integration, Debug/Release bundle, installation, and process
-liveness checks pass. Microphone/TCC and user-voice acceptance remain pending.
+Status: automated integration, Debug/Release bundle, installation, live
+microphone startup, callback hotfix, and process-liveness checks pass. The full
+TCC recovery matrix, measured user-voice corpus, and reliability acceptance
+remain pending.
 
 ## Implemented path
 
@@ -46,12 +48,14 @@ Swift package tests:
 swift test
 ```
 
-Result: 53 tests pass with zero failures. Coverage includes microphone-state
-mapping, deferred prompting, speech-asset inventory/install behavior, generated
-48 kHz stereo Float32 to 16 kHz mono Int16 conversion, transcription
-partial/final behavior, volatile-result revocation, cancellation generations,
-permission preparation, duplicate key events, stream failures, both
-finalization stall modes, and the timeout/key-up race.
+Initial result: 53 tests passed with zero failures. After the installed-app
+callback defect below, the off-main regression brought the result to 54 passing
+tests. Coverage includes microphone-state mapping, deferred prompting,
+speech-asset inventory/install behavior, generated 48 kHz stereo Float32 to 16
+kHz mono Int16 conversion, transcription partial/final behavior,
+volatile-result revocation, cancellation generations, permission preparation,
+duplicate key events, stream failures, both finalization stall modes, the
+timeout/key-up race, and execution of the audio tap away from `MainActor`.
 
 Strict formatting:
 
@@ -107,6 +111,44 @@ Post-copy checks establish:
   `/Applications/Topher.app/Contents/MacOS/Topher` and remains alive as an
   accessory process after launch.
 
+## Live callback defect and hotfix observed
+
+The first live microphone start exposed a Swift actor-isolation defect that the
+main-actor test probe could not reproduce. The audio engine started with the
+built-in one-channel 48 kHz Float32 input and constructed the 16 kHz Int16
+converter. Core Audio then invoked the installed tap on its real-time service
+queue while Swift had inferred the tap closure as `MainActor`-isolated.
+
+Observed failure evidence:
+
+- The app terminated immediately after the shortcut hold.
+- The diagnostic report `Topher-2026-07-14-234037.ips` faults on the Core Audio
+  real-time service queue.
+- The stack reaches `_swift_task_checkIsolatedSwift`, the tap closure in
+  `LiveMicrophoneCapture.start`, and `AVAudioNodeTap`.
+- Unified Logging reports that the block was expected to execute on the main
+  queue.
+
+The fix constructs the `AVAudioNodeTapBlock` through an explicitly `@Sendable`
+handler, keeping synchronous audio conversion on the framework-owned audio
+queue instead of allocating a main-actor task per buffer. A regression test now
+invokes that same production handler on a dedicated non-main dispatch queue; it
+would reproduce the runtime trap if main-actor isolation returned.
+
+Post-fix verification:
+
+- Strict formatting passes.
+- All 54 Swift tests pass.
+- Debug and universal Release `TopherApp` builds succeed.
+- Strict Release signature verification succeeds and the only Release
+  entitlement remains `com.apple.security.device.audio-input`.
+- The hotfix executable SHA-256 is
+  `1d9acd78fb384eb6b15d182ccda577d94caba0c8d6de1c00d21d4a61bddf6fbf` and
+  matches the installed executable.
+- Fresh installed PID `67964` started at 23:50:14 and remained alive after the
+  global hold.
+- No diagnostic report newer than the original 23:40 failure appeared.
+
 ## Privacy boundary checked in source and tests
 
 - The target requests microphone capture only. It has no Accessibility,
@@ -122,10 +164,10 @@ Post-copy checks establish:
 
 These checks require the locally installed 0.3.0 bundle and user interaction:
 
-1. First hold displays the macOS microphone prompt only once and does not begin
-   capture behind the prompt.
-2. Grant path prepares assets if needed, asks for a fresh hold, shows live
-   partial feedback, finalizes on release, and executes exactly once.
+1. Confirm the first-grant behavior on a reset TCC identity: the prompt appears
+   only once and capture does not begin behind it.
+2. Complete the grant-path corpus: show live partial feedback, finalize on
+   release, and execute each supported request exactly once.
 3. Denial path displays recovery guidance; returning from the Microphone privacy
    pane refreshes readiness without exposing transcript data.
 4. The seven-command corpus meets local accuracy/latency thresholds on the

@@ -5,18 +5,19 @@ may move forward when it uses fixed endpoints and native APIs. Do not start
 browser page reading, Accessibility, screen capture, or wake-word work until the
 speech-to-action loop survives the reliability slice.
 
-## Prerequisite: reproducible native build — complete for Slice 1
+## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. `swift test` passes all 24 tests and the SwiftPM product builds.
+2. `swift test` passes all 53 tests and the SwiftPM product builds.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
    in `/Applications`, passes strict signature validation, launches as a UI
    element, creates its status-item scene, and remains running.
 
-The permission-specific Xcode-versus-`/Applications` matrix moves to Slice 3,
-because Slice 1 deliberately has no microphone or speech authorization request.
+The original 0.2.0 installed bundle completed the no-permission matrix. The
+microphone-specific Xcode-versus-`/Applications` matrix remains part of the
+0.3.0 acceptance gate.
 
 ## Slice 1: control path without speech — complete
 
@@ -32,7 +33,7 @@ liveness, and status-item creation. The user manually confirmed that Safari,
 Chrome, and Visual Studio Code execute from the panel, unknown input fails
 closed, and the key-down/up lifecycle works as expected.
 
-## Slice 2: isolated speech benchmark
+## Slice 2: isolated speech benchmark — pending measured corpus
 
 - Build separate direct-Apple, AuralKit, FluidAudio, WhisperKit, and (if still
   justified) whisper.cpp adapters in the benchmark harness.
@@ -44,26 +45,36 @@ closed, and the key-down/up lifecycle works as expected.
 Exit: a measured decision record names one engine and its fallback behavior;
 the main app remains runnable without speech.
 
-## Slice 3: speech-connected command loop
+## Slice 3: speech-connected command loop — implemented, live acceptance open
 
-- Add the selected capture/transcription component and a focused microphone
-  permission manager.
-- Add `NSMicrophoneUsageDescription` and the Hardened Runtime
-  `com.apple.security.device.audio-input` entitlement with the capture feature;
-  keep both absent until then.
-- The manager must name the feature and reason, expose the current authorization
-  state, request only from a user voice action, explain denied/restricted
+Topher now integrates the direct Apple candidate for dogfooding before the
+comparative benchmark closes. This makes the real loop testable without
+pretending the permanent engine decision has been made.
+
+- Complete: direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine`
+  capture, explicit audio conversion, asset preparation, and a focused
+  microphone permission manager.
+- Complete: `NSMicrophoneUsageDescription` and only the Hardened Runtime
+  `com.apple.security.device.audio-input` entitlement needed by capture.
+- Complete: the manager names the feature and reason, exposes authorization
+  state, requests only from a user voice action, explains denied/restricted
   recovery, provide a verified route to the correct System Settings pane,
-  refresh state when Topher becomes active, and say explicitly whether restart
-  is needed.
-- Add speech-recognition authorization only if the selected implementation uses
-  `SFSpeechRecognizer`; keep it absent for a pure `SpeechAnalyzer` path.
-- Map hotkey down to capture start and key-up to explicit finalization.
-- Preserve manual transcript input in a development menu.
-- Never retain raw audio; make transcript retention opt-in.
+  and refreshes state when Topher becomes active.
+- Complete: no speech-recognition authorization because the current direct path
+  does not use `SFSpeechRecognizer`.
+- Complete: hotkey down starts capture and key-up explicitly finalizes it; live
+  partials appear in the menu and transient cross-app HUD.
+- Complete: 30-second listening and 8-second finalization watchdogs, immediate
+  stream failure recovery, stale-generation rejection, and regression tests for
+  key-up/cancellation races.
+- Complete: manual transcript fallback remains available.
+- Complete: raw audio is never written and transcript text is not persisted or
+  logged.
+- Pending: install 0.3.0, exercise first-run grant/denial/settings recovery, and
+  measure the seven-command corpus on the user's microphone and voice.
 
-Exit: the seven-command corpus reaches the accepted local bar without network,
-and denial/error recovery is visible.
+Exit: the seven-command corpus reaches the accepted local bar without a network
+dependency, and installed-app denial/error recovery is verified.
 
 ## Slice 4: useful deterministic command set — in progress
 

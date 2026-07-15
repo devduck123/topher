@@ -1,27 +1,31 @@
 # Topher
 
 Topher is a local-first macOS assistant. This repository currently contains a
-small but end-to-end control path: a native menu-bar UI, configurable global
-push-to-talk lifecycle, manual transcript input, deterministic typed command
-resolution, policy validation, native application launching, and allowlisted
-Google/YouTube navigation.
+small but end-to-end voice-command path: a native menu-bar UI, configurable
+global push-to-talk, on-device English transcription, deterministic typed
+command resolution, policy validation, native application launching, and
+allowlisted Google/YouTube navigation.
 
-Status: Release 0.2.0 is build verified. Xcode 26.6 builds the conventional
-`Topher.app`, all 24 tests pass, and the locally signed app runs from
-`/Applications` as a menu-bar-only process. The shortcut lifecycle, supported
-app launches, and fail-closed behavior have also passed interactive acceptance.
-
-The slice intentionally has no microphone capture or model dependency yet. It
-settles the command-to-capability path before speech is selected with recordings
-of the actual user.
+Status: the 0.3.0 development build passes all 53 Swift tests and automated
+Debug/Release app-bundle checks. Direct Apple
+`SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
+local dogfooding. Installed-app microphone, TCC, accuracy, and latency
+acceptance on the user's voice remains the release gate; the comparative speech
+benchmark is still open.
 
 ## Implemented in this slice
 
 - A SwiftUI `MenuBarExtra` with visible ready, listening, transcribing,
   executing, success, and failure states.
-- A user-recorded global shortcut. Key down begins the mock listening state;
-  key up processes the transcript through one ordered event stream. A 30-second
-  timeout recovers from a missing key-up.
+- A user-recorded global shortcut. Key down starts microphone capture after
+  permission and local assets are ready; key up stops capture and explicitly
+  finalizes the transcript.
+- Live partial text in Topher and a transient, non-activating cross-app voice
+  HUD while listening/finalizing.
+- A 30-second listening watchdog, an 8-second finalization watchdog, immediate
+  stream-error recovery, and generation guards against late results.
+- Direct Apple on-device transcription for fixed `en_US`, with on-demand asset
+  preparation and no raw-audio file writes.
 - Manual execution for development without speech.
 - Typed, allowlisted commands for Chrome, Safari, and Visual Studio Code.
 - Typed, allowlisted navigation to Google and YouTube.
@@ -29,21 +33,22 @@ of the actual user.
 - Native launch through `NSWorkspace`.
 - A separate policy decision before execution.
 - Safe rejection of unknown text and applications.
-- XCTest coverage for parsing, policy behavior, and native capability outcomes.
+- XCTest coverage for parsing, policy, native capabilities, audio conversion,
+  permission/assets, transcription, cancellation, and push-to-talk races.
 
 ## Where the AI is (and is not)
 
-There is no model in the execution path yet. That is intentional: the current
-grammar proves that a user request can become a typed command, pass an
-independent policy check, and reach one narrow native capability without giving
-a model arbitrary control of the Mac.
+Speech recognition is now the first ML component in the live path, but there is
+still no LLM deciding what Topher may do. The current grammar turns a transcript
+into a typed command, passes an independent policy check, and reaches one narrow
+native capability without giving a model arbitrary control of the Mac.
 
 The intended layers are:
 
 1. Deterministic commands for exact requests such as “Open Safari,” “Go to
    YouTube,” and “Search YouTube for local AI.” These do not need AI.
-2. An optional local model that interprets fuzzier phrasing into the same typed
-   commands. It proposes; the policy layer still decides what can execute.
+2. A future optional local model that interprets fuzzier phrasing into the same
+   typed commands. It proposes; the policy layer still decides what can execute.
 3. Permissioned browser context for requests such as “What’s on my feed?” or
    “Go to this Chrome tab.” Those require a narrow Chrome extension/native
    adapter and are not implemented yet.
@@ -71,16 +76,32 @@ For an interactive smoke test:
 
 1. Click Topher's sparkles icon in the menu bar.
 2. Record a normal modified shortcut.
-3. Enter `Open Safari.` and press **Run**; then try `Go to YouTube` and `Search
-   YouTube for C++ & Swift #1`.
-4. Try `Search Google for best local speech model` or `Search the web for Swift
-   SpeechAnalyzer`.
-5. Enter unknown text and confirm it fails closed.
-6. With another app focused, hold and release the shortcut and confirm the
-   visible listening, transcribing, executing, and result states.
+3. Hold it once. Grant microphone access if macOS asks, then let Topher prepare
+   the local English speech asset. Release and hold again after Topher says it
+   is ready.
+4. Say “Open Safari,” release, and confirm the HUD changes from listening to
+   finalizing before Safari opens exactly once.
+5. Try “Go to YouTube,” “Search YouTube for C++ and Swift,” and “Search Google
+   for best local speech model.”
+6. Speak unknown text and confirm it fails closed.
+7. Use the manual transcript field and **Run** as a development fallback.
 
 No default shortcut is claimed. This avoids silently overriding an existing
 system or application shortcut.
+
+## Voice privacy and permissions
+
+Topher asks for microphone access only from an explicit voice action. Its app
+bundle contains `NSMicrophoneUsageDescription` and only the Hardened Runtime
+audio-input entitlement needed for capture. The direct `SpeechAnalyzer` path
+does not request legacy `SFSpeechRecognizer` authorization, Accessibility,
+Automation, Screen Recording, or Apple Events access.
+
+Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
+not written to disk. Partial/final transcripts exist transiently in process
+memory and UI so the requested command can run; Topher does not persist or log
+them. Denied microphone access links to the macOS Microphone privacy pane and is
+rechecked when Topher becomes active again.
 
 ## Logs and diagnostics
 

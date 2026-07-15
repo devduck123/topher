@@ -180,26 +180,21 @@ is untrusted data and must never share the user-instruction channel.
 
 ## Permissions
 
-Slice 1 requests no privacy permissions. Opening registered applications and
-reading the frontmost application do not require Accessibility.
+The 0.3.0 direct-Apple speech integration adds
+`NSMicrophoneUsageDescription` and the Hardened Runtime
+[`com.apple.security.device.audio-input`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.audio-input)
+entitlement. Topher asks only on an explicit voice action; the privacy string
+does not replace the resource-access entitlement. A focused permission manager
+reports not-determined/authorized/denied/restricted state, handles the one
+request, opens the Microphone settings pane, and refreshes on app activation.
 
-When speech is integrated:
-
-- Add `NSMicrophoneUsageDescription` and the Hardened Runtime
-  [`com.apple.security.device.audio-input`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.audio-input)
-  entitlement, then ask only on the user's first voice action. The privacy
-  string does not replace the resource-access entitlement.
-- A direct `SpeechAnalyzer`/`SpeechTranscriber` pipeline stays on device and does
-  not require `SFSpeechRecognizer` server authorization according to Apple's
-  [speech permission guidance](https://developer.apple.com/documentation/speech/asking-permission-to-use-speech-recognition).
-- Add `NSSpeechRecognitionUsageDescription` only if a selected implementation
-  actually invokes `SFSpeechRecognizer`.
-- Do not add Accessibility or Screen Recording usage descriptions before those
-  capabilities exist.
-
-A small permission manager becomes warranted in the speech slice, when there is
-one real permission to explain, inspect, request, and recover. Adding it now
-would be speculative.
+The direct `SpeechAnalyzer`/`SpeechTranscriber` pipeline stays on device and does
+not require `SFSpeechRecognizer` server authorization according to Apple's
+[speech permission guidance](https://developer.apple.com/documentation/speech/asking-permission-to-use-speech-recognition).
+Accordingly, the current target has no `NSSpeechRecognitionUsageDescription`.
+Add it only if a future selected implementation actually invokes
+`SFSpeechRecognizer`. Do not add Accessibility or Screen Recording usage
+descriptions before those capabilities exist.
 
 ## Context and browser path
 
@@ -240,21 +235,28 @@ stay below structured app/browser interfaces in the execution hierarchy.
 
 ## What exists now versus what waits
 
-Authored and locally type-checked now:
+Authored, tested, and built now:
 
 - `TopherCommand`, fixed `ApplicationTarget`, deterministic resolver, and policy.
 - Fixed `WebsiteTarget`, `SearchProvider`, and bounded `SearchQuery` values.
 - Native application-open and web-navigation capabilities with risk/access
   metadata and small injected `NSWorkspace` facades.
 - One observable UI state model.
-- Menu-bar UI, mock PTT lifecycle, manual transcript input, and typed outcome.
-- Parser, query validation, policy, and native capability unit tests. The
-  facades let lookup, URL handoff, success, and failure be tested without
-  launching applications or the default browser.
+- Direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine` capture,
+  `AVAudioConverter`, runtime asset preparation, and microphone permission
+  boundaries.
+- Real push-to-talk start/partial/finalize/cancel behavior with listening and
+  finalization watchdogs, generation guards, and immediate stream recovery.
+- Menu-bar UI, transient non-activating voice HUD, manual transcript fallback,
+  and typed outcome.
+- Parser, query validation, policy, native capability, permission, asset,
+  conversion, transcription-session, and lifecycle-race tests. Injected facades
+  keep unit tests from launching applications, opening a browser, or using a
+  real microphone.
 
 Waits for measured need:
 
-- Audio/transcriber protocols, permission manager, context broker, capability
-  registry collection, model-provider abstraction, overlay panel, browser page
-  or tab adapter, accessibility/screen providers, wake word, and persistent
+- Comparative speech adapters and the measured user-voice corpus, context
+  broker, capability registry collection, model-provider abstraction, browser
+  page or tab adapter, accessibility/screen providers, wake word, and persistent
   history.

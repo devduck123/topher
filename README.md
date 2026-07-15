@@ -9,9 +9,10 @@ allowlisted Google/YouTube navigation.
 Status: the 0.3.0 development build passes all 53 Swift tests and automated
 Debug/Release app-bundle checks. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
-local dogfooding. Installed-app microphone, TCC, accuracy, and latency
-acceptance on the user's voice remains the release gate; the comparative speech
-benchmark is still open.
+local dogfooding. The strictly verified Release bundle is installed and running
+from `/Applications`; microphone/TCC, accuracy, and latency acceptance on the
+user's voice remains the release gate. The comparative speech benchmark is
+still open.
 
 ## Implemented in this slice
 

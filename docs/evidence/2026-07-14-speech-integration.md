@@ -2,8 +2,8 @@
 
 Date: 2026-07-14
 
-Status: automated integration, Debug, and Release bundle checks pass.
-Installed-app microphone/TCC and user-voice acceptance remain pending.
+Status: automated integration, Debug/Release bundle, installation, and process
+liveness checks pass. Microphone/TCC and user-voice acceptance remain pending.
 
 ## Implemented path
 
@@ -86,6 +86,27 @@ Observed bundle checks:
 The deployable shared scheme is `TopherApp`. The similarly named SwiftPM
 `Topher` scheme creates a bare executable and is not installation evidence.
 
+## Installed Release verification observed
+
+The existing 0.2.0 bundle was moved to a temporary rollback location before the
+verified Release bundle was copied to `/Applications/Topher.app`. A broad,
+truncated process-list check initially missed the still-resident 0.2.0 process;
+an exact PID/elapsed-time check caught it before acceptance testing. That stale
+process was terminated, and a fresh process was launched only after the 0.3.0
+bundle was in place.
+
+Post-copy checks establish:
+
+- Installed version/build is `0.3.0`/`3` with bundle ID `dev.topher.app`.
+- Strict deep signature validation succeeds.
+- Installed Release entitlements contain only
+  `com.apple.security.device.audio-input`.
+- SHA-256 of the installed main executable exactly matches the verified Release
+  build (`92b2ae44258d1b72b7567fdee3f69adbf9c71adae6c5d7a6fbfc844870608ef8`).
+- LaunchServices accepts the bundle. Fresh PID `54268` started at 23:07:23 from
+  `/Applications/Topher.app/Contents/MacOS/Topher` and remains alive as an
+  accessory process after launch.
+
 ## Privacy boundary checked in source and tests
 
 - The target requests microphone capture only. It has no Accessibility,
@@ -101,15 +122,13 @@ The deployable shared scheme is `TopherApp`. The similarly named SwiftPM
 
 These checks require the locally installed 0.3.0 bundle and user interaction:
 
-1. Installation to `/Applications/Topher.app`, launch, and process/status-item
-   liveness.
-2. First hold displays the macOS microphone prompt only once and does not begin
+1. First hold displays the macOS microphone prompt only once and does not begin
    capture behind the prompt.
-3. Grant path prepares assets if needed, asks for a fresh hold, shows live
+2. Grant path prepares assets if needed, asks for a fresh hold, shows live
    partial feedback, finalizes on release, and executes exactly once.
-4. Denial path displays recovery guidance; returning from the Microphone privacy
+3. Denial path displays recovery guidance; returning from the Microphone privacy
    pane refreshes readiness without exposing transcript data.
-5. The seven-command corpus meets local accuracy/latency thresholds on the
+4. The seven-command corpus meets local accuracy/latency thresholds on the
    user's voice and microphone.
-6. Relaunch/rebuild behavior establishes how stable ad-hoc signing is for TCC on
+5. Relaunch/rebuild behavior establishes how stable ad-hoc signing is for TCC on
    this Mac; no persistence guarantee is assumed before that check.

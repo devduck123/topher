@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Format, test, and build
+    runs-on: macos-26
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check Swift package dependency parity
+        run: ruby scripts/check_dependency_parity.rb
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Record toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Check formatting
+        run: xcrun swift-format lint --strict -r Package.swift Sources Tests
+
+      - name: Run unit tests
+        run: swift test
+
+      - name: Build unsigned Release app
+        run: |
+          xcodebuild \
+            -project Topher.xcodeproj \
+            -scheme TopherApp \
+            -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/TopherDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build

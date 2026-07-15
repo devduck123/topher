@@ -8,7 +8,10 @@ speech-to-action loop survives the reliability slice.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. `swift test` passes all 92 tests and the SwiftPM product builds.
+2. The tree defines 110 Swift tests. The latest complete local normal and
+   Thread Sanitizer runs passed the 109 tests present before the final
+   storage-reload regression; that added path separately passed compiler and
+   executable-smoke checks and awaits the full CI rerun.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
@@ -75,8 +78,9 @@ pretending the permanent engine decision has been made.
 - Complete: payload-free signpost intervals measure voice preparation, capture,
   and finalization without recording speech or transcript content.
 - Complete: manual transcript fallback remains available.
-- Complete: raw audio is never written and transcript text is not persisted or
-  logged.
+- Complete: raw audio is never written and transcript text never enters
+  Unified Logging. Final command text is persisted only in the explicitly
+  enabled, bounded developer trace described in the diagnostics slice.
 - Complete: install the hardened 0.3.0 Release in `/Applications`, exercise the
   live global hold, capture the initial Core Audio actor-isolation crash, fix it,
   and add an off-main callback regression test.
@@ -121,9 +125,16 @@ it does not, remove the model path.
 
 - Exercise 100 repeated sessions, cancellation, timeouts, sleep/wake, and audio
   device changes.
-- Add bounded local action diagnostics that distinguish proposed, rejected,
-  started, and completed actions without raw audio, transcript text, search
-  queries, or page contents.
+- Complete: add a default-off local developer trace for the exact finalized
+  voice/manual command plus fixed typed outcome, capability kind, timing, and
+  app version. Enforce 24-hour, 200-record, 1-MiB, and 4-KiB-per-transcript
+  bounds; reject unsafe storage paths; invalidate previously issued tokens and
+  prevent queued late records on disable or clear; never include audio,
+  partials, retrieved context, constructed URLs, or detailed errors appended by
+  Topher. Treat the finalized user-authored command as sensitive because it can
+  itself contain those strings.
+- Add richer metadata-only lifecycle events only when a measured reliability
+  question requires them.
 - Test shortcut conflicts and launch-at-login only if daily use warrants it.
 
 Exit: the core loop recovers without restarting Topher and meets the measured

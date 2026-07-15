@@ -70,7 +70,7 @@ application-owned value may carry:
 - Authenticated source identity and conversation, when remote.
 - Receipt time and expiry.
 - Whether local user presence was established.
-- Original user-authored text or a reference to the transient transcript.
+- Original user-authored text or a reference to the finalized transcript.
 - A bounded session reference, when follow-up is explicitly enabled.
 - A response route that cannot be replaced by retrieved content.
 
@@ -263,9 +263,16 @@ Every stage must fail closed and remain cancellable:
 - Confirmation timeout cancels the proposal.
 - Adapter retries cannot execute the same request twice.
 
-Diagnostic events should identify lifecycle stage, fixed capability/provider
-kind, timing, and outcome without storing transcript, query, message, URL, page,
-screen, or document content.
+Ordinary diagnostic events should identify lifecycle stage, fixed
+capability/provider kind, timing, and outcome without storing transcript, query,
+message, URL, page, screen, or document content. A content-bearing developer
+trace is a separate, explicit exception: it must default off, require informed
+opt-in, show persistent enabled state, accept only the finalized user-authored
+command, enforce short age/count/size bounds, and never include audio, partial
+speech, retrieved context, constructed URLs, detailed errors, or app-sourced
+credentials. Disable and clear must invalidate previously issued trace tokens
+and prevent their queued late records. The user-authored command can itself
+contain a query, URL, pasted content, or secret and must be treated accordingly.
 
 ## Incremental implementation path
 

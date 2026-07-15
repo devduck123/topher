@@ -11,8 +11,11 @@ can reuse capture without inheriting command authority.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development build passes all 92 Swift tests and automated
-Debug/Release app-bundle checks. Direct Apple
+Status: the 0.3.0 development tree defines 110 Swift tests. The latest complete
+local runs passed all 109 tests that existed at that point both normally and
+under Thread Sanitizer; the final storage-reload regression was then
+type-checked and exercised by a focused executable smoke. A full 110-test CI
+rerun and final app-bundle check remain publish gates. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
 were verified for the strictly checked Release bundle. A live Core Audio
@@ -49,6 +52,9 @@ The comparative speech benchmark is still open.
 - Native launch through `NSWorkspace`.
 - A separate policy decision before execution.
 - Safe rejection of unknown text and applications.
+- An explicitly enabled, bounded developer trace for recent final command
+  transcripts and typed outcomes. It is off by default and can be cleared at
+  any time.
 - XCTest coverage for parsing, policy, native capabilities, audio conversion,
   permission/assets, transcription, cancellation, and push-to-talk races.
 
@@ -56,7 +62,7 @@ The comparative speech benchmark is still open.
 
 Topher's global shortcut already works while another application is focused;
 the menu does not need to be open. The current hold is a **push-to-talk assistant
-command**: release sends the transient transcript through Topher's typed command
+command**: release sends the finalized transcript through Topher's typed command
 resolver and policy.
 
 It is not yet general-purpose text dictation into the focused field. Always-on
@@ -132,10 +138,13 @@ authorization, Accessibility, Automation/Apple Events, or Screen Recording
 access.
 
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
-not written to disk. Partial/final transcripts exist transiently in process
-memory and UI so the requested command can run; Topher does not persist or log
-them. Denied microphone access links to the macOS Microphone privacy pane and is
-rechecked when Topher becomes active again.
+not written to disk. Partial transcripts exist transiently in process memory
+and UI so the requested command can run. Ordinary logging never includes
+transcript text. When the developer explicitly enables **Record final command
+transcripts**, Topher retains the bounded final voice or manual text described
+below; audio and partial transcripts are still never retained. Denied
+microphone access links to the macOS Microphone privacy pane and is rechecked
+when Topher becomes active again.
 
 ## Current macOS security posture
 
@@ -161,11 +170,34 @@ and the corresponding permission and denial-recovery tests.
 ## Logs and diagnostics
 
 Topher writes metadata-only events to macOS Unified Logging under subsystem
-`dev.topher.app` and categories `control-path` and `voice-capture`. It also emits
-payload-free signpost intervals for voice preparation, capture, and
-finalization. It does not create an app-owned log file or database, and it does
-not log the manual transcript, search query, URL, raw audio, application name,
-or detailed error text.
+`dev.topher.app` and categories `control-path`, `voice-capture`, and
+`developer-diagnostics`. It also emits payload-free signpost intervals for
+voice preparation, capture, and finalization. Unified Logging never receives
+the manual transcript, search query, URL, raw audio, application name, or
+detailed error text.
+
+For local dogfooding, the menu's **Developer diagnostics** section can retain a
+separate command trace. Recording is off by default, requires a warning and
+confirmation, and adds an orange dot to the menu-bar icon while enabled. Each
+record contains the exact finalized voice or manual command, its source, a
+fixed typed outcome, fixed command/capability metadata when available,
+processing duration, and app version/build. It never contains raw audio,
+partials, or content Topher separately captures from a page, screen, message, or
+document. Topher does not append constructed destination URLs, Keychain/config
+values, or detailed framework errors. The user-authored command itself can
+contain a query, URL, pasted content, or secret.
+
+The trace is stored at
+`~/Library/Caches/dev.topher.app/TranscriptDiagnostics/transcript-diagnostics.json`.
+Topher sets POSIX modes `0700` on its cache directories and `0600` on the file,
+and excludes them from backup. Topher prunes records older than 24 hours, keeps
+at most 200 records and 1 MiB total, and limits each transcript to 4 KiB.
+Disabling invalidates previously issued trace tokens and prevents their queued
+late records, but preserves recent records until expiry; **Clear Now** removes them
+immediately. The cache is local plaintext, not an encrypted vault: the same
+macOS account and system administrators can read it, and filesystem ACLs may
+grant additional access. Do not paste it into a public issue or pull request
+without reviewing and redacting it.
 
 Stream new events while testing:
 
@@ -181,12 +213,14 @@ Inspect recently retained events:
   --predicate 'subsystem == "dev.topher.app"'
 ```
 
-The operating system manages and rotates this diagnostic store. See
-[Local diagnostics](docs/local-diagnostics.md) for the current event inventory
-and the macOS-to-web-development mental model.
+The operating system manages Unified Logging retention; Topher owns the bounded
+developer-trace cleanup. See [Local diagnostics](docs/local-diagnostics.md) for
+the event inventory, exact retention semantics, and the macOS-to-web-development
+mental model.
 
 ## Read next
 
+- [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)
@@ -194,7 +228,7 @@ and the macOS-to-web-development mental model.
 - [Implementation plan](docs/implementation-plan.md)
 - [Risk register](docs/risks.md)
 - [Local diagnostics](docs/local-diagnostics.md)
-- [Latest foundation verification](docs/evidence/2026-07-15-assistant-pipeline-foundation.md)
+- [Foundation verification](docs/evidence/2026-07-15-assistant-pipeline-foundation.md)
 - [Speech pre-merge verification](docs/evidence/2026-07-15-pre-merge-hardening.md)
 - [Decision records](docs/decisions/0001-native-macos-26.md)
 - [Contributing and macOS development practices](CONTRIBUTING.md)

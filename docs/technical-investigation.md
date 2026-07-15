@@ -47,12 +47,18 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.3.0 development branch passes 92 tests and adds only the Release
-audio-input entitlement required for microphone capture. See the dated
+The current 0.3.0 development tree defines 110 tests and adds only the Release
+audio-input entitlement required for microphone capture. The latest complete
+local normal and Thread Sanitizer runs passed all 109 tests present before the
+final transcript-reload regression; that new bounded-reload path separately
+passed compiler and executable-smoke validation and awaits the full CI rerun.
+See the dated
 [speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
 installed bundle and live callback verification, and the
 [pre-merge hardening evidence](evidence/2026-07-15-pre-merge-hardening.md) for
-the latest automated lifecycle and HUD checks.
+the lifecycle and HUD checks, and the
+[developer transcript diagnostics evidence](evidence/2026-07-15-developer-transcript-diagnostics.md)
+for the current validation state.
 
 Live framework probes, run outside the restricted build sandbox, returned:
 

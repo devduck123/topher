@@ -32,6 +32,11 @@ development build. There is not yet a notarized public binary release.
 - Raw audio and screen captures are not persisted beyond the active request by
   default.
 - Sensitive content is excluded from ordinary logs.
+- Final voice/manual command text is retained only when the user explicitly
+  enables the bounded developer trace. It is off by default, visibly indicated,
+  stored with restrictive POSIX modes, automatically pruned, and immediately
+  clearable. The command can itself contain a spoken or pasted credential;
+  Topher never separately appends Keychain or configuration values.
 - Credentials belong in macOS Keychain and never in source control.
 - Every effect requires capability-specific policy. An explicit, present-user
   request may itself confirm a capability-defined, bounded deterministic local

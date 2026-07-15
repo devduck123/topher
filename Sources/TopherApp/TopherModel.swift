@@ -108,6 +108,7 @@ final class TopherModel: ObservableObject {
 
   private let commandProcessor: AssistantCommandProcessor
   private let captureController: PushToTalkCaptureController
+  private let developerDiagnostics: DeveloperDiagnosticsController?
   private let voiceFeedbackResultDuration: Duration
 
   private var shortcutEventsTask: Task<Void, Never>?
@@ -128,6 +129,7 @@ final class TopherModel: ObservableObject {
     listeningTimeout: Duration = .seconds(30),
     finalizationTimeout: Duration = .seconds(8),
     voiceFeedbackResultDuration: Duration = .seconds(3),
+    developerDiagnostics: DeveloperDiagnosticsController? = nil,
     listenForShortcutEvents: Bool = true
   ) {
     let permission = microphonePermission ?? MicrophonePermissionClient()
@@ -146,6 +148,7 @@ final class TopherModel: ObservableObject {
       webOpener: webOpener
     )
     self.captureController = captureController
+    self.developerDiagnostics = developerDiagnostics
     self.voiceFeedbackResultDuration = voiceFeedbackResultDuration
     voiceReadiness = captureController.readiness
 
@@ -274,6 +277,7 @@ final class TopherModel: ObservableObject {
       activeVoicePresentation = nil
       let transcript = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !transcript.isEmpty else {
+        recordNoUsableSpeechIfEnabled()
         let message = "I didn’t hear a command. Hold the shortcut and try again."
         phase = .failure(message)
         if presentsGlobally {
@@ -286,6 +290,25 @@ final class TopherModel: ObservableObject {
 
     case .failed(let failure):
       applyCaptureFailure(failure)
+    }
+  }
+
+  private func recordNoUsableSpeechIfEnabled() {
+    guard let developerDiagnostics else { return }
+
+    Task {
+      guard let token = await developerDiagnostics.beginTrace() else { return }
+      await developerDiagnostics.record(
+        transcript: "",
+        source: .voice,
+        trace: AssistantCommandTrace(
+          outcome: .noUsableSpeech,
+          commandKind: nil,
+          capabilityIdentifier: nil
+        ),
+        processingDurationMilliseconds: 0,
+        using: token
+      )
     }
   }
 
@@ -367,12 +390,13 @@ final class TopherModel: ObservableObject {
 
   private func startCommandProcessing(
     _ transcript: String,
-    source: TranscriptSource,
+    source: DeveloperTranscriptSource,
     yieldBeforeProcessing: Bool = false
   ) {
     precondition(commandExecutionTask == nil)
     activePermissionFailure = nil
     let processor = commandProcessor
+    let diagnostics = developerDiagnostics
 
     commandExecutionTask = Task { [weak self] in
       if yieldBeforeProcessing {
@@ -380,7 +404,10 @@ final class TopherModel: ObservableObject {
       }
       guard !Task.isCancelled else { return }
 
-      let outcome = await processor.process(transcript) { [weak self] in
+      let traceToken = await diagnostics?.beginTrace()
+      let clock = ContinuousClock()
+      let processingStartedAt = clock.now
+      let result = await processor.process(transcript) { [weak self] in
         guard let self else { return }
         phase = .executing
         if source == .voice {
@@ -390,11 +417,25 @@ final class TopherModel: ObservableObject {
 
       guard !Task.isCancelled, let self else { return }
       commandExecutionTask = nil
-      apply(outcome, source: source)
+      apply(result.outcome, source: source)
+
+      if let diagnostics, let traceToken {
+        let duration = processingStartedAt.duration(to: clock.now)
+        let durationMilliseconds = Self.milliseconds(in: duration)
+        Task {
+          await diagnostics.record(
+            transcript: transcript,
+            source: source,
+            trace: result.trace,
+            processingDurationMilliseconds: durationMilliseconds,
+            using: traceToken
+          )
+        }
+      }
     }
   }
 
-  private func apply(_ outcome: AssistantCommandOutcome, source: TranscriptSource) {
+  private func apply(_ outcome: AssistantCommandOutcome, source: DeveloperTranscriptSource) {
     switch outcome {
     case .unsupported:
       applyFailure(
@@ -408,7 +449,7 @@ final class TopherModel: ObservableObject {
     }
   }
 
-  private func apply(_ outcome: ActionOutcome, source: TranscriptSource) {
+  private func apply(_ outcome: ActionOutcome, source: DeveloperTranscriptSource) {
     switch outcome {
     case .succeeded(let message):
       phase = .success(message)
@@ -420,7 +461,7 @@ final class TopherModel: ObservableObject {
     }
   }
 
-  private func applyFailure(_ message: String, source: TranscriptSource) {
+  private func applyFailure(_ message: String, source: DeveloperTranscriptSource) {
     phase = .failure(message)
     if source == .voice {
       presentVoiceResult(.failure(message))
@@ -489,11 +530,13 @@ final class TopherModel: ObservableObject {
       }
     }
   }
-}
 
-private enum TranscriptSource: Equatable, Sendable {
-  case manual
-  case voice
+  private static func milliseconds(in duration: Duration) -> UInt64 {
+    let components = duration.components
+    let seconds = Double(components.seconds)
+    let fractionalSeconds = Double(components.attoseconds) / 1_000_000_000_000_000_000
+    return UInt64(max(0, (seconds + fractionalSeconds) * 1_000).rounded())
+  }
 }
 
 private enum VoicePresentation: Equatable, Sendable {

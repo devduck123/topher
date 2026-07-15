@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MenuContentView: View {
   @ObservedObject var model: TopherModel
+  @ObservedObject var diagnostics: DeveloperDiagnosticsController
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -65,6 +66,8 @@ struct MenuContentView: View {
           .textFieldStyle(.roundedBorder)
           .onSubmit(model.runManually)
       }
+
+      DeveloperDiagnosticsView(diagnostics: diagnostics)
 
       HStack {
         Button("Run") {

@@ -156,7 +156,25 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(voice.startCount, 1)
   }
 
-  func testWhitespaceOnlyFinalTranscriptFailsWithoutExecuting() async {
+  func testWhitespaceOnlyFinalTranscriptFailsWithoutExecuting() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherEmptyTranscriptDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
     let voice = VoiceHarness()
     var applicationOpenCount = 0
     var webOpenCount = 0
@@ -172,7 +190,8 @@ final class TopherModelSpeechTests: XCTestCase {
       ),
       webOpener: WebOpenCapability(
         workspace: WebWorkspace(open: { _ in webOpenCount += 1 })
-      )
+      ),
+      developerDiagnostics: diagnostics
     )
 
     model.beginPushToTalk()
@@ -183,10 +202,14 @@ final class TopherModelSpeechTests: XCTestCase {
 
     await waitUntil {
       model.phase == .failure("I didn’t hear a command. Hold the shortcut and try again.")
+        && diagnostics.records.count == 1
     }
     XCTAssertEqual(applicationOpenCount, 0)
     XCTAssertEqual(webOpenCount, 0)
     XCTAssertEqual(voice.finishCount, 1)
+    let record = try XCTUnwrap(diagnostics.records.first)
+    XCTAssertEqual(record.transcript, "")
+    XCTAssertEqual(record.outcome, .noUsableSpeech)
   }
 
   func testDeniedMicrophonePermissionDoesNotStartTranscription() async {
@@ -354,6 +377,177 @@ final class TopherModelSpeechTests: XCTestCase {
     await waitUntil { model.phase == .success("Opened Safari.") }
 
     XCTAssertEqual(openCount, 1)
+  }
+
+  func testEnabledDeveloperDiagnosticsRecordOnlyTheFinalVoiceTranscript() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherModelDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+
+    let recordedAt = Date(timeIntervalSince1970: 1_000)
+    let store = DeveloperDiagnosticsStore(
+      storageDirectoryURL:
+        temporaryRoot
+        .appendingPathComponent("dev.topher.app", isDirectory: true)
+        .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+      initialEnabled: true,
+      now: { recordedAt }
+    )
+    let diagnostics = DeveloperDiagnosticsController(
+      store: store,
+      now: { recordedAt },
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics
+    )
+
+    model.beginPushToTalk()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.partial("Bring me to"))
+    await waitUntil { model.phase == .listening("Bring me to") }
+    model.endPushToTalk()
+    voice.yield(.final("Bring me to YouTube"))
+
+    await waitUntil {
+      diagnostics.records.count == 1
+        && model.phase
+          == .failure(
+            "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
+          )
+    }
+
+    let record = try XCTUnwrap(diagnostics.records.first)
+    XCTAssertEqual(record.transcript, "Bring me to YouTube")
+    XCTAssertFalse(record.transcript.contains("Bring me to\n"))
+    XCTAssertEqual(record.source, .voice)
+    XCTAssertEqual(record.outcome, .unsupported)
+    XCTAssertNil(record.commandKind)
+
+    model.endPushToTalk()
+    await Task.yield()
+    XCTAssertEqual(diagnostics.records.count, 1)
+  }
+
+  func testEnabledDeveloperDiagnosticsRecordSuccessfulManualCommand() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherManualDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    var openCount = 0
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+          openApplication: { _ in openCount += 1 }
+        )
+      ),
+      developerDiagnostics: diagnostics
+    )
+    model.manualTranscript = "  Open Safari  "
+
+    model.runManually()
+
+    await waitUntil {
+      model.phase == .success("Opened Safari.") && diagnostics.records.count == 1
+    }
+    let record = try XCTUnwrap(diagnostics.records.first)
+    XCTAssertEqual(openCount, 1)
+    XCTAssertEqual(record.transcript, "Open Safari")
+    XCTAssertEqual(record.source, .manual)
+    XCTAssertEqual(record.outcome, .capabilitySucceeded)
+    XCTAssertEqual(record.commandKind, .openApplication)
+    XCTAssertEqual(
+      record.capabilityIdentifier,
+      ApplicationOpenCapability.descriptor.identifier
+    )
+  }
+
+  func testDeveloperDiagnosticsFailureDoesNotChangeCommandOutcome() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherModelDiagnosticsFailureTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+
+    let appDirectory = temporaryRoot.appendingPathComponent("dev.topher.app", isDirectory: true)
+    let outsideDirectory = temporaryRoot.appendingPathComponent("outside", isDirectory: true)
+    try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: false)
+    try FileManager.default.createDirectory(
+      at: outsideDirectory, withIntermediateDirectories: false)
+    let storageDirectory = appDirectory.appendingPathComponent(
+      "TranscriptDiagnostics",
+      isDirectory: true
+    )
+    try FileManager.default.createSymbolicLink(
+      at: storageDirectory,
+      withDestinationURL: outsideDirectory
+    )
+
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL: storageDirectory,
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    var openCount = 0
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+          openApplication: { _ in openCount += 1 }
+        )
+      ),
+      developerDiagnostics: diagnostics
+    )
+    model.manualTranscript = "Open Safari"
+
+    model.runManually()
+
+    await waitUntil {
+      model.phase == .success("Opened Safari.")
+        && diagnostics.errorMessage
+          == "Couldn’t save the latest transcript diagnostic. The command still ran; Clear Now can retry cleanup."
+        && diagnostics.hasPendingStorageMaintenance
+    }
+    XCTAssertEqual(openCount, 1)
+    XCTAssertTrue(diagnostics.records.isEmpty)
   }
 
   func testModelDeinitShutsDownActiveVoiceCapture() async {
@@ -627,7 +821,8 @@ final class TopherModelSpeechTests: XCTestCase {
     webOpener: WebOpenCapability? = nil,
     listeningTimeout: Duration = .seconds(1),
     finalizationTimeout: Duration = .seconds(1),
-    voiceFeedbackResultDuration: Duration = .seconds(1)
+    voiceFeedbackResultDuration: Duration = .seconds(1),
+    developerDiagnostics: DeveloperDiagnosticsController? = nil
   ) -> TopherModel {
     TopherModel(
       applicationOpener: applicationOpener ?? inertApplicationOpener(),
@@ -638,6 +833,7 @@ final class TopherModelSpeechTests: XCTestCase {
       listeningTimeout: listeningTimeout,
       finalizationTimeout: finalizationTimeout,
       voiceFeedbackResultDuration: voiceFeedbackResultDuration,
+      developerDiagnostics: developerDiagnostics,
       listenForShortcutEvents: false
     )
   }

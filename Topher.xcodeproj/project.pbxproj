@@ -23,6 +23,9 @@
 		A0000000000000000000003B /* VoiceFeedbackHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002C /* VoiceFeedbackHUD.swift */; };
 		A0000000000000000000003C /* AssistantCommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002D /* AssistantCommandProcessor.swift */; };
 		A0000000000000000000003D /* PushToTalkCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002E /* PushToTalkCaptureController.swift */; };
+		A0000000000000000000003E /* DeveloperDiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002F /* DeveloperDiagnosticsStore.swift */; };
+		A0000000000000000000003F /* DeveloperDiagnosticsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000040 /* DeveloperDiagnosticsController.swift */; };
+		A00000000000000000000041 /* DeveloperDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000042 /* DeveloperDiagnosticsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +45,9 @@
 		A0000000000000000000002C /* VoiceFeedbackHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceFeedbackHUD.swift; sourceTree = "<group>"; };
 		A0000000000000000000002D /* AssistantCommandProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantCommandProcessor.swift; sourceTree = "<group>"; };
 		A0000000000000000000002E /* PushToTalkCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushToTalkCaptureController.swift; sourceTree = "<group>"; };
+		A0000000000000000000002F /* DeveloperDiagnosticsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsStore.swift; sourceTree = "<group>"; };
+		A00000000000000000000040 /* DeveloperDiagnosticsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsController.swift; sourceTree = "<group>"; };
+		A00000000000000000000042 /* DeveloperDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +84,9 @@
 			children = (
 				A00000000000000000000020 /* ApplicationOpenCapability.swift */,
 				A0000000000000000000002D /* AssistantCommandProcessor.swift */,
+				A00000000000000000000040 /* DeveloperDiagnosticsController.swift */,
+				A0000000000000000000002F /* DeveloperDiagnosticsStore.swift */,
+				A00000000000000000000042 /* DeveloperDiagnosticsView.swift */,
 				A00000000000000000000021 /* KeyboardShortcut.swift */,
 				A00000000000000000000022 /* MenuContentView.swift */,
 				A00000000000000000000026 /* MicrophonePermissionClient.swift */,
@@ -174,6 +183,9 @@
 			files = (
 				A00000000000000000000030 /* ApplicationOpenCapability.swift in Sources */,
 				A0000000000000000000003C /* AssistantCommandProcessor.swift in Sources */,
+				A0000000000000000000003F /* DeveloperDiagnosticsController.swift in Sources */,
+				A0000000000000000000003E /* DeveloperDiagnosticsStore.swift in Sources */,
+				A00000000000000000000041 /* DeveloperDiagnosticsView.swift in Sources */,
 				A00000000000000000000031 /* KeyboardShortcut.swift in Sources */,
 				A00000000000000000000032 /* MenuContentView.swift in Sources */,
 				A00000000000000000000036 /* MicrophonePermissionClient.swift in Sources */,

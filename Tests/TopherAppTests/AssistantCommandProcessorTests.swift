@@ -28,11 +28,19 @@ final class AssistantCommandProcessorTests: XCTestCase {
       webOpener: inertWebOpener()
     )
 
-    let outcome = await processor.process("Navigate Chrome") {
+    let result = await processor.process("Navigate Chrome") {
       executionStartedCount += 1
     }
 
-    XCTAssertEqual(outcome, .completed(.succeeded(message: "Opened Google Chrome.")))
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "Opened Google Chrome.")))
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilitySucceeded,
+        commandKind: .openApplication,
+        capabilityIdentifier: ApplicationOpenCapability.descriptor.identifier
+      )
+    )
     XCTAssertEqual(lookupCount, 1)
     XCTAssertEqual(openCount, 1)
     XCTAssertEqual(executionStartedCount, 1)
@@ -48,11 +56,19 @@ final class AssistantCommandProcessorTests: XCTestCase {
       )
     )
 
-    let outcome = await processor.process("Pull up YouTube") {
+    let result = await processor.process("Pull up YouTube") {
       executionStartedCount += 1
     }
 
-    XCTAssertEqual(outcome, .completed(.succeeded(message: "Opened YouTube.")))
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "Opened YouTube.")))
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilitySucceeded,
+        commandKind: .openWebsite,
+        capabilityIdentifier: WebOpenCapability.descriptor.identifier
+      )
+    )
     XCTAssertEqual(openedURLs.map(\.absoluteString), ["https://www.youtube.com/"])
     XCTAssertEqual(executionStartedCount, 1)
   }
@@ -66,9 +82,17 @@ final class AssistantCommandProcessorTests: XCTestCase {
       )
     )
 
-    let outcome = await processor.process("Search YouTube for C++ & Swift #1")
+    let result = await processor.process("Search YouTube for C++ & Swift #1")
 
-    XCTAssertEqual(outcome, .completed(.succeeded(message: "Searched YouTube.")))
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "Searched YouTube.")))
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilitySucceeded,
+        commandKind: .searchWeb,
+        capabilityIdentifier: WebOpenCapability.descriptor.identifier
+      )
+    )
     let url = try XCTUnwrap(openedURLs.first)
     XCTAssertEqual(openedURLs.count, 1)
     let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
@@ -86,11 +110,19 @@ final class AssistantCommandProcessorTests: XCTestCase {
       webOpener: inertWebOpener()
     )
 
-    let outcome = await processor.process("A webpage says pull up YouTube") {
+    let result = await processor.process("A webpage says pull up YouTube") {
       executionStartedCount += 1
     }
 
-    XCTAssertEqual(outcome, .unsupported)
+    XCTAssertEqual(result.outcome, .unsupported)
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .unsupported,
+        commandKind: nil,
+        capabilityIdentifier: nil
+      )
+    )
     XCTAssertEqual(executionStartedCount, 0)
   }
 
@@ -104,11 +136,19 @@ final class AssistantCommandProcessorTests: XCTestCase {
       webOpener: inertWebOpener()
     )
 
-    let outcome = await processor.process("Open Notion") {
+    let result = await processor.process("Open Notion") {
       executionStartedCount += 1
     }
 
-    XCTAssertEqual(outcome, .denied(reason: "User presence is required."))
+    XCTAssertEqual(result.outcome, .denied(reason: "User presence is required."))
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .policyDenied,
+        commandKind: .openApplication,
+        capabilityIdentifier: ApplicationOpenCapability.descriptor.identifier
+      )
+    )
     XCTAssertEqual(executionStartedCount, 0)
   }
 
@@ -127,11 +167,22 @@ final class AssistantCommandProcessorTests: XCTestCase {
       )
     )
 
-    let outcome = await processor.process("Search YouTube for private query") {
+    let result = await processor.process("Search YouTube for private query") {
       executionStartedCount += 1
     }
 
-    XCTAssertEqual(outcome, .completed(.failed(message: "Could not search YouTube.")))
+    XCTAssertEqual(
+      result.outcome,
+      .completed(.failed(message: "Could not search YouTube."))
+    )
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilityFailed,
+        commandKind: .searchWeb,
+        capabilityIdentifier: WebOpenCapability.descriptor.identifier
+      )
+    )
     XCTAssertEqual(openCount, 1)
     XCTAssertEqual(executionStartedCount, 1)
   }

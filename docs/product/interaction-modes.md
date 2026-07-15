@@ -163,7 +163,9 @@ No input mode receives special authority. All modes must follow the same rules:
    other externally visible effects.
 7. Execute only registered capabilities with validated inputs.
 8. Return a typed result to the originating local or remote channel.
-9. Avoid raw audio, transcript, message, and screen-content logging.
+9. Keep raw audio, transcript, message, and screen content out of ordinary
+   logging. Any content-bearing developer trace must be separately opted into,
+   visibly active, narrowly scoped, bounded, and immediately clearable.
 
 The technical lifecycle and screen-context rules are defined in
 [Request lifecycle and context](../architecture/request-lifecycle.md).

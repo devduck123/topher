@@ -1,6 +1,12 @@
 # Assistant pipeline foundation verification
 
 Date: 2026-07-15
+Source commit: `4cbbf3a`
+
+This is a historical checkpoint. The later opt-in developer transcript trace is
+covered by [Developer transcript diagnostics verification](2026-07-15-developer-transcript-diagnostics.md);
+its bounded persistence does not alter the metadata-only Unified Logging claims
+below.
 
 This record covers the foundation refactor and the first small command-set
 extension after the 0.3.0 speech merge. It records automated evidence only;

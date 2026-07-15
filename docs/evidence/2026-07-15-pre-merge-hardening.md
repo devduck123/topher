@@ -81,8 +81,10 @@ release-quality, run the installed candidate and verify:
 
 Record the macOS version, input device, shortcut, command corpus, pass/fail
 counts, any clipped or duplicate result, and the timestamps of matching
-metadata-only Unified Log events. Do not record raw audio or transcript text in
-diagnostics.
+metadata-only Unified Log events. Do not record raw audio. Keep ordinary
+Unified Logging metadata-only; final transcript text may appear only in the
+later, explicitly enabled bounded developer trace documented in
+`docs/local-diagnostics.md`.
 
 The 100-session run, external audio routes, sleep/wake, speech-engine benchmark,
 Developer ID signing, and notarization remain later gates. Deferring them is an

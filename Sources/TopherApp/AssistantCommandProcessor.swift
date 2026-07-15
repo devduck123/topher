@@ -7,6 +7,11 @@ enum AssistantCommandOutcome: Equatable, Sendable {
   case completed(ActionOutcome)
 }
 
+struct AssistantCommandProcessingResult: Equatable, Sendable {
+  let outcome: AssistantCommandOutcome
+  let trace: AssistantCommandTrace
+}
+
 /// Owns the deterministic transcript-to-capability path.
 ///
 /// The processor does not create unstructured tasks. Once resolution and policy
@@ -35,18 +40,34 @@ final class AssistantCommandProcessor {
   func process(
     _ transcript: String,
     executionStarted: @MainActor () -> Void = {}
-  ) async -> AssistantCommandOutcome {
+  ) async -> AssistantCommandProcessingResult {
     guard case .resolved(let command) = resolver.resolve(transcript) else {
       logger.notice("Rejected an unsupported command")
-      return .unsupported
+      return AssistantCommandProcessingResult(
+        outcome: .unsupported,
+        trace: AssistantCommandTrace(
+          outcome: .unsupported,
+          commandKind: nil,
+          capabilityIdentifier: nil
+        )
+      )
     }
+
+    let commandMetadata = traceMetadata(for: command)
 
     switch policy.evaluate(command) {
     case .allowed:
       break
     case .denied(let reason):
       logger.notice("Command policy denied a registered command")
-      return .denied(reason: reason)
+      return AssistantCommandProcessingResult(
+        outcome: .denied(reason: reason),
+        trace: AssistantCommandTrace(
+          outcome: .policyDenied,
+          commandKind: commandMetadata.kind,
+          capabilityIdentifier: commandMetadata.capabilityIdentifier
+        )
+      )
     }
 
     executionStarted()
@@ -71,12 +92,40 @@ final class AssistantCommandProcessor {
       logger.error("Capability failed")
     }
 
-    return .completed(outcome)
+    let traceOutcome =
+      switch outcome {
+      case .succeeded:
+        AssistantCommandTraceOutcome.capabilitySucceeded
+      case .failed:
+        AssistantCommandTraceOutcome.capabilityFailed
+      }
+
+    return AssistantCommandProcessingResult(
+      outcome: .completed(outcome),
+      trace: AssistantCommandTrace(
+        outcome: traceOutcome,
+        commandKind: commandMetadata.kind,
+        capabilityIdentifier: commandMetadata.capabilityIdentifier
+      )
+    )
   }
 
   private func logExecution(_ descriptor: CapabilityDescriptor) {
     logger.info(
       "Executing registered capability: \(descriptor.identifier, privacy: .public)"
     )
+  }
+
+  private func traceMetadata(
+    for command: TopherCommand
+  ) -> (kind: AssistantCommandKind, capabilityIdentifier: String) {
+    switch command {
+    case .openApplication:
+      (.openApplication, ApplicationOpenCapability.descriptor.identifier)
+    case .openWebsite:
+      (.openWebsite, WebOpenCapability.descriptor.identifier)
+    case .searchWeb:
+      (.searchWeb, WebOpenCapability.descriptor.identifier)
+    }
   }
 }

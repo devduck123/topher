@@ -4,6 +4,13 @@ public enum TopherCommand: Equatable, Sendable {
   case openApplication(ApplicationTarget)
   case openWebsite(WebsiteTarget)
   case searchWeb(provider: SearchProvider, query: SearchQuery)
+}
+
+/// The deterministic resolver either produces a typed executable proposal or
+/// declines the text. Unsupported input never crosses the policy boundary as a
+/// command.
+public enum CommandResolution: Equatable, Sendable {
+  case resolved(TopherCommand)
   case unsupported
 }
 

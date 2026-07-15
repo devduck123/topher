@@ -21,6 +21,8 @@
 		A00000000000000000000039 /* SpeechTranscriptionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000029 /* SpeechTranscriptionSession.swift */; };
 		A0000000000000000000003A /* VoiceTranscriptionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002A /* VoiceTranscriptionClient.swift */; };
 		A0000000000000000000003B /* VoiceFeedbackHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002C /* VoiceFeedbackHUD.swift */; };
+		A0000000000000000000003C /* AssistantCommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002D /* AssistantCommandProcessor.swift */; };
+		A0000000000000000000003D /* PushToTalkCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002E /* PushToTalkCaptureController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +40,8 @@
 		A0000000000000000000002A /* VoiceTranscriptionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTranscriptionClient.swift; sourceTree = "<group>"; };
 		A0000000000000000000002B /* Topher.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Topher.entitlements; sourceTree = "<group>"; };
 		A0000000000000000000002C /* VoiceFeedbackHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceFeedbackHUD.swift; sourceTree = "<group>"; };
+		A0000000000000000000002D /* AssistantCommandProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantCommandProcessor.swift; sourceTree = "<group>"; };
+		A0000000000000000000002E /* PushToTalkCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushToTalkCaptureController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,9 +77,11 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000020 /* ApplicationOpenCapability.swift */,
+				A0000000000000000000002D /* AssistantCommandProcessor.swift */,
 				A00000000000000000000021 /* KeyboardShortcut.swift */,
 				A00000000000000000000022 /* MenuContentView.swift */,
 				A00000000000000000000026 /* MicrophonePermissionClient.swift */,
+				A0000000000000000000002E /* PushToTalkCaptureController.swift */,
 				A00000000000000000000027 /* SpeechAssetPreparationClient.swift */,
 				A00000000000000000000028 /* SpeechAudioConversion.swift */,
 				A00000000000000000000029 /* SpeechTranscriptionSession.swift */,
@@ -167,9 +173,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00000000000000000000030 /* ApplicationOpenCapability.swift in Sources */,
+				A0000000000000000000003C /* AssistantCommandProcessor.swift in Sources */,
 				A00000000000000000000031 /* KeyboardShortcut.swift in Sources */,
 				A00000000000000000000032 /* MenuContentView.swift in Sources */,
 				A00000000000000000000036 /* MicrophonePermissionClient.swift in Sources */,
+				A0000000000000000000003D /* PushToTalkCaptureController.swift in Sources */,
 				A00000000000000000000037 /* SpeechAssetPreparationClient.swift in Sources */,
 				A00000000000000000000038 /* SpeechAudioConversion.swift in Sources */,
 				A00000000000000000000039 /* SpeechTranscriptionSession.swift in Sources */,

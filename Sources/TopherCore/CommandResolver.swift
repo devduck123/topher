@@ -4,9 +4,9 @@ import Foundation
 public struct CommandResolver: Sendable {
   public init() {}
 
-  public func resolve(_ transcript: String) -> TopherCommand {
+  public func resolve(_ transcript: String) -> CommandResolution {
     if let command = resolveSearchPreservingQuery(transcript) {
-      return command
+      return .resolved(command)
     }
 
     let normalized = normalize(transcript)
@@ -28,14 +28,17 @@ public struct CommandResolver: Sendable {
 
     if let requestedName = removingFirstPrefix(
       from: request,
-      candidates: ["open", "launch", "start", "go to", "visit"]
+      candidates: [
+        "open", "launch", "start", "go to", "visit", "navigate to", "navigate",
+        "switch to", "switch over to", "pull up",
+      ]
     ) {
       if let target = ApplicationTarget.matching(requestedName) {
-        return .openApplication(target)
+        return .resolved(.openApplication(target))
       }
 
       if let target = WebsiteTarget.matching(requestedName) {
-        return .openWebsite(target)
+        return .resolved(.openWebsite(target))
       }
 
       return .unsupported

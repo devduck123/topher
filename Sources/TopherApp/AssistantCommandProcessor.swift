@@ -1,0 +1,82 @@
+import OSLog
+import TopherCore
+
+enum AssistantCommandOutcome: Equatable, Sendable {
+  case unsupported
+  case denied(reason: String)
+  case completed(ActionOutcome)
+}
+
+/// Owns the deterministic transcript-to-capability path.
+///
+/// The processor does not create unstructured tasks. Once resolution and policy
+/// allow a command, it awaits exactly one registered capability and returns its
+/// typed outcome to the caller.
+@MainActor
+final class AssistantCommandProcessor {
+  private let resolver: CommandResolver
+  private let policy: CommandPolicy
+  private let applicationOpener: ApplicationOpenCapability
+  private let webOpener: WebOpenCapability
+  private let logger = Logger(subsystem: "dev.topher.app", category: "control-path")
+
+  init(
+    resolver: CommandResolver = .init(),
+    policy: CommandPolicy = .init(),
+    applicationOpener: ApplicationOpenCapability? = nil,
+    webOpener: WebOpenCapability? = nil
+  ) {
+    self.resolver = resolver
+    self.policy = policy
+    self.applicationOpener = applicationOpener ?? ApplicationOpenCapability()
+    self.webOpener = webOpener ?? WebOpenCapability()
+  }
+
+  func process(
+    _ transcript: String,
+    executionStarted: @MainActor () -> Void = {}
+  ) async -> AssistantCommandOutcome {
+    guard case .resolved(let command) = resolver.resolve(transcript) else {
+      logger.notice("Rejected an unsupported command")
+      return .unsupported
+    }
+
+    switch policy.evaluate(command) {
+    case .allowed:
+      break
+    case .denied(let reason):
+      logger.notice("Command policy denied a registered command")
+      return .denied(reason: reason)
+    }
+
+    executionStarted()
+
+    let outcome: ActionOutcome
+    switch command {
+    case .openApplication(let target):
+      logExecution(ApplicationOpenCapability.descriptor)
+      outcome = await applicationOpener.execute(target)
+    case .openWebsite(let target):
+      logExecution(WebOpenCapability.descriptor)
+      outcome = await webOpener.execute(target)
+    case .searchWeb(let provider, let query):
+      logExecution(WebOpenCapability.descriptor)
+      outcome = await webOpener.execute(provider: provider, query: query)
+    }
+
+    switch outcome {
+    case .succeeded:
+      logger.info("Capability completed")
+    case .failed:
+      logger.error("Capability failed")
+    }
+
+    return .completed(outcome)
+  }
+
+  private func logExecution(_ descriptor: CapabilityDescriptor) {
+    logger.info(
+      "Executing registered capability: \(descriptor.identifier, privacy: .public)"
+    )
+  }
+}

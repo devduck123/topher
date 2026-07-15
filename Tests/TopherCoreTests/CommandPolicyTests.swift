@@ -19,10 +19,15 @@ final class CommandPolicyTests: XCTestCase {
     }
   }
 
-  func testDeniesUnsupportedProposal() {
+  func testSupportsAnInjectedDenialWithoutChangingProductionPolicy() {
+    let deniedPolicy = CommandPolicy { _ in
+      .denied(reason: "User presence is required.")
+    }
+
     XCTAssertEqual(
-      policy.evaluate(.unsupported),
-      .denied(reason: "Topher only executes registered commands.")
+      deniedPolicy.evaluate(.openApplication(.notion)),
+      .denied(reason: "User presence is required.")
     )
+    XCTAssertEqual(policy.evaluate(.openApplication(.notion)), .allowed)
   }
 }

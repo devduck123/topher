@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import KeyboardShortcuts
-import OSLog
 import TopherCore
 
 @MainActor
@@ -90,60 +89,7 @@ final class TopherModel: ObservableObject {
     }
   }
 
-  enum VoiceReadiness: Equatable {
-    case checking
-    case needsPermission
-    case needsAssets
-    case preparing(progress: Double?)
-    case ready
-    case denied
-    case restricted
-    case unavailable
-
-    var title: String {
-      switch self {
-      case .checking:
-        "Checking voice input…"
-      case .needsPermission:
-        "Microphone permission required"
-      case .needsAssets:
-        "Local speech model needs preparation"
-      case .preparing(let progress):
-        if let progress {
-          "Preparing local speech model… \(Int(progress * 100))%"
-        } else {
-          "Preparing local speech model…"
-        }
-      case .ready:
-        "On-device voice input ready"
-      case .denied:
-        "Microphone access denied"
-      case .restricted:
-        "Microphone access restricted"
-      case .unavailable:
-        "On-device voice input unavailable"
-      }
-    }
-
-    var canPrepare: Bool {
-      switch self {
-      case .needsPermission, .needsAssets:
-        true
-      case .checking, .preparing, .ready, .denied, .restricted, .unavailable:
-        false
-      }
-    }
-
-    var needsSettings: Bool {
-      switch self {
-      case .denied:
-        true
-      case .checking, .needsPermission, .needsAssets, .preparing, .ready, .restricted,
-        .unavailable:
-        false
-      }
-    }
-  }
+  typealias VoiceReadiness = VoiceCaptureReadiness
 
   enum VoiceFeedback: Equatable {
     case hidden
@@ -160,31 +106,16 @@ final class TopherModel: ObservableObject {
   @Published private(set) var voiceReadiness: VoiceReadiness
   @Published private(set) var voiceFeedback: VoiceFeedback = .hidden
 
-  private let resolver: CommandResolver
-  private let policy: CommandPolicy
-  private let applicationOpener: ApplicationOpenCapability
-  private let webOpener: WebOpenCapability
-  private let microphonePermission: MicrophonePermissionClient
-  private let speechAssets: SpeechAssetPreparationClient
-  private let voiceTranscription: VoiceTranscriptionClient
-  private let listeningTimeout: Duration
-  private let finalizationTimeout: Duration
+  private let commandProcessor: AssistantCommandProcessor
+  private let captureController: PushToTalkCaptureController
   private let voiceFeedbackResultDuration: Duration
-  private let logger = Logger(subsystem: "dev.topher.app", category: "control-path")
 
   private var shortcutEventsTask: Task<Void, Never>?
-  private var voiceLifecycleTask: Task<Void, Never>?
-  private var voiceEventsTask: Task<Void, Never>?
-  private var listeningTimeoutTask: Task<Void, Never>?
-  private var voiceReadinessRefreshTask: Task<Void, Never>?
+  private var commandExecutionTask: Task<Void, Never>?
   private var voiceFeedbackDismissalTask: Task<Void, Never>?
-  private var isPushToTalkHeld = false
-  private var isVoiceCleanupPending = false
-  private var voiceGeneration: UInt64 = 0
-  private var voiceReadinessGeneration: UInt64 = 0
   private var voiceFeedbackGeneration: UInt64 = 0
-  private var finalVoiceTranscript = ""
   private var activePermissionFailure: MicrophonePermissionState?
+  private var activeVoicePresentation: VoicePresentation?
 
   init(
     resolver: CommandResolver = .init(),
@@ -199,17 +130,28 @@ final class TopherModel: ObservableObject {
     voiceFeedbackResultDuration: Duration = .seconds(3),
     listenForShortcutEvents: Bool = true
   ) {
-    self.resolver = resolver
-    self.policy = policy
-    self.applicationOpener = applicationOpener ?? ApplicationOpenCapability()
-    self.webOpener = webOpener ?? WebOpenCapability()
-    self.microphonePermission = microphonePermission ?? MicrophonePermissionClient()
-    self.speechAssets = speechAssets ?? SpeechAssetPreparationClient()
-    self.voiceTranscription = voiceTranscription ?? .live()
-    self.listeningTimeout = listeningTimeout
-    self.finalizationTimeout = finalizationTimeout
+    let permission = microphonePermission ?? MicrophonePermissionClient()
+    let captureController = PushToTalkCaptureController(
+      microphonePermission: permission,
+      speechAssets: speechAssets ?? SpeechAssetPreparationClient(),
+      transcription: voiceTranscription ?? .live(),
+      listeningTimeout: listeningTimeout,
+      finalizationTimeout: finalizationTimeout
+    )
+
+    commandProcessor = AssistantCommandProcessor(
+      resolver: resolver,
+      policy: policy,
+      applicationOpener: applicationOpener,
+      webOpener: webOpener
+    )
+    self.captureController = captureController
     self.voiceFeedbackResultDuration = voiceFeedbackResultDuration
-    voiceReadiness = Self.permissionReadiness(self.microphonePermission.currentState)
+    voiceReadiness = captureController.readiness
+
+    captureController.onEvent = { [weak self] event in
+      self?.handleCaptureEvent(event)
+    }
 
     if listenForShortcutEvents {
       shortcutEventsTask = Task { [weak self] in
@@ -226,120 +168,64 @@ final class TopherModel: ObservableObject {
       }
     }
 
-    if self.microphonePermission.currentState == .authorized {
-      refreshVoiceReadiness()
+    if permission.currentState == .authorized {
+      captureController.refreshReadiness()
     }
   }
 
   deinit {
+    let captureController = captureController
+    Task { @MainActor in
+      captureController.shutdown()
+    }
     shortcutEventsTask?.cancel()
-    voiceLifecycleTask?.cancel()
-    voiceEventsTask?.cancel()
-    listeningTimeoutTask?.cancel()
-    voiceReadinessRefreshTask?.cancel()
+    commandExecutionTask?.cancel()
     voiceFeedbackDismissalTask?.cancel()
   }
 
   func refreshVoiceReadiness() {
-    invalidateVoiceReadinessRefresh()
-    let token = voiceReadinessGeneration
-    let permissionState = microphonePermission.currentState
-    guard permissionState == .authorized else {
-      voiceReadiness = Self.permissionReadiness(permissionState)
-      reconcilePhase(with: permissionState)
-      return
-    }
-
-    reconcilePhase(with: permissionState)
-    voiceReadiness = .checking
-    let speechAssets = speechAssets
-    voiceReadinessRefreshTask = Task { [weak self] in
-      let assetState = await speechAssets.readiness()
-      guard
-        let self,
-        !Task.isCancelled,
-        voiceReadinessGeneration == token,
-        microphonePermission.currentState == .authorized
-      else { return }
-      voiceReadiness = Self.assetReadiness(assetState)
-    }
+    captureController.refreshReadiness()
   }
 
   func prepareVoiceInput() {
-    guard !phase.isBusy, !isVoiceCleanupPending else { return }
-    isPushToTalkHeld = false
+    guard canStartNewInteraction else { return }
+
+    let previousPermissionFailure = activePermissionFailure
+    activePermissionFailure = nil
+    activeVoicePresentation = .menuPreparation
     hideVoiceFeedback()
-    startVoicePreparation(startWhenReady: false, presentsGlobalFeedback: false)
+    if !captureController.prepareForUse() {
+      activePermissionFailure = previousPermissionFailure
+      activeVoicePresentation = nil
+    }
   }
 
   func beginPushToTalk() {
-    guard !phase.isBusy, !isVoiceCleanupPending, !isPushToTalkHeld else { return }
-    isPushToTalkHeld = true
-    startVoicePreparation(startWhenReady: true, presentsGlobalFeedback: true)
+    guard canStartNewInteraction else { return }
+
+    let previousPermissionFailure = activePermissionFailure
+    activePermissionFailure = nil
+    activeVoicePresentation = .globalShortcut
+    if !captureController.beginHold() {
+      activePermissionFailure = previousPermissionFailure
+      activeVoicePresentation = nil
+    }
   }
 
   func endPushToTalk() {
-    isPushToTalkHeld = false
-    guard phase.isListening else { return }
-
-    listeningTimeoutTask?.cancel()
-    listeningTimeoutTask = nil
-    phase = .finalizingVoice
-    let visibleTranscript =
-      if case .listening(let transcript) = voiceFeedback {
-        transcript
-      } else {
-        finalVoiceTranscript
-      }
-    presentVoiceFeedback(.finalizing(visibleTranscript))
-    logger.info("Push-to-talk ended")
-
-    let token = voiceGeneration
-    voiceLifecycleTask = Task { [weak self] in
-      guard let self else { return }
-
-      let outcome = await finalizeVoice(eventsTask: voiceEventsTask)
-      guard voiceGeneration == token else { return }
-
-      switch outcome {
-      case .completed:
-        let transcript = finalVoiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
-        clearVoiceResultState()
-        guard !transcript.isEmpty else {
-          let message = "I didn’t hear a command. Hold the shortcut and try again."
-          phase = .failure(message)
-          presentVoiceResult(.failure(message))
-          logger.notice("Voice capture completed without speech")
-          return
-        }
-
-        processTranscript(transcript, source: .voice)
-      case .failed:
-        await failAndCancelVoice(
-          token: token,
-          message: "Voice transcription failed. Try the shortcut again.",
-          logEvent: .transcriptionFailed
-        )
-      case .timedOut:
-        await failAndCancelVoice(
-          token: token,
-          message: "Voice finalization timed out. Try the shortcut again.",
-          logEvent: .finalizationTimedOut
-        )
-      }
-    }
+    // Always forward key-up. During first-run preparation this clears the
+    // controller's physical-held gate even though listening has not begun.
+    captureController.endHold()
   }
 
   func runManually() {
-    guard !phase.isBusy, !isVoiceCleanupPending else { return }
+    guard canStartNewInteraction else { return }
+
+    activeVoicePresentation = nil
     activePermissionFailure = nil
     hideVoiceFeedback()
     phase = .transcribing
-    let transcript = manualTranscript
-    Task { [weak self] in
-      await Task.yield()
-      self?.processTranscript(transcript, source: .manual)
-    }
+    startCommandProcessing(manualTranscript, source: .manual, yieldBeforeProcessing: true)
   }
 
   func openMicrophoneSettings() {
@@ -352,374 +238,173 @@ final class TopherModel: ObservableObject {
     NSWorkspace.shared.open(url)
   }
 
-  private func startVoicePreparation(
-    startWhenReady: Bool,
-    presentsGlobalFeedback: Bool
-  ) {
-    voiceLifecycleTask?.cancel()
-    listeningTimeoutTask?.cancel()
-    invalidateVoiceReadinessRefresh()
-    clearVoiceResultState()
-    activePermissionFailure = nil
-    phase = .preparingVoice
-    if presentsGlobalFeedback {
-      presentVoiceFeedback(.preparing("Checking microphone access…"))
-    }
-    voiceGeneration &+= 1
-    let token = voiceGeneration
-
-    voiceLifecycleTask = Task { [weak self] in
-      guard let self else { return }
-      await prepareAndMaybeStartVoice(
-        token: token,
-        startWhenReady: startWhenReady,
-        presentsGlobalFeedback: presentsGlobalFeedback
-      )
-    }
+  private var canStartNewInteraction: Bool {
+    !phase.isBusy && !captureController.isBusy && commandExecutionTask == nil
   }
 
-  private func prepareAndMaybeStartVoice(
-    token: UInt64,
-    startWhenReady: Bool,
-    presentsGlobalFeedback: Bool
-  ) async {
-    let initialPermission = microphonePermission.currentState
-    let permissionState = await microphonePermission.requestAuthorization()
-    guard voiceGeneration == token else { return }
-    invalidateVoiceReadinessRefresh()
+  private func handleCaptureEvent(_ event: PushToTalkCaptureEvent) {
+    switch event {
+    case .readinessChanged(let readiness, let permission):
+      voiceReadiness = readiness
+      reconcilePhase(with: permission)
 
-    switch permissionState {
-    case .authorized:
-      voiceReadiness = .checking
-      if presentsGlobalFeedback {
-        presentVoiceFeedback(.preparing("Checking the local speech model…"))
-      }
-    case .notDetermined:
-      activePermissionFailure = .notDetermined
-      voiceReadiness = .needsPermission
-      let message = "Microphone access is required for push-to-talk."
-      phase = .failure(message)
-      if presentsGlobalFeedback {
-        presentVoiceResult(.failure(message))
-      }
-      return
-    case .denied:
-      activePermissionFailure = .denied
-      voiceReadiness = .denied
-      let message = "Microphone denied. Open Topher’s menu to open Microphone Settings."
-      phase = .failure(message)
-      if presentsGlobalFeedback {
-        presentVoiceResult(.failure(message))
-      }
-      logger.notice("Microphone permission denied")
-      return
-    case .restricted:
-      activePermissionFailure = .restricted
-      voiceReadiness = .restricted
-      let message = "Microphone access is restricted by this Mac’s administrator or policy."
-      phase = .failure(message)
-      if presentsGlobalFeedback {
-        presentVoiceResult(.failure(message))
-      }
-      logger.notice("Microphone permission restricted")
-      return
-    }
+    case .stateChanged(let state):
+      handleCaptureState(state)
 
-    let initialAssets = await speechAssets.readiness()
-    guard voiceGeneration == token else { return }
-    voiceReadiness = Self.assetReadiness(initialAssets)
-
-    var preparedAssetsThisAttempt = false
-    let requiresAssetPreparation =
-      switch initialAssets {
-      case .ready:
-        false
-      case .unavailable, .unsupportedLocale, .downloadRequired, .downloading:
-        true
-      }
-    if requiresAssetPreparation {
-      preparedAssetsThisAttempt = true
-      do {
-        let finalState = try await speechAssets.prepare { [weak self] state in
-          guard let self, voiceGeneration == token else { return }
-          voiceReadiness = Self.assetReadiness(state)
-          if presentsGlobalFeedback {
-            presentVoiceFeedback(.preparing(voiceReadiness.title))
-          }
-        }
-        guard voiceGeneration == token else { return }
-        voiceReadiness = Self.assetReadiness(finalState)
-        guard case .ready = finalState else {
-          let message = "The local English speech model isn’t ready yet."
-          phase = .failure(message)
-          if presentsGlobalFeedback {
-            presentVoiceResult(.failure(message))
-          }
-          return
-        }
-      } catch {
-        guard voiceGeneration == token else { return }
-        voiceReadiness = .needsAssets
-        let message = "Couldn’t prepare the local speech model. Try again."
-        phase = .failure(message)
-        if presentsGlobalFeedback {
-          presentVoiceResult(.failure(message))
-        }
-        logger.error("Speech asset preparation failed")
-        return
-      }
-    }
-
-    let permissionWasRequested = initialPermission == .notDetermined
-    if !startWhenReady || permissionWasRequested || preparedAssetsThisAttempt {
-      voiceReadiness = .ready
+    case .readyForNextHold:
       let message = "Voice input is ready. Hold your shortcut again to speak."
+      let presentsGlobally = activeVoicePresentation == .globalShortcut
+      activeVoicePresentation = nil
       phase = .success(message)
-      if presentsGlobalFeedback {
+      if presentsGlobally {
         presentVoiceResult(.success(message))
       }
-      return
-    }
 
-    guard isPushToTalkHeld else {
+    case .releasedBeforeListening:
       let message = "Released before listening started. Hold the shortcut again."
+      let presentsGlobally = activeVoicePresentation == .globalShortcut
+      activeVoicePresentation = nil
       phase = .success(message)
-      if presentsGlobalFeedback {
+      if presentsGlobally {
         presentVoiceResult(.failure(message))
       }
-      return
-    }
 
-    do {
-      try await voiceTranscription.prepare()
-      guard voiceGeneration == token, isPushToTalkHeld else {
-        await voiceTranscription.cancel()
-        if voiceGeneration == token {
-          let message = "Released before listening started. Hold the shortcut again."
-          phase = .success(message)
-          if presentsGlobalFeedback {
-            presentVoiceResult(.failure(message))
-          }
+    case .completed(let rawTranscript):
+      let presentsGlobally = activeVoicePresentation == .globalShortcut
+      activeVoicePresentation = nil
+      let transcript = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !transcript.isEmpty else {
+        let message = "I didn’t hear a command. Hold the shortcut and try again."
+        phase = .failure(message)
+        if presentsGlobally {
+          presentVoiceResult(.failure(message))
         }
         return
       }
 
-      let events = try await voiceTranscription.start()
-      guard voiceGeneration == token, isPushToTalkHeld else {
-        await voiceTranscription.cancel()
-        if voiceGeneration == token {
-          let message = "Released before listening started. Hold the shortcut again."
-          phase = .success(message)
-          if presentsGlobalFeedback {
-            presentVoiceResult(.failure(message))
-          }
+      startCommandProcessing(transcript, source: .voice)
+
+    case .failed(let failure):
+      applyCaptureFailure(failure)
+    }
+  }
+
+  private func handleCaptureState(_ state: PushToTalkCaptureState) {
+    let presentsGlobally = activeVoicePresentation == .globalShortcut
+
+    switch state {
+    case .preparing(let preparation):
+      phase = .preparingVoice
+      guard presentsGlobally else { return }
+
+      let detail =
+        switch preparation {
+        case .microphonePermission:
+          "Checking microphone access…"
+        case .speechModel:
+          "Checking the local speech model…"
+        case .speechAssets(let readiness):
+          readiness.title
         }
-        return
+      presentVoiceFeedback(.preparing(detail))
+
+    case .listening(let transcript):
+      phase = .listening(transcript)
+      if presentsGlobally {
+        presentVoiceFeedback(.listening(transcript))
       }
 
-      phase = .listening("")
-      presentVoiceFeedback(.listening(""))
-      logger.info("Push-to-talk started")
-      consumeVoiceEvents(events, token: token)
-      scheduleListeningTimeout(token: token)
-    } catch {
-      await voiceTranscription.cancel()
-      guard voiceGeneration == token else { return }
-      let message = "Couldn’t start voice input. Try the shortcut again."
-      phase = .failure(message)
-      if presentsGlobalFeedback {
-        presentVoiceResult(.failure(message))
-      }
-      logger.error("Voice capture failed to start")
-    }
-  }
-
-  private func consumeVoiceEvents(
-    _ events: AsyncThrowingStream<TranscriptionEvent, any Error>,
-    token: UInt64
-  ) {
-    voiceEventsTask?.cancel()
-    voiceEventsTask = Task { [weak self] in
-      guard let self else { return }
-
-      do {
-        for try await event in events {
-          guard voiceGeneration == token else { return }
-          switch event {
-          case .partial(let transcript):
-            if phase.isListening {
-              phase = .listening(transcript)
-              presentVoiceFeedback(.listening(transcript))
-            }
-          case .final(let transcript):
-            finalVoiceTranscript = transcript
-            if phase == .finalizingVoice {
-              presentVoiceFeedback(.finalizing(transcript))
-            } else if phase.isListening {
-              phase = .listening(transcript)
-              presentVoiceFeedback(.listening(transcript))
-            }
-          }
-        }
-
-        guard voiceGeneration == token, phase.isListening else { return }
-        await failAndCancelVoice(
-          token: token,
-          message: "Voice input stopped unexpectedly. Try the shortcut again.",
-          logEvent: .resultStreamEnded
-        )
-      } catch {
-        guard voiceGeneration == token else { return }
-        await failAndCancelVoice(
-          token: token,
-          message: "Voice transcription failed. Try the shortcut again.",
-          logEvent: .resultStreamFailed
-        )
+    case .finalizing(let transcript):
+      phase = .finalizingVoice
+      if presentsGlobally {
+        presentVoiceFeedback(.finalizing(transcript))
       }
     }
   }
 
-  private func scheduleListeningTimeout(token: UInt64) {
-    listeningTimeoutTask?.cancel()
-    let timeout = listeningTimeout
-    listeningTimeoutTask = Task { [weak self] in
-      do {
-        try await Task.sleep(for: timeout)
-      } catch {
-        return
-      }
-
-      guard let self, voiceGeneration == token, phase.isListening else { return }
-      await failAndCancelVoice(
-        token: token,
-        message: "Listening timed out. Try the shortcut again.",
-        logEvent: .listeningTimedOut
-      )
-    }
-  }
-
-  private func finalizeVoice(
-    eventsTask: Task<Void, Never>?
-  ) async -> VoiceFinalizationOutcome {
-    let (outcomes, continuation) = AsyncStream.makeStream(of: VoiceFinalizationOutcome.self)
-    let transcription = voiceTranscription
-
-    let operation = Task { @MainActor in
-      do {
-        try await transcription.finish()
-        await eventsTask?.value
-        continuation.yield(.completed)
-      } catch {
-        continuation.yield(.failed)
-      }
-    }
-    let timeout = finalizationTimeout
-    let watchdog = Task { @MainActor in
-      do {
-        try await Task.sleep(for: timeout)
-      } catch {
-        return
-      }
-      continuation.yield(.timedOut)
-    }
-
-    var iterator = outcomes.makeAsyncIterator()
-    let outcome = await iterator.next() ?? .failed
-    watchdog.cancel()
-    continuation.finish()
-    if outcome != .completed {
-      operation.cancel()
-    }
-    return outcome
-  }
-
-  private func failAndCancelVoice(
-    token: UInt64,
-    message: String,
-    logEvent: VoiceFailureLogEvent
-  ) async {
-    guard voiceGeneration == token else { return }
-
-    voiceGeneration &+= 1
-    listeningTimeoutTask?.cancel()
-    listeningTimeoutTask = nil
-    isPushToTalkHeld = false
-    isVoiceCleanupPending = true
-    activePermissionFailure = nil
-    phase = .failure(message)
-    presentVoiceResult(.failure(message))
-    clearVoiceResultState()
-    switch logEvent {
-    case .transcriptionFailed:
-      logger.error("Voice transcription failed")
-    case .finalizationTimedOut:
-      logger.error("Voice finalization timed out")
+  private func applyCaptureFailure(_ failure: PushToTalkCaptureFailure) {
+    let message: String
+    switch failure {
+    case .microphonePermissionRequired:
+      activePermissionFailure = .notDetermined
+      message = "Microphone access is required for push-to-talk."
+    case .microphoneDenied:
+      activePermissionFailure = .denied
+      message = "Microphone denied. Open Topher’s menu to open Microphone Settings."
+    case .microphoneRestricted:
+      activePermissionFailure = .restricted
+      message = "Microphone access is restricted by this Mac’s administrator or policy."
+    case .speechModelNotReady:
+      activePermissionFailure = nil
+      message = "The local English speech model isn’t ready yet."
+    case .speechAssetPreparationFailed:
+      activePermissionFailure = nil
+      message = "Couldn’t prepare the local speech model. Try again."
+    case .startFailed:
+      activePermissionFailure = nil
+      message = "Couldn’t start voice input. Try the shortcut again."
     case .resultStreamEnded:
-      logger.error("Voice result stream ended while listening")
-    case .resultStreamFailed:
-      logger.error("Voice result stream failed")
+      activePermissionFailure = nil
+      message = "Voice input stopped unexpectedly. Try the shortcut again."
+    case .resultStreamFailed, .finalizationFailed:
+      activePermissionFailure = nil
+      message = "Voice transcription failed. Try the shortcut again."
     case .listeningTimedOut:
-      logger.notice("Push-to-talk timed out without a key-up event")
+      activePermissionFailure = nil
+      message = "Listening timed out. Try the shortcut again."
+    case .finalizationTimedOut:
+      activePermissionFailure = nil
+      message = "Voice finalization timed out. Try the shortcut again."
     }
 
-    await voiceTranscription.cancel()
-    isVoiceCleanupPending = false
+    let presentsGlobally = activeVoicePresentation == .globalShortcut
+    activeVoicePresentation = nil
+    phase = .failure(message)
+    if presentsGlobally {
+      presentVoiceResult(.failure(message))
+    }
   }
 
-  private func processTranscript(_ transcript: String, source: TranscriptSource) {
+  private func startCommandProcessing(
+    _ transcript: String,
+    source: TranscriptSource,
+    yieldBeforeProcessing: Bool = false
+  ) {
+    precondition(commandExecutionTask == nil)
     activePermissionFailure = nil
-    let command = resolver.resolve(transcript)
+    let processor = commandProcessor
 
-    guard policy.evaluate(command) == .allowed else {
-      let message = "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
-      phase = .failure(message)
-      if source == .voice {
-        presentVoiceResult(.failure(message))
-      }
-      logger.notice("Rejected an unsupported command")
-      return
-    }
-
-    if source == .voice {
-      presentVoiceFeedback(.executing(transcript))
-    }
-
-    switch command {
-    case .openApplication(let target):
-      phase = .executing
-      logger.info(
-        "Executing registered capability: \(ApplicationOpenCapability.descriptor.identifier, privacy: .public)"
-      )
-      Task {
-        let outcome = await applicationOpener.execute(target)
-        apply(outcome, source: source)
-      }
-    case .openWebsite(let target):
-      phase = .executing
-      logger.info(
-        "Executing registered capability: \(WebOpenCapability.descriptor.identifier, privacy: .public)"
-      )
-      Task {
+    commandExecutionTask = Task { [weak self] in
+      if yieldBeforeProcessing {
         await Task.yield()
-        let outcome = await webOpener.execute(target)
-        apply(outcome, source: source)
       }
-    case .searchWeb(let provider, let query):
-      phase = .executing
-      logger.info(
-        "Executing registered capability: \(WebOpenCapability.descriptor.identifier, privacy: .public)"
-      )
-      Task {
-        await Task.yield()
-        let outcome = await webOpener.execute(provider: provider, query: query)
-        apply(outcome, source: source)
+      guard !Task.isCancelled else { return }
+
+      let outcome = await processor.process(transcript) { [weak self] in
+        guard let self else { return }
+        phase = .executing
+        if source == .voice {
+          presentVoiceFeedback(.executing(transcript))
+        }
       }
+
+      guard !Task.isCancelled, let self else { return }
+      commandExecutionTask = nil
+      apply(outcome, source: source)
+    }
+  }
+
+  private func apply(_ outcome: AssistantCommandOutcome, source: TranscriptSource) {
+    switch outcome {
     case .unsupported:
-      let message = "Unsupported command."
-      phase = .failure(message)
-      if source == .voice {
-        presentVoiceResult(.failure(message))
-      }
+      applyFailure(
+        "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”",
+        source: source
+      )
+    case .denied(let reason):
+      applyFailure(reason, source: source)
+    case .completed(let actionOutcome):
+      apply(actionOutcome, source: source)
     }
   }
 
@@ -730,13 +415,15 @@ final class TopherModel: ObservableObject {
       if source == .voice {
         presentVoiceResult(.success(message))
       }
-      logger.info("Capability completed")
     case .failed(let message):
-      phase = .failure(message)
-      if source == .voice {
-        presentVoiceResult(.failure(message))
-      }
-      logger.error("Capability failed")
+      applyFailure(message, source: source)
+    }
+  }
+
+  private func applyFailure(_ message: String, source: TranscriptSource) {
+    phase = .failure(message)
+    if source == .voice {
+      presentVoiceResult(.failure(message))
     }
   }
 
@@ -778,12 +465,6 @@ final class TopherModel: ObservableObject {
     voiceFeedback = .hidden
   }
 
-  private func invalidateVoiceReadinessRefresh() {
-    voiceReadinessRefreshTask?.cancel()
-    voiceReadinessRefreshTask = nil
-    voiceReadinessGeneration &+= 1
-  }
-
   private func reconcilePhase(with permissionState: MicrophonePermissionState) {
     guard !phase.isBusy else { return }
 
@@ -808,42 +489,6 @@ final class TopherModel: ObservableObject {
       }
     }
   }
-
-  private func clearVoiceResultState() {
-    voiceEventsTask?.cancel()
-    voiceEventsTask = nil
-    finalVoiceTranscript = ""
-  }
-
-  private static func permissionReadiness(
-    _ state: MicrophonePermissionState
-  ) -> VoiceReadiness {
-    switch state {
-    case .notDetermined:
-      .needsPermission
-    case .authorized:
-      .checking
-    case .denied:
-      .denied
-    case .restricted:
-      .restricted
-    }
-  }
-
-  private static func assetReadiness(
-    _ state: SpeechAssetPreparationState
-  ) -> VoiceReadiness {
-    switch state {
-    case .unavailable, .unsupportedLocale:
-      .unavailable
-    case .downloadRequired:
-      .needsAssets
-    case .downloading(_, let progress):
-      .preparing(progress: progress)
-    case .ready:
-      .ready
-    }
-  }
 }
 
 private enum TranscriptSource: Equatable, Sendable {
@@ -851,16 +496,7 @@ private enum TranscriptSource: Equatable, Sendable {
   case voice
 }
 
-private enum VoiceFinalizationOutcome: Equatable, Sendable {
-  case completed
-  case failed
-  case timedOut
-}
-
-private enum VoiceFailureLogEvent {
-  case transcriptionFailed
-  case finalizationTimedOut
-  case resultStreamEnded
-  case resultStreamFailed
-  case listeningTimedOut
+private enum VoicePresentation: Equatable, Sendable {
+  case globalShortcut
+  case menuPreparation
 }

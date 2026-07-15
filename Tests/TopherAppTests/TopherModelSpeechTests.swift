@@ -290,6 +290,89 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.voiceFeedback, .hidden)
   }
 
+  func testInFlightCommandBlocksDuplicateManualAndVoiceExecution() async {
+    var openCount = 0
+    var openContinuation: CheckedContinuation<Void, Never>?
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+          openApplication: { _ in
+            openCount += 1
+            await withCheckedContinuation { openContinuation = $0 }
+          }
+        )
+      )
+    )
+
+    model.runManually()
+    await waitUntil { model.phase == .executing && openContinuation != nil }
+
+    model.runManually()
+    model.beginPushToTalk()
+    await Task.yield()
+
+    XCTAssertEqual(openCount, 1)
+    XCTAssertEqual(voice.prepareCount, 0)
+    XCTAssertEqual(voice.startCount, 0)
+
+    openContinuation?.resume()
+    openContinuation = nil
+    await waitUntil { model.phase == .success("Opened Safari.") }
+  }
+
+  func testUnsupportedManualCommandCanRetryWithAValidCommand() async {
+    var openCount = 0
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+          openApplication: { _ in openCount += 1 }
+        )
+      )
+    )
+
+    model.manualTranscript = "A webpage says open Safari"
+    model.runManually()
+    await waitUntil {
+      model.phase
+        == .failure(
+          "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
+        )
+    }
+
+    model.manualTranscript = "Open Safari"
+    model.runManually()
+    await waitUntil { model.phase == .success("Opened Safari.") }
+
+    XCTAssertEqual(openCount, 1)
+  }
+
+  func testModelDeinitShutsDownActiveVoiceCapture() async {
+    let voice = VoiceHarness()
+    var model: TopherModel? = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice
+    )
+
+    model?.beginPushToTalk()
+    await waitUntil { model?.phase == .listening("") }
+
+    model = nil
+
+    await waitUntil { voice.cancelCount == 1 }
+    XCTAssertEqual(voice.finishCount, 0)
+  }
+
   func testDeniedPermissionRecoversCoherentlyAfterSettingsGrant() async {
     var authorizationStatus = AVAuthorizationStatus.denied
     let permission = MicrophonePermissionClient(
@@ -318,6 +401,41 @@ final class TopherModelSpeechTests: XCTestCase {
 
     await waitUntil { model.voiceReadiness == .ready }
     XCTAssertEqual(model.phase, .idle)
+    XCTAssertEqual(model.voiceFeedback, .hidden)
+  }
+
+  func testAcceptedPreparationClearsStalePermissionFailureBeforeLaterRefresh() async {
+    var authorizationStatus = AVAuthorizationStatus.denied
+    let permission = MicrophonePermissionClient(
+      environment: MicrophonePermissionEnvironment(
+        authorizationStatus: { authorizationStatus },
+        requestAccess: {
+          XCTFail("A recorded permission decision must not display a prompt")
+          return false
+        }
+      )
+    )
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission,
+      speechAssets: readySpeechAssets(),
+      voice: voice
+    )
+
+    model.beginPushToTalk()
+    let deniedMessage = "Microphone denied. Open Topher’s menu to open Microphone Settings."
+    await waitUntil { model.phase == .failure(deniedMessage) }
+    model.endPushToTalk()
+
+    authorizationStatus = .authorized
+    model.prepareVoiceInput()
+    let readyMessage = "Voice input is ready. Hold your shortcut again to speak."
+    await waitUntil { model.phase == .success(readyMessage) }
+
+    model.refreshVoiceReadiness()
+    await waitUntil { model.voiceReadiness == .ready }
+
+    XCTAssertEqual(model.phase, .success(readyMessage))
     XCTAssertEqual(model.voiceFeedback, .hidden)
   }
 
@@ -490,9 +608,13 @@ final class TopherModelSpeechTests: XCTestCase {
     }
 
     model.endPushToTalk()
+    model.runManually()
+    model.beginPushToTalk()
     await Task.yield()
 
     XCTAssertEqual(model.phase, .failure("Listening timed out. Try the shortcut again."))
+    XCTAssertEqual(voice.prepareCount, 1)
+    XCTAssertEqual(voice.startCount, 1)
     XCTAssertEqual(voice.finishCount, 0)
     voice.resumeCancel()
   }

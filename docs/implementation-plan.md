@@ -119,7 +119,10 @@ dependency, and installed-app denial/error recovery is verified.
   browser-owned route; support target-specific Google/YouTube query phrasing;
   reject independently executable compound actions; and retain typed reasons
   for unsupported requests.
-- Add validated explicit HTTPS URL opening only if a later use case needs it.
+- Complete in build 6: deliver Chrome-owned routes through targeted URL handoff
+  rather than launch-only arguments; accept exact bare known targets and
+  destination-first provider searches; normalize sentence punctuation only in
+  extracted command values; and add bounded explicit HTTPS domain navigation.
 - Add application discovery plus explicit aliases without accepting arbitrary
   model-provided bundle IDs.
 - Add a read-only active-application provider for “What app am I using?”

@@ -13,6 +13,12 @@ final class CommandPolicyTests: XCTestCase {
     XCTAssertEqual(policy.evaluate(.openWebsite(.youtube)), .allowed)
     XCTAssertEqual(policy.evaluate(.openBrowserRoute(.chromeExtensions)), .allowed)
 
+    let domain = HTTPSDomain("tnc.com")
+    XCTAssertNotNil(domain)
+    if let domain {
+      XCTAssertEqual(policy.evaluate(.openDomain(domain)), .allowed)
+    }
+
     let query = SearchQuery("local models")
     XCTAssertNotNil(query)
     if let query {

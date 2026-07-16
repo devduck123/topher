@@ -22,21 +22,30 @@ struct WebWorkspace {
 @MainActor
 struct BrowserRouteWorkspace {
   let applicationURL: (String) -> URL?
-  let openApplication: (URL, [String]) async throws -> Void
+  let openURLs: ([URL], URL) async throws -> Void
 
   static var live: Self {
     let workspace = NSWorkspace.shared
     return Self(
       applicationURL: { workspace.urlForApplication(withBundleIdentifier: $0) },
-      openApplication: { applicationURL, arguments in
+      openURLs: { urls, applicationURL in
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         configuration.promptsUserIfNeeded = true
-        configuration.arguments = arguments
-        _ = try await workspace.openApplication(
-          at: applicationURL,
-          configuration: configuration
-        )
+        try await withCheckedThrowingContinuation {
+          (continuation: CheckedContinuation<Void, any Error>) in
+          workspace.open(
+            urls,
+            withApplicationAt: applicationURL,
+            configuration: configuration
+          ) { _, error in
+            if let error {
+              continuation.resume(throwing: error)
+            } else {
+              continuation.resume(returning: ())
+            }
+          }
+        }
       }
     )
   }
@@ -57,22 +66,25 @@ final class BrowserRouteOpenCapability {
   }
 
   func execute(_ target: BrowserRouteTarget) async -> ActionOutcome {
-    guard let applicationURL = workspace.applicationURL(target.browser.bundleIdentifier) else {
+    guard
+      let applicationURL = workspace.applicationURL(target.browser.bundleIdentifier),
+      let routeURL = routeURL(for: target)
+    else {
       return .failed(message: "Could not open \(target.displayName).")
     }
 
     do {
-      try await workspace.openApplication(applicationURL, [routeArgument(for: target)])
+      try await workspace.openURLs([routeURL], applicationURL)
       return .succeeded(message: "Opened \(target.displayName).")
     } catch {
       return .failed(message: "Could not open \(target.displayName).")
     }
   }
 
-  private func routeArgument(for target: BrowserRouteTarget) -> String {
+  private func routeURL(for target: BrowserRouteTarget) -> URL? {
     switch target {
     case .chromeExtensions:
-      "chrome://extensions/"
+      URL(string: "chrome://extensions/")
     }
   }
 }
@@ -101,6 +113,15 @@ final class WebOpenCapability {
       return .succeeded(message: "Opened \(target.displayName).")
     } catch {
       return .failed(message: "Could not open \(target.displayName).")
+    }
+  }
+
+  func execute(_ domain: HTTPSDomain) async -> ActionOutcome {
+    do {
+      try await workspace.open(domain.url)
+      return .succeeded(message: "Opened \(domain.host).")
+    } catch {
+      return .failed(message: "Could not open \(domain.host).")
     }
   }
 

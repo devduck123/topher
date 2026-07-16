@@ -25,7 +25,7 @@ public struct CommandPolicy: Sendable {
     }
 
     switch command {
-    case .openApplication, .openBrowserRoute, .openWebsite, .searchWeb:
+    case .openApplication, .openBrowserRoute, .openDomain, .openWebsite, .searchWeb:
       return .allowed
     }
   }

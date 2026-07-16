@@ -120,9 +120,20 @@ Crunchyroll” can mean navigate to the known Crunchyroll destination, while
 subjects use Google through the default browser. Application matching does not
 take priority merely because an installed application resembles a website.
 Browser-owned internal routes, such as Chrome Extensions, are distinct typed
-targets rather than arbitrary URL strings. A request that independently
-resolves to multiple executable actions is rejected as compound until a future
-planner and confirmation design can preserve ordering and authority safely.
+targets rather than arbitrary URL strings. They are delivered as URLs to the
+registered browser application, not as launch-only process arguments.
+
+An explicit navigation request may produce `HTTPSDomain`, a typed public-host
+value that always constructs HTTPS and rejects paths, credentials, ports, IP
+addresses, custom schemes, and local or reserved names. Known application and
+website targets still win before domain parsing. The original transcript is
+retained for diagnostics; only an extracted command search/domain value drops
+likely terminal sentence punctuation. Dictation formatting remains a separate
+mode and does not inherit command normalization.
+
+A request that independently resolves to multiple executable actions is
+rejected as compound until a future planner and confirmation design can
+preserve ordering and authority safely.
 
 A model may help interpret phrasing, but it cannot create capabilities, grant
 permissions, set policy, or return executable code. Unavailable local reasoning

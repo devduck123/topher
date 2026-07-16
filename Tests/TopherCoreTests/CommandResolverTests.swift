@@ -27,6 +27,21 @@ final class CommandResolverTests: XCTestCase {
     }
   }
 
+  func testRecognizesBareExactKnownTargets() {
+    let cases: [(String, TopherCommand)] = [
+      ("Chrome", .openApplication(.chrome)),
+      ("Notes.", .openApplication(.notes)),
+      ("Notion!", .openApplication(.notion)),
+      ("VS Code.", .openApplication(.visualStudioCode)),
+      ("YouTube", .openWebsite(.youtube)),
+      ("GitHub.", .openWebsite(.github)),
+    ]
+
+    for (transcript, expected) in cases {
+      XCTAssertEqual(resolver.resolve(transcript), .resolved(expected))
+    }
+  }
+
   func testUsesValidatedDeveloperApplicationIdentities() {
     XCTAssertEqual(ApplicationTarget.chatGPT.bundleIdentifier, "com.openai.codex")
     XCTAssertEqual(ApplicationTarget.xcode.bundleIdentifier, "com.apple.dt.Xcode")
@@ -68,6 +83,7 @@ final class CommandResolverTests: XCTestCase {
       ("Topher, please open You Tube for me.", .youtube),
       ("Open GitHub", .github),
       ("Open github.com", .github),
+      ("Open gidhub.com", .github),
       ("Open Crunchyroll", .crunchyroll),
       ("Go to my Gmail", .gmail),
       ("Open Gmail", .gmail),
@@ -96,6 +112,7 @@ final class CommandResolverTests: XCTestCase {
   func testKnownSearchDestinationsAcceptTargetSpecificQueries() {
     let cases: [(String, SearchProvider, String)] = [
       ("Open YouTube for dining with Derek", .youtube, "dining with Derek"),
+      ("Open YouTube for dining with Derek.", .youtube, "dining with Derek"),
       ("Take me to YouTube for Swift concurrency", .youtube, "Swift concurrency"),
       ("Open Google for macOS speech recognition", .google, "macOS speech recognition"),
     ]
@@ -106,6 +123,54 @@ final class CommandResolverTests: XCTestCase {
         resolver.resolve(transcript),
         query.map { .resolved(.searchWeb(provider: provider, query: $0)) }
       )
+    }
+  }
+
+  func testKnownSearchDestinationsAcceptDestinationFirstQueries() {
+    let cases: [(String, SearchProvider, String)] = [
+      ("YouTube for dining with Derek.", .youtube, "dining with Derek"),
+      ("YouTube, dining with Derek.", .youtube, "dining with Derek"),
+      ("YouTube search dining with Derek", .youtube, "dining with Derek"),
+      ("Google for Swift concurrency", .google, "Swift concurrency"),
+      ("Google: local macOS speech recognition", .google, "local macOS speech recognition"),
+    ]
+
+    for (transcript, provider, queryText) in cases {
+      let query = SearchQuery(queryText)
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        query.map { .resolved(.searchWeb(provider: provider, query: $0)) }
+      )
+    }
+  }
+
+  func testRecognizesExplicitValidatedHTTPSDomains() throws {
+    let cases = [
+      ("Go to TNC.com.", "tnc.com"),
+      ("Go to TNC.com for me.", "tnc.com"),
+      ("Visit www.swift.org", "www.swift.org"),
+      ("Open https://developer.apple.com", "developer.apple.com"),
+    ]
+
+    for (transcript, host) in cases {
+      let domain = try XCTUnwrap(HTTPSDomain(host))
+      XCTAssertEqual(resolver.resolve(transcript), .resolved(.openDomain(domain)))
+    }
+  }
+
+  func testExplicitDomainNavigationFailsClosedForUnsafeOrAmbiguousValues() {
+    let cases = [
+      "Open http://example.com",
+      "Open example.com/private/path",
+      "Open user@example.com",
+      "Open example.com:8443",
+      "Open 127.0.0.1",
+      "Open localhost",
+      "Open totally-real.example",
+    ]
+
+    for transcript in cases {
+      XCTAssertEqual(resolver.resolve(transcript), .unsupported(reason: .unknownTarget))
     }
   }
 
@@ -154,6 +219,8 @@ final class CommandResolverTests: XCTestCase {
       ("Search the web for Swift speech APIs", .google, "Swift speech APIs"),
       ("Topher, could you search for M4 benchmarks", .google, "M4 benchmarks"),
       ("Search YouTube for C++ & Swift #1", .youtube, "C++ & Swift #1"),
+      ("Search YouTube for dining with Derek.", .youtube, "dining with Derek"),
+      ("Search for tnc.com", .google, "tnc.com"),
       ("Search Crunchyroll anime releases", .google, "Crunchyroll anime releases"),
       ("Search Chrome extensions", .google, "Chrome extensions"),
     ]

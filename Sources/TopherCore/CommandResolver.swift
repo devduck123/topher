@@ -22,6 +22,10 @@ public struct CommandResolver: Sendable {
       return .resolved(.openWebsite(target))
     }
 
+    if let resolution = resolveDestinationFirstQuery(transcript) {
+      return resolution
+    }
+
     if let resolution = resolveSearchPreservingQuery(transcript) {
       return resolution
     }
@@ -29,6 +33,16 @@ public struct CommandResolver: Sendable {
     let request = normalizedRequest(transcript)
     if requiresContext(request) {
       return .unsupported(reason: .contextRequired)
+    }
+
+    // Exact known targets are safe enough to use as terse commands. Website
+    // brands win before native applications, matching explicit "open" forms.
+    if let target = WebsiteTarget.matching(request) {
+      return .resolved(.openWebsite(target))
+    }
+
+    if let target = ApplicationTarget.matching(request) {
+      return .resolved(.openApplication(target))
     }
 
     if let requestedName = removingFirstPrefix(
@@ -55,6 +69,10 @@ public struct CommandResolver: Sendable {
 
       if let resolution = resolveTargetQuery(transcript) {
         return resolution
+      }
+
+      if let domain = resolveExplicitHTTPSDomain(transcript) {
+        return .resolved(.openDomain(domain))
       }
 
       return .unsupported(
@@ -109,7 +127,7 @@ public struct CommandResolver: Sendable {
         continue
       }
 
-      guard let query = SearchQuery(queryText) else {
+      guard let query = commandSearchQuery(queryText) else {
         return .unsupported(reason: .missingValue)
       }
 
@@ -139,7 +157,7 @@ public struct CommandResolver: Sendable {
         guard let queryText = removingRawPrefix(from: request, candidates: prefixes) else {
           continue
         }
-        guard let query = SearchQuery(queryText) else {
+        guard let query = commandSearchQuery(queryText) else {
           return .unsupported(reason: .missingValue)
         }
         return .resolved(.searchWeb(provider: provider, query: query))
@@ -147,6 +165,70 @@ public struct CommandResolver: Sendable {
     }
 
     return nil
+  }
+
+  private func resolveDestinationFirstQuery(_ transcript: String) -> CommandResolution? {
+    let request = rawCommandRequest(transcript)
+
+    for target in WebsiteTarget.allCases {
+      guard let provider = target.queryProvider else { continue }
+      for alias in target.aliases.sorted(by: { $0.count > $1.count }) {
+        let explicitPrefixes = ["\(alias) for", "\(alias) search for", "\(alias) search"]
+        if let queryText = removingRawPrefix(from: request, candidates: explicitPrefixes) {
+          guard let query = commandSearchQuery(queryText) else {
+            return .unsupported(reason: .missingValue)
+          }
+          return .resolved(.searchWeb(provider: provider, query: query))
+        }
+
+        if let queryText = removingRawDelimitedPrefix(alias, from: request) {
+          guard let query = commandSearchQuery(queryText) else {
+            return .unsupported(reason: .missingValue)
+          }
+          return .resolved(.searchWeb(provider: provider, query: query))
+        }
+      }
+    }
+
+    return nil
+  }
+
+  private func resolveExplicitHTTPSDomain(_ transcript: String) -> HTTPSDomain? {
+    let request = rawCommandRequest(transcript)
+    guard
+      let value = removingRawPrefix(
+        from: request,
+        candidates: [
+          "navigate to", "switch over to", "switch to", "bring me to", "take me to",
+          "pull up", "open", "launch", "start", "go to", "visit", "navigate",
+        ]
+      )
+    else {
+      return nil
+    }
+
+    let withoutPunctuation = removingLikelySentencePunctuation(from: value)
+    let domainText = removingRawSuffix(
+      from: withoutPunctuation,
+      candidates: ["please", "for me"]
+    )
+    return HTTPSDomain(domainText)
+  }
+
+  private func commandSearchQuery(_ text: String) -> SearchQuery? {
+    SearchQuery(removingLikelySentencePunctuation(from: text))
+  }
+
+  private func removingLikelySentencePunctuation(from text: String) -> String {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard
+      let last = trimmed.last,
+      ".?!".contains(last),
+      trimmed.count > 1
+    else {
+      return trimmed
+    }
+    return String(trimmed.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   private func containsCompoundRequest(_ request: String) -> Bool {
@@ -251,6 +333,53 @@ public struct CommandResolver: Sendable {
         character.unicodeScalars.allSatisfy { separators.contains($0) }
       })
     )
+  }
+
+  private func rawCommandRequest(_ transcript: String) -> String {
+    var request = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    request = removingRawAddress(from: request)
+    request =
+      removingRawPrefix(
+        from: request,
+        candidates: ["please", "can you", "could you", "would you"]
+      ) ?? request
+    return request
+  }
+
+  private func removingRawDelimitedPrefix(_ prefix: String, from text: String) -> String? {
+    guard text.count > prefix.count else { return nil }
+
+    let prefixEnd = text.index(text.startIndex, offsetBy: prefix.count)
+    let actualPrefix = String(text[..<prefixEnd])
+    guard actualPrefix.compare(prefix, options: .caseInsensitive) == .orderedSame else {
+      return nil
+    }
+
+    guard ",:".contains(text[prefixEnd]) else { return nil }
+    return String(text[text.index(after: prefixEnd)...])
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func removingRawSuffix(from text: String, candidates: [String]) -> String {
+    for candidate in candidates {
+      guard text.count >= candidate.count else { continue }
+
+      let suffixStart = text.index(text.endIndex, offsetBy: -candidate.count)
+      let suffix = String(text[suffixStart...])
+      guard suffix.compare(candidate, options: .caseInsensitive) == .orderedSame else {
+        continue
+      }
+
+      if suffixStart == text.startIndex {
+        return ""
+      }
+
+      let precedingIndex = text.index(before: suffixStart)
+      guard text[precedingIndex].isWhitespace else { continue }
+      return String(text[..<precedingIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    return text
   }
 
   private func removingRawPrefix(from text: String, candidates: [String]) -> String? {

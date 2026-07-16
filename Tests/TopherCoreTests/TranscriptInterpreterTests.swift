@@ -62,11 +62,11 @@ final class TranscriptInterpreterTests: XCTestCase {
 
   func testCorrectsKnownDeveloperVocabularyOnlyWhenItResolvesSafely() {
     let result = interpreter.interpret(
-      primary: TranscriptHypothesis(text: "Open gidhub.com")
+      primary: TranscriptHypothesis(text: "Open gidhub")
     )
 
-    XCTAssertEqual(result.rawTranscript, "Open gidhub.com")
-    XCTAssertEqual(result.selectedTranscript, "Open GitHub.com")
+    XCTAssertEqual(result.rawTranscript, "Open gidhub")
+    XCTAssertEqual(result.selectedTranscript, "Open GitHub")
     XCTAssertEqual(result.reason, .vocabularyCorrection)
   }
 

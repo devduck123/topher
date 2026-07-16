@@ -20,6 +20,7 @@ enum DeveloperTranscriptSource: String, Codable, Equatable, Sendable {
 enum AssistantCommandKind: String, Codable, Equatable, Sendable {
   case openApplication
   case openBrowserRoute
+  case openDomain
   case openWebsite
   case searchWeb
 }

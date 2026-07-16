@@ -109,6 +109,9 @@ final class AssistantCommandProcessor {
     case .openBrowserRoute(let target):
       logExecution(BrowserRouteOpenCapability.descriptor)
       outcome = await browserRouteOpener.execute(target)
+    case .openDomain(let domain):
+      logExecution(WebOpenCapability.descriptor)
+      outcome = await webOpener.execute(domain)
     case .openWebsite(let target):
       logExecution(WebOpenCapability.descriptor)
       outcome = await webOpener.execute(target)
@@ -157,6 +160,8 @@ final class AssistantCommandProcessor {
       (.openApplication, ApplicationOpenCapability.descriptor.identifier)
     case .openBrowserRoute:
       (.openBrowserRoute, BrowserRouteOpenCapability.descriptor.identifier)
+    case .openDomain:
+      (.openDomain, WebOpenCapability.descriptor.identifier)
     case .openWebsite:
       (.openWebsite, WebOpenCapability.descriptor.identifier)
     case .searchWeb:

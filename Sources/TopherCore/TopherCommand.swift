@@ -3,6 +3,7 @@ import Foundation
 public enum TopherCommand: Equatable, Sendable {
   case openApplication(ApplicationTarget)
   case openBrowserRoute(BrowserRouteTarget)
+  case openDomain(HTTPSDomain)
   case openWebsite(WebsiteTarget)
   case searchWeb(provider: SearchProvider, query: SearchQuery)
 }

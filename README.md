@@ -11,8 +11,8 @@ can reuse capture without inheriting command authority.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development tree currently defines 142 Swift tests. The
-latest complete local run passed all 142 tests; Thread Sanitizer and final
+Status: the 0.3.0 development tree currently defines 151 Swift tests. The
+latest complete local run passed all 151 tests; Thread Sanitizer and final
 app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -47,12 +47,19 @@ The comparative speech benchmark is still open.
   Visual Studio Code, and Xcode, including bounded phrasing such as “Navigate
   Chrome,” “Switch to Chrome,” and “Open Codex.”
 - Typed, allowlisted navigation to Crunchyroll, Gmail, GitHub, Google, YouTube,
-  and the browser-owned Chrome Extensions route.
+  and the browser-owned Chrome Extensions route. Internal Chrome routes are
+  delivered as URLs to Chrome even when it is already running.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
   known site, provider searches retain their provider, and unknown bare
   searches use Google in the default browser (Chrome in dogfood use).
-- Target-aware query phrasing such as “Open YouTube for dining with Derek,”
-  plus fail-closed rejection of multiple executable actions in one request.
+- Exact known targets can be terse commands such as “Notes,” “VS Code,” and
+  “YouTube.” Target-first query phrasing such as “YouTube for dining with
+  Derek” is supported, and likely sentence-ending punctuation is removed only
+  from the extracted command value while the raw transcript remains intact.
+- Explicit navigation to validated public domains such as “Go to tnc.com” uses
+  HTTPS only. Paths, credentials, ports, IP addresses, custom schemes, and
+  local/reserved names fail closed.
+- Fail-closed rejection of multiple executable actions in one request.
 - A bounded local personal-vocabulary editor for developer and product terms.
   Canonical terms may bias on-device recognition; known mis-transcriptions stay
   in Topher's deterministic correction layer, which can only select an already
@@ -137,9 +144,9 @@ For an interactive smoke test:
    is ready.
 4. Say “Open Safari,” release, and confirm the HUD changes from listening to
    finalizing before Safari opens exactly once.
-5. Try “Open Notion,” “Open Notes,” “Go to my Gmail,” “Open Chrome extensions,”
-   “Open YouTube for dining with Derek,” “Search Crunchyroll,” and “Search for
-   best local speech model.”
+5. Try “Notion,” “Notes,” “Go to my Gmail,” “Open Chrome extensions,” “YouTube
+   for dining with Derek,” “Go to tnc.com,” “Search Crunchyroll,” and “Search
+   for best local speech model.”
 6. Speak unknown text and confirm it fails closed.
 7. Use the manual transcript field and **Run** as a development fallback.
 
@@ -174,9 +181,12 @@ ad-hoc signing; Debug also receives Xcode's development-only
 `com.apple.security.get-task-allow` entitlement. There is no Developer ID
 signature or notarized release.
 
-The current web commands construct allowlisted HTTPS destinations and hand them
-to the user's default browser through `NSWorkspace`. Topher itself has no direct
-network client, embedded browser, Chrome extension/native-messaging host,
+The current web commands construct fixed allowlisted destinations or accept an
+explicit public DNS host through the bounded `HTTPSDomain` type, then hand the
+HTTPS URL to the user's default browser through `NSWorkspace`. Browser-owned
+internal routes are delivered only to their registered browser application.
+Topher itself has no direct network client, embedded browser, Chrome
+extension/native-messaging host,
 browser-page or tab capture, Accessibility provider, or screen-capture
 implementation. The browser performs the external request and maintains its
 normal history when the user explicitly runs a search or navigation command.

@@ -81,10 +81,10 @@ final class AssistantCommandProcessorTests: XCTestCase {
       browserRouteOpener: BrowserRouteOpenCapability(
         workspace: BrowserRouteWorkspace(
           applicationURL: { _ in applicationURL },
-          openApplication: { receivedURL, arguments in
+          openURLs: { urls, receivedURL in
             openCount += 1
             XCTAssertEqual(receivedURL, applicationURL)
-            XCTAssertEqual(arguments, ["chrome://extensions/"])
+            XCTAssertEqual(urls.map(\.absoluteString), ["chrome://extensions/"])
           }
         )
       ),
@@ -106,6 +106,29 @@ final class AssistantCommandProcessorTests: XCTestCase {
       )
     )
     XCTAssertEqual(openCount, 1)
+  }
+
+  func testValidatedDomainCommandExecutesExactlyOnce() async {
+    var openedURLs: [URL] = []
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      webOpener: WebOpenCapability(
+        workspace: WebWorkspace(open: { openedURLs.append($0) })
+      )
+    )
+
+    let result = await processor.process("Go to TNC.com.")
+
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "Opened tnc.com.")))
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilitySucceeded,
+        commandKind: .openDomain,
+        capabilityIdentifier: WebOpenCapability.descriptor.identifier
+      )
+    )
+    XCTAssertEqual(openedURLs.map(\.absoluteString), ["https://tnc.com/"])
   }
 
   func testSearchCommandExecutesExactlyOnceAndPreservesTheQuery() async throws {

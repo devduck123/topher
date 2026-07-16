@@ -50,16 +50,16 @@ final class WebOpenCapabilityTests: XCTestCase {
   func testOpensChromeExtensionsThroughTheChromeApplication() async {
     let applicationURL = URL(fileURLWithPath: "/Applications/Google Chrome.app")
     var openedApplicationURL: URL?
-    var arguments: [String] = []
+    var openedURLs: [URL] = []
     let capability = BrowserRouteOpenCapability(
       workspace: BrowserRouteWorkspace(
         applicationURL: { bundleIdentifier in
           XCTAssertEqual(bundleIdentifier, "com.google.Chrome")
           return applicationURL
         },
-        openApplication: { url, receivedArguments in
-          openedApplicationURL = url
-          arguments = receivedArguments
+        openURLs: { urls, applicationURL in
+          openedURLs = urls
+          openedApplicationURL = applicationURL
         }
       )
     )
@@ -67,7 +67,7 @@ final class WebOpenCapabilityTests: XCTestCase {
     let outcome = await capability.execute(.chromeExtensions)
 
     XCTAssertEqual(openedApplicationURL, applicationURL)
-    XCTAssertEqual(arguments, ["chrome://extensions/"])
+    XCTAssertEqual(openedURLs.map(\.absoluteString), ["chrome://extensions/"])
     XCTAssertEqual(outcome, .succeeded(message: "Opened Chrome Extensions."))
     XCTAssertEqual(
       BrowserRouteOpenCapability.descriptor,
@@ -83,13 +83,26 @@ final class WebOpenCapabilityTests: XCTestCase {
     let capability = BrowserRouteOpenCapability(
       workspace: BrowserRouteWorkspace(
         applicationURL: { _ in nil },
-        openApplication: { _, _ in XCTFail("Must not attempt to open a missing browser") }
+        openURLs: { _, _ in XCTFail("Must not attempt to open a missing browser") }
       )
     )
 
     let outcome = await capability.execute(.chromeExtensions)
 
     XCTAssertEqual(outcome, .failed(message: "Could not open Chrome Extensions."))
+  }
+
+  func testOpensAValidatedDomainOverHTTPS() async throws {
+    var openedURL: URL?
+    let capability = WebOpenCapability(
+      workspace: WebWorkspace(open: { openedURL = $0 })
+    )
+    let domain = try XCTUnwrap(HTTPSDomain("TNC.com"))
+
+    let outcome = await capability.execute(domain)
+
+    XCTAssertEqual(openedURL?.absoluteString, "https://tnc.com/")
+    XCTAssertEqual(outcome, .succeeded(message: "Opened tnc.com."))
   }
 
   func testBuildsAnEncodedGoogleSearchURL() async throws {

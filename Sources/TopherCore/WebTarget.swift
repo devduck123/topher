@@ -30,7 +30,7 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
     case .gmail:
       ["gmail", "gmail com", "my gmail", "gmail inbox", "my gmail inbox"]
     case .github:
-      ["github", "git hub", "github com"]
+      ["github", "git hub", "github com", "gidhub com"]
     case .google:
       ["google", "google com", "google homepage"]
     case .youtube:
@@ -104,6 +104,70 @@ public enum SearchProvider: String, Equatable, Sendable {
     case .youtube:
       "YouTube"
     }
+  }
+}
+
+/// A validated public DNS host that Topher may open over HTTPS.
+///
+/// This deliberately excludes paths, credentials, ports, IP addresses, custom
+/// schemes, and local/reserved names. The resolver may construct this value
+/// from an explicit navigation request, but untrusted text never becomes a URL
+/// without crossing this boundary.
+public struct HTTPSDomain: Equatable, Sendable {
+  public let host: String
+  public let url: URL
+
+  public init?(_ value: String) {
+    var candidate = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if candidate.hasPrefix("https://") {
+      candidate.removeFirst("https://".count)
+    } else if candidate.contains("://") {
+      return nil
+    }
+
+    guard
+      !candidate.isEmpty,
+      candidate.utf8.count <= 253,
+      !candidate.contains(where: { $0.isWhitespace }),
+      !candidate.contains(where: { "/?#@:".contains($0) })
+    else {
+      return nil
+    }
+
+    let labels = candidate.split(separator: ".", omittingEmptySubsequences: false)
+    guard labels.count >= 2 else { return nil }
+
+    let allowedCharacters = Set("abcdefghijklmnopqrstuvwxyz0123456789-")
+    guard
+      labels.allSatisfy({ label in
+        !label.isEmpty
+          && label.utf8.count <= 63
+          && label.first != "-"
+          && label.last != "-"
+          && label.allSatisfy { allowedCharacters.contains($0) }
+      })
+    else {
+      return nil
+    }
+
+    let topLevelDomain = String(labels[labels.count - 1])
+    let reservedTopLevelDomains = ["example", "invalid", "local", "localhost", "test"]
+    guard
+      (2...63).contains(topLevelDomain.count),
+      topLevelDomain.allSatisfy({ $0.isASCII && $0.isLetter }),
+      !reservedTopLevelDomains.contains(topLevelDomain)
+    else {
+      return nil
+    }
+
+    var components = URLComponents()
+    components.scheme = "https"
+    components.host = candidate
+    components.path = "/"
+    guard let url = components.url else { return nil }
+
+    self.host = candidate
+    self.url = url
   }
 }
 

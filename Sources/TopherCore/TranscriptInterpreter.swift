@@ -228,6 +228,8 @@ public struct TranscriptInterpreter: Sendable {
       firstTarget == secondTarget
     case (.openWebsite(let firstTarget), .openWebsite(let secondTarget)):
       firstTarget == secondTarget
+    case (.openDomain(let firstDomain), .openDomain(let secondDomain)):
+      firstDomain == secondDomain
     case (.searchWeb(let firstProvider, _), .searchWeb(let secondProvider, _)):
       firstProvider == secondProvider
     default:

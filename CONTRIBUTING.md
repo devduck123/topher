@@ -120,8 +120,10 @@ bounded local developer trace documented in
 [Local diagnostics](docs/local-diagnostics.md). Never add another content-bearing
 diagnostic sink implicitly. Credentials belong in Keychain and must never be
 committed, printed, or stored in plist/user-default values or transcript
-diagnostics by Topher. Because the retained user-authored command can itself
-contain a pasted or spoken credential, treat every trace as sensitive.
+diagnostics by Topher. The trace includes non-secure dictation but deliberately
+excludes dictation targeting a secure field. Because any other retained
+user-authored request can itself contain a pasted or spoken credential, treat
+every trace as sensitive.
 
 ## Swift concurrency and native callbacks
 

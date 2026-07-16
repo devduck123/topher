@@ -57,6 +57,20 @@ struct VoiceFeedbackHUDPresenter: NSViewRepresentable {
         present(.success(message: message))
       case .failure(let message):
         present(.failure(message: message))
+      case .dictationPreparing(let detail):
+        if !isVoicePhaseActive {
+          displayScreen = currentScreen()
+        }
+        present(.dictationPreparing(detail: detail))
+      case .dictationListening(let transcript):
+        if !isVoicePhaseActive {
+          displayScreen = currentScreen()
+        }
+        present(.dictationListening(transcript: transcript))
+      case .dictationFinalizing(let transcript):
+        present(.dictationFinalizing(transcript: transcript))
+      case .dictationInserting(let transcript):
+        present(.dictationInserting(transcript: transcript))
       }
     }
 
@@ -133,6 +147,10 @@ private enum VoiceFeedbackHUDState: Equatable {
   case executing(transcript: String)
   case success(message: String)
   case failure(message: String)
+  case dictationPreparing(detail: String)
+  case dictationListening(transcript: String)
+  case dictationFinalizing(transcript: String)
+  case dictationInserting(transcript: String)
 
   var title: String {
     switch self {
@@ -148,6 +166,14 @@ private enum VoiceFeedbackHUDState: Equatable {
       "Done"
     case .failure:
       "Couldn’t complete command"
+    case .dictationPreparing:
+      "Preparing dictation"
+    case .dictationListening:
+      "Dictating"
+    case .dictationFinalizing:
+      "Finalizing dictation"
+    case .dictationInserting:
+      "Inserting text"
     }
   }
 
@@ -159,6 +185,11 @@ private enum VoiceFeedbackHUDState: Equatable {
       transcript
     case .success(let message), .failure(let message):
       message
+    case .dictationPreparing(let detail):
+      detail
+    case .dictationListening(let transcript), .dictationFinalizing(let transcript),
+      .dictationInserting(let transcript):
+      transcript
     }
   }
 
@@ -174,12 +205,21 @@ private enum VoiceFeedbackHUDState: Equatable {
       "Working"
     case .success, .failure:
       ""
+    case .dictationPreparing:
+      "Wait to speak"
+    case .dictationListening:
+      "Release to insert"
+    case .dictationFinalizing:
+      "One moment"
+    case .dictationInserting:
+      "Working"
     }
   }
 
   var symbolName: String? {
     switch self {
-    case .preparing, .finalizing, .executing, .listening:
+    case .preparing, .finalizing, .executing, .listening, .dictationPreparing,
+      .dictationListening, .dictationFinalizing, .dictationInserting:
       nil
     case .success:
       "checkmark.circle.fill"
@@ -194,7 +234,8 @@ private enum VoiceFeedbackHUDState: Equatable {
       .green
     case .failure:
       .orange
-    case .preparing, .listening, .finalizing, .executing:
+    case .preparing, .listening, .finalizing, .executing, .dictationPreparing,
+      .dictationListening, .dictationFinalizing, .dictationInserting:
       .accentColor
     }
   }
@@ -222,9 +263,10 @@ private struct VoiceFeedbackHUD: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 10) {
         switch state {
-        case .listening:
+        case .listening, .dictationListening:
           VoiceWaveform()
-        case .preparing, .finalizing, .executing:
+        case .preparing, .finalizing, .executing, .dictationPreparing,
+          .dictationFinalizing, .dictationInserting:
           ProgressView()
             .controlSize(.small)
             .frame(width: 38, height: 20)

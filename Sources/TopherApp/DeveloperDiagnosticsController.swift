@@ -187,7 +187,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
       apply(snapshot)
     } catch {
       errorMessage =
-        "Couldn’t save the latest transcript diagnostic. The command still ran; Clear Now can retry cleanup."
+        "Couldn’t save the latest transcript diagnostic. The request still completed; Clear Now can retry cleanup."
       hasPendingStorageMaintenance = true
       logger.error("Developer diagnostics record write failed")
     }

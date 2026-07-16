@@ -1,18 +1,18 @@
 # Topher
 
-Topher is a local-first macOS assistant. This repository currently contains a
-small but end-to-end voice-command path: a native menu-bar UI, configurable
-global push-to-talk, on-device English transcription, deterministic typed
-command resolution, policy validation, native application launching, and
-allowlisted Google/YouTube navigation. The capture and command-processing
-boundaries are now independent so later dictation and context-aware requests
-can reuse capture without inheriting command authority.
+Topher is a local-first macOS assistant. This repository currently contains
+end-to-end voice-command and global-dictation paths: a native menu-bar UI, two
+configurable global hold shortcuts, on-device English transcription,
+deterministic typed command resolution, safe focused-field insertion, policy
+validation, native application launching, and bounded web navigation. Capture
+is shared, but command interpretation and dictation insertion remain separate
+request kinds and authority boundaries.
 
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development tree currently defines 179 Swift tests. The
-latest complete local run passed all 179 tests; Thread Sanitizer and final
+Status: the 0.4.0 development tree currently defines 209 Swift tests. The
+latest complete local run passed all 209 tests; Thread Sanitizer and final
 app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -30,6 +30,16 @@ The comparative speech benchmark is still open.
 - A user-recorded global shortcut. Key down starts microphone capture after
   permission and local assets are ready; key up stops capture and explicitly
   finalizes the transcript.
+- A distinct user-recorded global dictation shortcut that works while another
+  app is focused. Dictation bypasses the command resolver, conservatively
+  formats the transcript, and replaces only the selection captured at key-down.
+- An explicit Accessibility permission boundary for dictation. Topher rejects
+  secure/protected fields before capture, revalidates focus, selection, nearby
+  text, and secure state before insertion, never presses Return, and never
+  submits or sends.
+- Context-aware word spacing at the insertion boundary, one guarded undo for
+  the latest insertion, and a local review/copy fallback for editors Topher
+  cannot safely mutate. Clipboard writes happen only after pressing **Copy**.
 - Live partial text in Topher and a transient, non-activating cross-app voice
   HUD for preparation, listening, finalization, execution, and outcomes.
 - A 30-second listening watchdog, an 8-second finalization watchdog, immediate
@@ -86,7 +96,7 @@ The comparative speech benchmark is still open.
 - A separate policy decision before execution.
 - Safe rejection of malformed address-like input, ambiguous installed-app
   names, and explicitly requested applications that are not installed.
-- A bounded developer trace for recent final command
+- A bounded developer trace for recent final command and non-secure dictation
   transcripts and typed outcomes. Local dogfood builds start with it on; an
   explicit off switch and **Clear Now** remain available at any time. Each
   retained request can be rated independently for transcript accuracy and
@@ -96,16 +106,18 @@ The comparative speech benchmark is still open.
 
 ## Current interaction boundary
 
-Topher's global shortcut already works while another application is focused;
-the menu does not need to be open. The current hold is a **push-to-talk assistant
-command**: release sends the finalized transcript through Topher's typed command
-resolver and policy.
+Topher's two global shortcuts work while another application is focused; the
+menu does not need to be open. The **assistant command** hold sends finalized
+speech through the typed resolver and policy. The **dictation** hold sends it
+through conservative formatting and a narrow Accessibility capability that
+replaces the captured selection without submitting.
 
-It is not yet general-purpose text dictation into the focused field. Always-on
-wake listening, remote chat requests, conversational follow-ups, browser-page
-reading, Accessibility context, and visual screen understanding are also not
-implemented. They are separate modes and trust boundaries rather than flags on
-the current command path.
+This is the first safe global-dictation foundation, not yet a claim of broad
+Wispr-style editor compatibility or benchmarked transcription quality. Rich
+dictation formatting, spoken punctuation commands, multi-paragraph editing,
+always-on wake listening, remote chat, conversational follow-ups, browser-page
+reading, broader Accessibility context, and visual screen understanding remain
+separate future work.
 
 See [Interaction modes](docs/product/interaction-modes.md) and
 [Request lifecycle and context](docs/architecture/request-lifecycle.md) for the
@@ -180,26 +192,37 @@ For an interactive smoke test:
    fallback. Say a malformed address or an explicitly missing app and confirm
    it fails closed.
 7. Use the manual transcript field and **Run** as a development fallback.
+8. Record a different hold-to-dictate shortcut, explicitly allow Topher under
+   **Privacy & Security → Accessibility**, focus a normal editable field in
+   another app, hold the dictation shortcut, say a sentence, and release.
+   Confirm text is inserted once without Return being pressed. Repeat with a
+   selection, with the caret next to an existing word, and with a password
+   field. Use **Undo Dictation** before moving the caret. If an editor is not
+   supported, review the pending text in Topher and press **Copy** explicitly.
 
 No default shortcut is claimed. This avoids silently overriding an existing
 system or application shortcut.
 
 ## Voice privacy and permissions
 
-Topher asks for microphone access only from an explicit voice action. Its app
-bundle contains `NSMicrophoneUsageDescription`; the Release signature contains
-only the `com.apple.security.device.audio-input` entitlement needed for capture.
-The direct `SpeechAnalyzer` path does not request legacy `SFSpeechRecognizer`
-authorization, Accessibility, Automation/Apple Events, or Screen Recording
-access.
+Topher asks for microphone access only from an explicit voice action and asks
+for Accessibility only from an explicit dictation action or **Enable** button.
+Its app bundle contains `NSMicrophoneUsageDescription`; the Release signature
+contains only the `com.apple.security.device.audio-input` entitlement needed
+for capture. The direct `SpeechAnalyzer` path does not request legacy
+`SFSpeechRecognizer` authorization. Topher does not request Automation/Apple
+Events or Screen Recording access. Accessibility is used only for the focused
+text element, selection, immediate text boundary, insertion, and guarded undo.
 
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
 not written to disk. Partial transcripts exist transiently in process memory
-and UI so the requested command can run. Ordinary logging never includes
-transcript text. During local dogfooding, **Record final command transcripts**
-defaults on and retains the bounded final voice or manual text described below;
-it can be turned off or cleared at any time. Audio and partial transcripts are
-still never retained. Denied
+and UI so the request can complete. Ordinary logging never includes transcript
+text. During local dogfooding, **Record final commands and dictation** defaults
+on and retains the bounded final voice/manual command or non-secure dictation
+described below; it can be turned off or cleared at any time. Dictation aimed
+at a secure field is refused before capture, and a field that becomes secure
+during a hold causes the transcript to be discarded without a preview or
+developer record. Audio and partial transcripts are still never retained. Denied
 microphone access links to the macOS Microphone privacy pane and is rechecked
 when Topher becomes active again.
 
@@ -218,9 +241,10 @@ bounded `HTTPSDomain` type, then hand the HTTPS URL to the user's default
 browser through `NSWorkspace`. Browser-owned
 internal routes are delivered only to their registered browser application.
 Topher itself has no direct network client, embedded browser, Chrome
-extension/native-messaging host,
-browser-page or tab capture, Accessibility provider, or screen-capture
-implementation. The browser performs the external request and maintains its
+extension/native-messaging host, browser-page or tab capture, general
+Accessibility context provider, or screen-capture implementation. Its
+Accessibility surface is currently limited to focused-field dictation. The
+browser performs the external request and maintains its
 normal history when the user explicitly runs a search or navigation command.
 
 Before Topher adds direct networking, browser-content adapters, broader local
@@ -238,19 +262,19 @@ the manual transcript, search query, URL, raw audio, application name, or
 detailed error text.
 
 For local dogfooding, the menu's **Developer diagnostics** section can retain a
-separate command trace. Recording starts on for the current local-development
+separate request trace. Recording starts on for the current local-development
 phase, preserves an explicit opt-out, and adds an orange dot to the menu-bar
 icon while enabled. Re-enabling after an opt-out requires confirmation. Each
-record contains the exact finalized voice or manual command, the interpreted
-command and correction reason when Topher safely selected a different reading,
+record contains the exact finalized voice/manual command or non-secure
+dictation, the interpreted or inserted text when Topher used different text,
 an available confidence summary, its source, an ephemeral launch-session ID, a
 fixed typed outcome, fixed command/capability metadata, a typed unsupported
 reason, optional local transcript/action ratings, capture-stage and processing
 durations, and app version/build. It never contains raw audio, partials, or content Topher
 separately captures from a page, screen, message, or document. Topher does not
 append constructed destination URLs, Keychain/config values, or detailed
-framework errors. The user-authored command itself can contain a query, URL,
-pasted content, or secret.
+framework errors. Secure-field dictation is deliberately excluded, but other
+user-authored text can itself contain a query, URL, pasted content, or secret.
 
 The trace is stored at
 `~/Library/Caches/dev.topher.app/TranscriptDiagnostics/transcript-diagnostics.json`.
@@ -292,8 +316,10 @@ mental model.
 - [Documentation map](docs/README.md)
 - [Product vision](docs/product/vision.md)
 - [Build 8 application-awareness verification](docs/evidence/2026-07-15-build-8-application-awareness.md)
+- [Build 9 global-dictation verification](docs/evidence/2026-07-15-build-9-global-dictation-foundation.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
+- [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

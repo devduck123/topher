@@ -47,11 +47,12 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.3.0 development tree defines 110 tests and adds only the Release
-audio-input entitlement required for microphone capture. The latest complete
-local normal and Thread Sanitizer runs passed all 109 tests present before the
-final transcript-reload regression; that new bounded-reload path separately
-passed compiler and executable-smoke validation and awaits the full CI rerun.
+The current 0.4.0 development tree defines 209 tests and still adds only the
+Release audio-input entitlement required for microphone capture. Build 9 also
+adds an explicit Accessibility TCC boundary for narrow focused-field dictation;
+Accessibility does not add a code-signing entitlement. See the latest dated
+evidence for normal, sanitizer, Xcode, and bundle results rather than treating
+this evolving investigation as verification.
 See the dated
 [speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
 installed bundle and live callback verification, and the
@@ -135,9 +136,10 @@ The Xcode target explicitly enables Hardened Runtime and disables App Sandbox.
 Those settings are independent: Hardened Runtime constrains the signed process,
 but the current application is not sandboxed. The Release signature is local
 and ad hoc, with only `com.apple.security.device.audio-input`; Debug also has
-Xcode's development-only `com.apple.security.get-task-allow`. The only current
-TCC request is microphone access. There is no Accessibility, Automation/Apple
-Events, Screen Recording, or legacy `SFSpeechRecognizer` authorization request.
+Xcode's development-only `com.apple.security.get-task-allow`. Current TCC
+requests are microphone access for held speech and Accessibility for explicitly
+invoked focused-field dictation. There is no Automation/Apple Events, Screen
+Recording, or legacy `SFSpeechRecognizer` authorization request.
 
 Google/YouTube navigation uses validated fixed HTTPS destinations and delegates
 them to the default browser through `NSWorkspace`. Topher has no direct network

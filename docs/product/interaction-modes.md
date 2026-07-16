@@ -35,7 +35,7 @@ that mode new authority over the Mac.
 |---|---|---|---|
 | Global push-to-talk command | Hold a configured shortcut while any app is focused, speak a Topher request, then release to resolve and execute it. | Implemented | Microphone and local speech assets |
 | Manual panel command | Type a would-be transcript into Topher and run the same command path. | Implemented development fallback | None beyond the selected capability |
-| Global text dictation | Hold a distinct shortcut and insert polished text into the focused editable field. | Near-term design; not implemented | Likely Accessibility plus focused-element validation |
+| Global text dictation | Hold a distinct shortcut and insert conservatively formatted text into the focused editable field. | Safe foundation implemented; app-compatibility acceptance pending | Accessibility plus focused-element validation |
 | Local wake phrase | Opt in to local “Topher” detection, then capture one request without a keyboard hold. | Research only | Persistent microphone use, energy, false activation, visible ambient-state controls |
 | Remote chat message | Send Topher a request from another device through Discord, Slack, WhatsApp, or another adapter. | Planned investigation | Provider network, account identity, credentials, replay and remote-presence policy |
 | Conversational follow-up | Keep a short, visible interaction window for references such as “the second one.” | Future | Bounded local state, expiry, provenance, and clear reset behavior |
@@ -56,27 +56,39 @@ The menu does not need to be open and Topher does not need to be the focused
 application. The microphone is active only for the hold, subject to the
 30-second safety timeout.
 
-This is **not yet Wispr-style general dictation**. Current transcripts can open
-allowlisted apps, open allowlisted sites, or run typed searches. They are not
-inserted into whichever text field happens to be focused.
+This shortcut remains command-only. Dictated prose uses the distinct global
+dictation shortcut below, so speech cannot accidentally switch between typing
+and executing an assistant action.
 
 ## Global text dictation
 
-Text dictation is a separate capability and must not be implemented as a flag
-inside command execution. It should have a distinct shortcut or an unmistakable
-mode switch so dictated prose cannot accidentally become a Topher action.
+Text dictation is a separate capability, not a flag inside command execution.
+Build 9 implements a distinct shortcut so dictated prose cannot accidentally
+become a Topher action.
 
-The first safe contract should be:
+The implemented foundation contract is:
 
 - Capture and transcribe locally using the same replaceable speech boundary.
-- Transform only presentation details that can be evaluated, such as
-  punctuation, capitalization, and explicit spoken formatting commands.
+- Transform only bounded presentation details: trim outer whitespace, normalize
+  horizontal spacing and line endings, remove spaces before closing
+  punctuation, and add a boundary space only when insertion would weld words.
+  Topher does not invent terminal punctuation, capitalization, or meaning.
 - Identify and revalidate the focused editable element before insertion.
 - Insert text without pressing Return, submitting a form, or sending a message.
 - Refuse secure/password fields and other excluded surfaces.
 - Preserve a preview/copy fallback when direct insertion is unsupported.
 - Define one-step undo behavior before broad app support is claimed.
-- Request Accessibility only when the user explicitly enables this feature.
+- Request Accessibility only from an explicit dictation hold or enable action.
+- Revalidate focus, selection, surrounding text, and secure-field state after
+  transcription and before mutation. A mismatch produces a preview, not a guess.
+- Never mutate the clipboard automatically; copying a fallback is explicit.
+- Exclude secure-field dictation from the content-bearing developer trace.
+
+The foundation uses Accessibility selected-text and selected-range attributes.
+Editors that do not expose a safely settable selection are intentionally routed
+to the pending preview. Broad app compatibility, spoken formatting commands,
+punctuation quality, and multi-paragraph behavior remain measured acceptance
+work rather than implied guarantees.
 
 Dictation quality is a system-level result. The benchmark must cover recognition
 accuracy, partial stability, endpoint latency, punctuation, application-specific
@@ -177,7 +189,8 @@ Keep one reliable loop at every checkpoint:
 1. Finish push-to-talk accuracy, latency, permissions, sleep/wake, and repeated
    session validation.
 2. Add the read-only active-application provider as the smallest context slice.
-3. Build global text dictation as an explicitly separate mode and permission.
+3. Complete in build 9: build global text dictation as an explicitly separate
+   mode and permission; continue its app-compatibility and speech-quality gate.
 4. Add structured browser tab/page context before screenshot-based context.
 5. Establish confirmation and bounded-session behavior before remote mutation.
 6. Spike one chat adapter with read-only authority.

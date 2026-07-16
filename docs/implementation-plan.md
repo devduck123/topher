@@ -1,14 +1,16 @@
 # Ordered implementation plan
 
 Every slice ends with a runnable application. Deterministic browser navigation
-may move forward when it uses fixed endpoints and native APIs. Do not start
-browser page reading, Accessibility, screen capture, or wake-word work until the
-speech-to-action loop survives the reliability slice.
+may move forward when it uses fixed endpoints and native APIs. A narrow,
+independently guarded permission feature may proceed without pretending the
+speech reliability gate is closed; broad browser-page reading, general
+Accessibility context, screen capture, and wake-word work still wait for their
+own measured safety and reliability gates.
 
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The tree defines 179 Swift tests. Normal, Thread Sanitizer, Xcode Debug and
+2. The tree defines 209 Swift tests. Normal, Thread Sanitizer, Xcode Debug and
    Release, static analysis, signature, entitlement, installation, and process
    checks are rerun at each dogfood checkpoint.
 3. The conventional Xcode macOS application target uses fixed bundle ID
@@ -162,18 +164,20 @@ it does not, remove the model path.
 - Exercise 100 repeated sessions, cancellation, timeouts, sleep/wake, and audio
   device changes.
 - Complete: add a bounded local developer trace for the exact finalized
-  voice/manual command plus fixed typed outcome, capability kind, timing, and
+  voice/manual command or non-secure dictation plus fixed typed outcome,
+  capability kind, timing, and
   app version. Enforce 24-hour, 200-record, 1-MiB, and 4-KiB-per-transcript
   bounds; reject unsafe storage paths; invalidate previously issued tokens and
   prevent queued late records on disable or clear; never include audio,
   partials, retrieved context, constructed URLs, or detailed errors appended by
-  Topher. Treat the finalized user-authored command as sensitive because it can
+  Topher. Treat finalized user-authored request text as sensitive because it can
   itself contain those strings.
 - Complete: default that trace on during local dogfooding while preserving a
   persistent explicit opt-out, confirmation before re-enabling, and immediate
   deletion.
-- Complete: when interpretation changes a command, retain the bounded raw and
-  interpreted text, fixed reason, and confidence summary without retaining the
+- Complete: when interpretation or dictation formatting changes text, retain
+  bounded raw and final text, a fixed reason when applicable, and a confidence
+  summary without retaining the
   complete alternative list.
 - Complete: retain bounded monotonic hold-to-listening,
   listening-to-first-transcript, and key-up-to-final durations for evidence
@@ -212,12 +216,29 @@ not parallel implementation projects. The canonical contracts are
 - Introduce a shared context coordinator only after a second provider creates
   real freshness, selection, or cancellation behavior to coordinate.
 
-### Global text dictation
+### Global text dictation — foundation complete in build 9, acceptance pending
 
-- Use a distinct shortcut or explicit mode, never the command shortcut.
-- Benchmark punctuation, endpointing, insertion, undo, and app compatibility.
-- Request Accessibility only when direct focused-field insertion is enabled.
-- Never press Return, submit, or send automatically.
+- Complete: use a distinct shortcut and explicit request route, never the
+  command resolver. Per-shortcut ownership prevents one shortcut's key-up from
+  finalizing the other's capture.
+- Complete: request Accessibility only from an explicit dictation hold or
+  **Enable** action and refresh trust after app activation.
+- Complete: refuse secure fields before capture; revalidate focus, selection,
+  nearby text, and secure state before insertion; never press Return, submit,
+  send, or synthesize arbitrary keyboard input.
+- Complete: conservatively normalize spacing/line endings without inventing
+  punctuation or semantic rewrites; add only the word-boundary spaces required
+  to avoid joining adjacent words.
+- Complete: add guarded one-step undo and a pending local preview for unsupported
+  or changed targets. Clipboard mutation requires an explicit **Copy** click.
+- Complete: record raw versus formatted/inserted dictation as a distinct bounded
+  diagnostic source/outcome, but discard late-secure-field text without a
+  preview or diagnostic record.
+- Pending: run the app compatibility matrix across native AppKit fields, Chrome
+  form controls/contenteditable, editors, chat apps, multiline fields, selected
+  replacement, and unsupported/secure surfaces.
+- Pending: benchmark punctuation, endpointing, proper nouns, developer terms,
+  insertion latency, undo, and repeated sessions using the speech corpus.
 
 ### Structured browser context
 

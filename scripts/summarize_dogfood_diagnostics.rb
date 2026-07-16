@@ -68,16 +68,16 @@ def print_summary(title, records)
   transcript_accuracy = percentage(transcript_ratings.count(true), transcript_ratings.length)
   action_correctness = percentage(action_ratings.count(true), action_ratings.length)
   puts "  transcript accurate: #{transcript_accuracy}"
-  puts "  action correct: #{action_correctness}"
+  puts "  action/insertion correct: #{action_correctness}"
 
   interpreted = records.count { |record| record["interpretedTranscript"] }
-  puts "Interpretation changes: #{interpreted}/#{records.length}"
+  puts "Interpreted/formatted text changes: #{interpreted}/#{records.length}"
 
   timings = {
     "hold to listening" => "holdToListeningMilliseconds",
     "listening to first text" => "listeningToFirstTranscriptMilliseconds",
     "key-up to final" => "keyUpToFinalMilliseconds",
-    "command processing" => "processingDurationMilliseconds",
+    "request processing" => "processingDurationMilliseconds",
   }
   puts "Timing (milliseconds):"
   timings.each do |label, key|

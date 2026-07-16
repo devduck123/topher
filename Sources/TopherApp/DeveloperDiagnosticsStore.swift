@@ -4,11 +4,14 @@ import OSLog
 import TopherCore
 
 enum DeveloperTranscriptSource: String, Codable, Equatable, Sendable {
+  case dictation
   case manual
   case voice
 
   var displayName: String {
     switch self {
+    case .dictation:
+      "Dictation"
     case .manual:
       "Manual"
     case .voice:
@@ -31,6 +34,9 @@ enum AssistantCommandKind: String, Codable, Equatable, Sendable {
 enum AssistantCommandTraceOutcome: String, Codable, Equatable, Sendable {
   case capabilityFailed
   case capabilitySucceeded
+  case dictationFailed
+  case dictationFallback
+  case dictationInserted
   case noUsableSpeech
   case policyDenied
   case unsupported
@@ -41,6 +47,12 @@ enum AssistantCommandTraceOutcome: String, Codable, Equatable, Sendable {
       "Capability failed"
     case .capabilitySucceeded:
       "Succeeded"
+    case .dictationFailed:
+      "Dictation failed"
+    case .dictationFallback:
+      "Needs copy"
+    case .dictationInserted:
+      "Inserted"
     case .noUsableSpeech:
       "No usable speech"
     case .policyDenied:

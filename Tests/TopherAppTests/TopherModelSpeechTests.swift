@@ -84,6 +84,245 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.voiceFeedback, .success("Opened Safari."))
   }
 
+  func testGlobalDictationUsesSeparateRouteAndInsertsWithoutExecutingACommand() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "hello",
+      selection: FocusedTextRange(location: 5, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    XCTAssertEqual(model.voiceFeedback, .dictationListening(""))
+
+    voice.yield(.final("world"))
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(field.content, "hello world")
+    XCTAssertTrue(model.canUndoDictation)
+    XCTAssertNil(model.pendingDictationText)
+    XCTAssertEqual(model.voiceFeedback, .success("Inserted dictation."))
+  }
+
+  func testDictationPermissionPromptIsExplicitAndStopsBeforeMicrophoneCapture() async {
+    var promptCount = 0
+    let accessibility = AccessibilityPermissionClient(
+      environment: AccessibilityPermissionEnvironment(
+        isProcessTrusted: { false },
+        promptForTrust: {
+          promptCount += 1
+          return false
+        }
+      )
+    )
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: accessibility
+    )
+
+    XCTAssertEqual(promptCount, 0)
+    model.beginDictation()
+    await Task.yield()
+
+    XCTAssertEqual(promptCount, 1)
+    XCTAssertEqual(model.accessibilityPermissionState, .notAuthorized)
+    XCTAssertEqual(voice.prepareCount, 0)
+    XCTAssertEqual(voice.startCount, 0)
+  }
+
+  func testSecureFieldRefusesDictationBeforeCaptureOrTextRead() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "secret",
+      selection: FocusedTextRange(location: 6, length: 0)
+    )
+    field.isSecure = true
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await Task.yield()
+
+    XCTAssertEqual(model.phase, .failure("Dictation is disabled in secure text fields."))
+    XCTAssertEqual(field.selectedTextReadCount, 0)
+    XCTAssertEqual(voice.prepareCount, 0)
+    XCTAssertEqual(voice.startCount, 0)
+  }
+
+  func testUnsupportedTargetKeepsPreviewUntilExplicitCopy() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.canSetSelectedText = false
+    var clipboardWrites: [String] = []
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment),
+      dictationClipboard: DictationClipboardCapability(
+        environment: DictationClipboardEnvironment(writeString: {
+          clipboardWrites.append($0)
+          return true
+        })
+      )
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("GraphQL   URLSession"))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "GraphQL URLSession" }
+    XCTAssertTrue(clipboardWrites.isEmpty)
+    XCTAssertEqual(field.content, "")
+
+    model.copyPendingDictation()
+    XCTAssertEqual(clipboardWrites, ["GraphQL URLSession"])
+    XCTAssertEqual(model.phase, .success("Copied dictation. Paste it where you want it."))
+  }
+
+  func testDictationDiagnosticsSeparateRawSpeechFromInsertedText() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherDictationDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("GraphQL   URLSession"))
+    model.endDictation()
+
+    await waitUntil { diagnostics.records.count == 1 }
+    let record = try XCTUnwrap(diagnostics.records.first)
+    XCTAssertEqual(record.source, .dictation)
+    XCTAssertEqual(record.transcript, "GraphQL   URLSession")
+    XCTAssertEqual(record.interpretedTranscript, "GraphQL URLSession")
+    XCTAssertEqual(record.outcome, .dictationInserted)
+    XCTAssertEqual(
+      record.capabilityIdentifier,
+      FocusedTextInsertionCapability.descriptor.identifier
+    )
+  }
+
+  func testDictationBecomingSecureIsDiscardedWithoutDiagnosticRetention() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherSecureDictationDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    field.isSecure = true
+    voice.yield(.final("sensitive secret"))
+    model.endDictation()
+
+    await waitUntil {
+      model.phase
+        == .failure("The target became secure, so Topher discarded the dictation.")
+    }
+    try? await Task.sleep(for: .milliseconds(20))
+    XCTAssertNil(model.pendingDictationText)
+    XCTAssertTrue(diagnostics.records.isEmpty)
+  }
+
+  func testMismatchedShortcutReleaseCannotEndAnotherShortcutsCapture() async {
+    let voice = VoiceHarness(finishBehavior: .keepStreamOpen)
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission()
+    )
+
+    model.handleShortcutDown(.assistantCommand)
+    await waitUntil { model.phase == .listening("") }
+
+    model.handleShortcutDown(.dictation)
+    model.handleShortcutUp(.dictation)
+    await Task.yield()
+
+    XCTAssertEqual(model.phase, .listening(""))
+    XCTAssertEqual(voice.finishCount, 0)
+
+    model.handleShortcutUp(.assistantCommand)
+    await waitUntil { voice.finishCount == 1 }
+    voice.completeStream()
+  }
+
   func testCanonicalInstalledLocaleStartsOnFirstAuthorizedHold() async {
     let voice = VoiceHarness()
     let model = makeModel(
@@ -552,7 +791,7 @@ final class TopherModelSpeechTests: XCTestCase {
     await waitUntil {
       model.phase == .success("Opened Safari.")
         && diagnostics.errorMessage
-          == "Couldn’t save the latest transcript diagnostic. The command still ran; Clear Now can retry cleanup."
+          == "Couldn’t save the latest transcript diagnostic. The request still completed; Clear Now can retry cleanup."
         && diagnostics.hasPendingStorageMaintenance
     }
     XCTAssertEqual(openCount, 1)
@@ -831,7 +1070,10 @@ final class TopherModelSpeechTests: XCTestCase {
     listeningTimeout: Duration = .seconds(1),
     finalizationTimeout: Duration = .seconds(1),
     voiceFeedbackResultDuration: Duration = .seconds(1),
-    developerDiagnostics: DeveloperDiagnosticsController? = nil
+    developerDiagnostics: DeveloperDiagnosticsController? = nil,
+    accessibilityPermission: AccessibilityPermissionClient? = nil,
+    focusedTextInsertion: FocusedTextInsertionCapability? = nil,
+    dictationClipboard: DictationClipboardCapability? = nil
   ) -> TopherModel {
     TopherModel(
       applicationOpener: applicationOpener ?? inertApplicationOpener(),
@@ -843,6 +1085,9 @@ final class TopherModelSpeechTests: XCTestCase {
       finalizationTimeout: finalizationTimeout,
       voiceFeedbackResultDuration: voiceFeedbackResultDuration,
       developerDiagnostics: developerDiagnostics,
+      accessibilityPermission: accessibilityPermission,
+      focusedTextInsertion: focusedTextInsertion,
+      dictationClipboard: dictationClipboard,
       listenForShortcutEvents: false
     )
   }
@@ -853,6 +1098,18 @@ final class TopherModelSpeechTests: XCTestCase {
         authorizationStatus: { status },
         requestAccess: {
           XCTFail("A recorded permission decision must not display a prompt")
+          return false
+        }
+      )
+    )
+  }
+
+  private func authorizedAccessibilityPermission() -> AccessibilityPermissionClient {
+    AccessibilityPermissionClient(
+      environment: AccessibilityPermissionEnvironment(
+        isProcessTrusted: { true },
+        promptForTrust: {
+          XCTFail("An authorized accessibility state must not prompt")
           return false
         }
       )
@@ -907,6 +1164,69 @@ final class TopherModelSpeechTests: XCTestCase {
     }
 
     XCTAssertTrue(condition(), "Condition was not satisfied before timeout", file: file, line: line)
+  }
+}
+
+@MainActor
+private final class ModelFocusedTextHarness {
+  let element = FocusedTextElementID()
+  var content: String
+  var selection: FocusedTextRange
+  var isSecure = false
+  var canSetSelectedText = true
+  var selectedTextReadCount = 0
+
+  init(content: String, selection: FocusedTextRange) {
+    self.content = content
+    self.selection = selection
+  }
+
+  var environment: FocusedTextInsertionEnvironment {
+    FocusedTextInsertionEnvironment(
+      focusedElement: { [weak self] in self?.element },
+      sameElement: { $0 == $1 },
+      isSecure: { [weak self] _ in self?.isSecure ?? true },
+      selectedText: { [weak self] _ in
+        guard let self else { return nil }
+        selectedTextReadCount += 1
+        return (content as NSString).substring(
+          with: NSRange(location: selection.location, length: selection.length)
+        )
+      },
+      selectedRange: { [weak self] _ in self?.selection },
+      textContext: { [weak self] _, range in
+        guard let self else { return FocusedTextContext() }
+        let value = content as NSString
+        let precedingLocation = max(0, range.location - 2)
+        let followingLength = min(2, max(0, value.length - range.endLocation))
+        return FocusedTextContext(
+          precedingText: value.substring(
+            with: NSRange(
+              location: precedingLocation,
+              length: range.location - precedingLocation
+            )
+          ),
+          followingText: value.substring(
+            with: NSRange(location: range.endLocation, length: followingLength)
+          )
+        )
+      },
+      canSetSelectedText: { [weak self] _ in self?.canSetSelectedText ?? false },
+      canSetSelectedRange: { _ in true },
+      setSelectedText: { [weak self] _, text in
+        guard let self, canSetSelectedText else { return false }
+        content = (content as NSString).replacingCharacters(
+          in: NSRange(location: selection.location, length: selection.length),
+          with: text
+        )
+        return true
+      },
+      setSelectedRange: { [weak self] _, range in
+        self?.selection = range
+        return self != nil
+      },
+      release: { _ in }
+    )
   }
 }
 

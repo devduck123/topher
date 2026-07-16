@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		A00000000000000000000014 /* TopherCore in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000012 /* TopherCore */; };
 		A00000000000000000000015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000013 /* KeyboardShortcuts */; };
+		A0000000000000000000004C /* AccessibilityPermissionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000004B /* AccessibilityPermissionClient.swift */; };
+		A0000000000000000000004E /* DictationClipboardCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000004D /* DictationClipboardCapability.swift */; };
+		A00000000000000000000050 /* FocusedTextInsertionCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000004F /* FocusedTextInsertionCapability.swift */; };
 		A00000000000000000000030 /* ApplicationOpenCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000020 /* ApplicationOpenCapability.swift */; };
 		A00000000000000000000031 /* KeyboardShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000021 /* KeyboardShortcut.swift */; };
 		A00000000000000000000032 /* MenuContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000022 /* MenuContentView.swift */; };
@@ -34,6 +37,9 @@
 
 /* Begin PBXFileReference section */
 		A00000000000000000000005 /* Topher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Topher.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0000000000000000000004B /* AccessibilityPermissionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPermissionClient.swift; sourceTree = "<group>"; };
+		A0000000000000000000004D /* DictationClipboardCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationClipboardCapability.swift; sourceTree = "<group>"; };
+		A0000000000000000000004F /* FocusedTextInsertionCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedTextInsertionCapability.swift; sourceTree = "<group>"; };
 		A00000000000000000000020 /* ApplicationOpenCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationOpenCapability.swift; sourceTree = "<group>"; };
 		A00000000000000000000021 /* KeyboardShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcut.swift; sourceTree = "<group>"; };
 		A00000000000000000000022 /* MenuContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuContentView.swift; sourceTree = "<group>"; };
@@ -90,11 +96,14 @@
 		A00000000000000000000004 /* TopherApp */ = {
 			isa = PBXGroup;
 			children = (
+				A0000000000000000000004B /* AccessibilityPermissionClient.swift */,
 				A00000000000000000000020 /* ApplicationOpenCapability.swift */,
 				A0000000000000000000002D /* AssistantCommandProcessor.swift */,
 				A00000000000000000000040 /* DeveloperDiagnosticsController.swift */,
 				A0000000000000000000002F /* DeveloperDiagnosticsStore.swift */,
 				A00000000000000000000042 /* DeveloperDiagnosticsView.swift */,
+				A0000000000000000000004D /* DictationClipboardCapability.swift */,
+				A0000000000000000000004F /* FocusedTextInsertionCapability.swift */,
 				A00000000000000000000049 /* FrontmostApplicationCapability.swift */,
 				A00000000000000000000047 /* InstalledApplicationCatalog.swift */,
 				A00000000000000000000021 /* KeyboardShortcut.swift */,
@@ -193,11 +202,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A0000000000000000000004C /* AccessibilityPermissionClient.swift in Sources */,
 				A00000000000000000000030 /* ApplicationOpenCapability.swift in Sources */,
 				A0000000000000000000003C /* AssistantCommandProcessor.swift in Sources */,
 				A0000000000000000000003F /* DeveloperDiagnosticsController.swift in Sources */,
 				A0000000000000000000003E /* DeveloperDiagnosticsStore.swift in Sources */,
 				A00000000000000000000041 /* DeveloperDiagnosticsView.swift in Sources */,
+				A0000000000000000000004E /* DictationClipboardCapability.swift in Sources */,
+				A00000000000000000000050 /* FocusedTextInsertionCapability.swift in Sources */,
 				A0000000000000000000004A /* FrontmostApplicationCapability.swift in Sources */,
 				A00000000000000000000048 /* InstalledApplicationCatalog.swift in Sources */,
 				A00000000000000000000031 /* KeyboardShortcut.swift in Sources */,
@@ -272,7 +284,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -280,12 +292,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Topher;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Topher uses the microphone only while you hold your push-to-talk shortcut to transcribe commands on this Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Topher uses the microphone only while you hold an assistant or dictation shortcut to transcribe locally on this Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.topher.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -301,7 +313,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -309,12 +321,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Topher;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Topher uses the microphone only while you hold your push-to-talk shortcut to transcribe commands on this Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Topher uses the microphone only while you hold an assistant or dictation shortcut to transcribe locally on this Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.topher.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

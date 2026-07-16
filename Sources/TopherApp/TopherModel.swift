@@ -32,14 +32,14 @@ final class TopherModel: ObservableObject {
       case .success:
         "Done"
       case .failure:
-        "Couldn’t complete command"
+        "Couldn’t complete request"
       }
     }
 
     var detail: String {
       switch self {
       case .idle:
-        "Hold your shortcut, speak, then release to run the command."
+        "Use the assistant shortcut for commands or the dictation shortcut to type anywhere."
       case .preparingVoice:
         "Checking microphone access and the local speech model."
       case .listening(let transcript):
@@ -49,7 +49,7 @@ final class TopherModel: ObservableObject {
       case .transcribing:
         "Resolving the manual transcript."
       case .executing:
-        "Running an approved native capability."
+        "Running an approved local capability."
       case .success(let message), .failure(let message):
         message
       }
@@ -99,24 +99,38 @@ final class TopherModel: ObservableObject {
     case executing(String)
     case success(String)
     case failure(String)
+    case dictationPreparing(String)
+    case dictationListening(String)
+    case dictationFinalizing(String)
+    case dictationInserting(String)
   }
 
   @Published var manualTranscript = "Open Safari."
   @Published private(set) var phase: Phase = .idle
   @Published private(set) var voiceReadiness: VoiceReadiness
   @Published private(set) var voiceFeedback: VoiceFeedback = .hidden
+  @Published private(set) var accessibilityPermissionState: AccessibilityPermissionState
+  @Published private(set) var pendingDictationText: String?
+  @Published private(set) var canUndoDictation = false
 
   private let commandProcessor: AssistantCommandProcessor
   private let captureController: PushToTalkCaptureController
   private let developerDiagnostics: DeveloperDiagnosticsController?
   private let voiceFeedbackResultDuration: Duration
+  private let accessibilityPermission: AccessibilityPermissionClient
+  private let focusedTextInsertion: FocusedTextInsertionCapability
+  private let dictationClipboard: DictationClipboardCapability
 
-  private var shortcutEventsTask: Task<Void, Never>?
+  private var assistantShortcutEventsTask: Task<Void, Never>?
+  private var dictationShortcutEventsTask: Task<Void, Never>?
   private var commandExecutionTask: Task<Void, Never>?
   private var voiceFeedbackDismissalTask: Task<Void, Never>?
   private var voiceFeedbackGeneration: UInt64 = 0
   private var activePermissionFailure: MicrophonePermissionState?
   private var activeVoicePresentation: VoicePresentation?
+  private var activeVoiceMode: VoiceMode?
+  private var activeDictationPreparation: FocusedTextPreparationOutcome?
+  private var shortcutOwner: ShortcutOwner?
 
   init(
     resolver: CommandResolver = .init(),
@@ -130,6 +144,9 @@ final class TopherModel: ObservableObject {
     finalizationTimeout: Duration = .seconds(8),
     voiceFeedbackResultDuration: Duration = .seconds(3),
     developerDiagnostics: DeveloperDiagnosticsController? = nil,
+    accessibilityPermission: AccessibilityPermissionClient? = nil,
+    focusedTextInsertion: FocusedTextInsertionCapability? = nil,
+    dictationClipboard: DictationClipboardCapability? = nil,
     vocabularyProvider: @escaping @MainActor () -> TranscriptVocabulary = {
       .developerDefaults
     },
@@ -154,22 +171,39 @@ final class TopherModel: ObservableObject {
     self.captureController = captureController
     self.developerDiagnostics = developerDiagnostics
     self.voiceFeedbackResultDuration = voiceFeedbackResultDuration
+    let accessibilityPermission = accessibilityPermission ?? AccessibilityPermissionClient()
+    self.accessibilityPermission = accessibilityPermission
+    self.focusedTextInsertion = focusedTextInsertion ?? FocusedTextInsertionCapability()
+    self.dictationClipboard = dictationClipboard ?? DictationClipboardCapability()
     voiceReadiness = captureController.readiness
+    accessibilityPermissionState = accessibilityPermission.currentState
 
     captureController.onEvent = { [weak self] event in
       self?.handleCaptureEvent(event)
     }
 
     if listenForShortcutEvents {
-      shortcutEventsTask = Task { [weak self] in
+      assistantShortcutEventsTask = Task { [weak self] in
         for await event in KeyboardShortcuts.events(for: .pushToTalk) {
           guard let self else { return }
 
           switch event {
           case .keyDown:
-            beginPushToTalk()
+            handleShortcutDown(.assistantCommand)
           case .keyUp:
-            endPushToTalk()
+            handleShortcutUp(.assistantCommand)
+          }
+        }
+      }
+      dictationShortcutEventsTask = Task { [weak self] in
+        for await event in KeyboardShortcuts.events(for: .dictation) {
+          guard let self else { return }
+
+          switch event {
+          case .keyDown:
+            handleShortcutDown(.dictation)
+          case .keyUp:
+            handleShortcutUp(.dictation)
           }
         }
       }
@@ -185,7 +219,8 @@ final class TopherModel: ObservableObject {
     Task { @MainActor in
       captureController.shutdown()
     }
-    shortcutEventsTask?.cancel()
+    assistantShortcutEventsTask?.cancel()
+    dictationShortcutEventsTask?.cancel()
     commandExecutionTask?.cancel()
     voiceFeedbackDismissalTask?.cancel()
   }
@@ -194,29 +229,65 @@ final class TopherModel: ObservableObject {
     captureController.refreshReadiness()
   }
 
+  func refreshAccessibilityPermission() {
+    accessibilityPermissionState = accessibilityPermission.currentState
+    if accessibilityPermissionState == .authorized,
+      case .failure(let message) = phase,
+      message.contains("Accessibility")
+    {
+      phase = .idle
+    }
+  }
+
+  func requestAccessibilityPermission() {
+    accessibilityPermissionState = accessibilityPermission.requestAuthorization()
+    if accessibilityPermissionState == .authorized {
+      phase = .success("Accessibility access is ready for global dictation.")
+    } else {
+      phase = .failure(
+        "Allow Topher in System Settings → Privacy & Security → Accessibility, then try again."
+      )
+    }
+  }
+
+  func openAccessibilitySettings() {
+    accessibilityPermission.openSettings()
+  }
+
   func prepareVoiceInput() {
     guard canStartNewInteraction else { return }
 
     let previousPermissionFailure = activePermissionFailure
     activePermissionFailure = nil
     activeVoicePresentation = .menuPreparation
+    activeVoiceMode = .assistantCommand
     hideVoiceFeedback()
     if !captureController.prepareForUse() {
       activePermissionFailure = previousPermissionFailure
       activeVoicePresentation = nil
+      activeVoiceMode = nil
     }
   }
 
   func beginPushToTalk() {
-    guard canStartNewInteraction else { return }
+    _ = startAssistantHold()
+  }
+
+  @discardableResult
+  private func startAssistantHold() -> Bool {
+    guard canStartNewInteraction else { return false }
 
     let previousPermissionFailure = activePermissionFailure
     activePermissionFailure = nil
     activeVoicePresentation = .globalShortcut
+    activeVoiceMode = .assistantCommand
     if !captureController.beginHold() {
       activePermissionFailure = previousPermissionFailure
       activeVoicePresentation = nil
+      activeVoiceMode = nil
+      return false
     }
+    return true
   }
 
   func endPushToTalk() {
@@ -225,10 +296,92 @@ final class TopherModel: ObservableObject {
     captureController.endHold()
   }
 
+  func beginDictation() {
+    _ = startDictationHold()
+  }
+
+  @discardableResult
+  private func startDictationHold() -> Bool {
+    guard canStartNewInteraction else { return false }
+
+    activePermissionFailure = nil
+    hideVoiceFeedback()
+    refreshAccessibilityPermission()
+    guard accessibilityPermissionState == .authorized else {
+      accessibilityPermissionState = accessibilityPermission.requestAuthorization()
+      let message =
+        "Allow Topher in System Settings → Privacy & Security → Accessibility, then hold the dictation shortcut again."
+      phase = .failure(message)
+      presentVoiceResult(.failure(message))
+      return false
+    }
+
+    let preparation = focusedTextInsertion.prepareTarget()
+    if preparation == .secureField {
+      let message = "Dictation is disabled in secure text fields."
+      phase = .failure(message)
+      presentVoiceResult(.failure(message))
+      return false
+    }
+
+    activeVoicePresentation = .globalShortcut
+    activeVoiceMode = .dictation
+    activeDictationPreparation = preparation
+    guard captureController.beginHold() else {
+      activeVoicePresentation = nil
+      activeVoiceMode = nil
+      activeDictationPreparation = nil
+      focusedTextInsertion.discardPreparedTarget()
+      return false
+    }
+    return true
+  }
+
+  func endDictation() {
+    captureController.endHold()
+  }
+
+  func copyPendingDictation() {
+    guard let pendingDictationText, let text = try? DictationText(pendingDictationText) else {
+      return
+    }
+    if dictationClipboard.copy(text) {
+      phase = .success("Copied dictation. Paste it where you want it.")
+    } else {
+      phase = .failure("Couldn’t copy the pending dictation.")
+    }
+  }
+
+  func clearPendingDictation() {
+    pendingDictationText = nil
+  }
+
+  func undoLastDictation() {
+    let outcome = focusedTextInsertion.undoLastInsertion()
+    canUndoDictation = focusedTextInsertion.canUndo
+    switch outcome {
+    case .restored:
+      phase = .success("Undid the last dictation insertion.")
+    case .unavailable:
+      phase = .failure("There is no dictation insertion to undo.")
+    case .focusChanged:
+      phase = .failure("Return to the original text field before undoing dictation.")
+    case .secureField:
+      phase = .failure("The original field became secure, so Topher disabled dictation undo.")
+    case .selectionChanged:
+      phase = .failure("The caret moved, so Topher left the text unchanged.")
+    case .contentChanged:
+      phase = .failure("The inserted text changed, so Topher left it unchanged.")
+    case .failed:
+      phase = .failure("Couldn’t safely undo the last dictation insertion.")
+    }
+  }
+
   func runManually() {
     guard canStartNewInteraction else { return }
 
     activeVoicePresentation = nil
+    activeVoiceMode = nil
     activePermissionFailure = nil
     hideVoiceFeedback()
     phase = .transcribing
@@ -249,6 +402,31 @@ final class TopherModel: ObservableObject {
     !phase.isBusy && !captureController.isBusy && commandExecutionTask == nil
   }
 
+  func handleShortcutDown(_ owner: ShortcutOwner) {
+    guard shortcutOwner == nil else { return }
+    let accepted =
+      switch owner {
+      case .assistantCommand:
+        startAssistantHold()
+      case .dictation:
+        startDictationHold()
+      }
+    if accepted {
+      shortcutOwner = owner
+    }
+  }
+
+  func handleShortcutUp(_ owner: ShortcutOwner) {
+    guard shortcutOwner == owner else { return }
+    shortcutOwner = nil
+    switch owner {
+    case .assistantCommand:
+      endPushToTalk()
+    case .dictation:
+      endDictation()
+    }
+  }
+
   private func handleCaptureEvent(_ event: PushToTalkCaptureEvent) {
     switch event {
     case .readinessChanged(let readiness, let permission):
@@ -261,7 +439,7 @@ final class TopherModel: ObservableObject {
     case .readyForNextHold:
       let message = "Voice input is ready. Hold your shortcut again to speak."
       let presentsGlobally = activeVoicePresentation == .globalShortcut
-      activeVoicePresentation = nil
+      resetActiveVoiceInteraction()
       phase = .success(message)
       if presentsGlobally {
         presentVoiceResult(.success(message))
@@ -270,7 +448,7 @@ final class TopherModel: ObservableObject {
     case .releasedBeforeListening:
       let message = "Released before listening started. Hold the shortcut again."
       let presentsGlobally = activeVoicePresentation == .globalShortcut
-      activeVoicePresentation = nil
+      resetActiveVoiceInteraction()
       phase = .success(message)
       if presentsGlobally {
         presentVoiceResult(.failure(message))
@@ -278,11 +456,14 @@ final class TopherModel: ObservableObject {
 
     case .completed(let rawTranscript):
       let presentsGlobally = activeVoicePresentation == .globalShortcut
-      activeVoicePresentation = nil
+      let mode = activeVoiceMode ?? .assistantCommand
+      let dictationPreparation = activeDictationPreparation
+      clearActiveVoiceStateWithoutDiscardingTarget()
       let transcript = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !transcript.isEmpty else {
-        recordNoUsableSpeechIfEnabled()
-        let message = "I didn’t hear a command. Hold the shortcut and try again."
+        focusedTextInsertion.discardPreparedTarget()
+        recordNoUsableSpeechIfEnabled(source: mode.diagnosticSource)
+        let message = mode.noUsableSpeechMessage
         phase = .failure(message)
         if presentsGlobally {
           presentVoiceResult(.failure(message))
@@ -290,17 +471,32 @@ final class TopherModel: ObservableObject {
         return
       }
 
-      startCommandProcessing(transcript, source: .voice)
+      switch mode {
+      case .assistantCommand:
+        startCommandProcessing(transcript, source: .voice)
+      case .dictation:
+        startDictationProcessing(
+          transcript,
+          preparation: dictationPreparation,
+          presentsGlobally: presentsGlobally
+        )
+      }
 
     case .completedWithEvidence(let transcription):
       let presentsGlobally = activeVoicePresentation == .globalShortcut
-      activeVoicePresentation = nil
+      let mode = activeVoiceMode ?? .assistantCommand
+      let dictationPreparation = activeDictationPreparation
+      clearActiveVoiceStateWithoutDiscardingTarget()
       let transcript = transcription.primary.text.trimmingCharacters(
         in: .whitespacesAndNewlines
       )
       guard !transcript.isEmpty else {
-        recordNoUsableSpeechIfEnabled(captureMetrics: transcription.captureMetrics)
-        let message = "I didn’t hear a command. Hold the shortcut and try again."
+        focusedTextInsertion.discardPreparedTarget()
+        recordNoUsableSpeechIfEnabled(
+          source: mode.diagnosticSource,
+          captureMetrics: transcription.captureMetrics
+        )
+        let message = mode.noUsableSpeechMessage
         phase = .failure(message)
         if presentsGlobally {
           presentVoiceResult(.failure(message))
@@ -308,20 +504,34 @@ final class TopherModel: ObservableObject {
         return
       }
 
-      startCommandProcessing(
-        transcript,
-        source: .voice,
-        alternatives: transcription.alternatives,
-        confidence: transcription.primary.confidence,
-        captureMetrics: transcription.captureMetrics
-      )
+      switch mode {
+      case .assistantCommand:
+        startCommandProcessing(
+          transcript,
+          source: .voice,
+          alternatives: transcription.alternatives,
+          confidence: transcription.primary.confidence,
+          captureMetrics: transcription.captureMetrics
+        )
+      case .dictation:
+        startDictationProcessing(
+          transcript,
+          preparation: dictationPreparation,
+          confidence: transcription.primary.confidence,
+          captureMetrics: transcription.captureMetrics,
+          presentsGlobally: presentsGlobally
+        )
+      }
 
     case .failed(let failure):
       applyCaptureFailure(failure)
     }
   }
 
-  private func recordNoUsableSpeechIfEnabled(captureMetrics: VoiceCaptureMetrics? = nil) {
+  private func recordNoUsableSpeechIfEnabled(
+    source: DeveloperTranscriptSource = .voice,
+    captureMetrics: VoiceCaptureMetrics? = nil
+  ) {
     guard let developerDiagnostics else { return }
 
     Task {
@@ -329,7 +539,7 @@ final class TopherModel: ObservableObject {
       await developerDiagnostics.record(
         transcript: "",
         captureMetrics: captureMetrics,
-        source: .voice,
+        source: source,
         trace: AssistantCommandTrace(
           outcome: .noUsableSpeech,
           commandKind: nil,
@@ -343,6 +553,7 @@ final class TopherModel: ObservableObject {
 
   private func handleCaptureState(_ state: PushToTalkCaptureState) {
     let presentsGlobally = activeVoicePresentation == .globalShortcut
+    let isDictation = activeVoiceMode == .dictation
 
     switch state {
     case .preparing(let preparation):
@@ -358,18 +569,24 @@ final class TopherModel: ObservableObject {
         case .speechAssets(let readiness):
           readiness.title
         }
-      presentVoiceFeedback(.preparing(detail))
+      presentVoiceFeedback(
+        isDictation ? .dictationPreparing(detail) : .preparing(detail)
+      )
 
     case .listening(let transcript):
       phase = .listening(transcript)
       if presentsGlobally {
-        presentVoiceFeedback(.listening(transcript))
+        presentVoiceFeedback(
+          isDictation ? .dictationListening(transcript) : .listening(transcript)
+        )
       }
 
     case .finalizing(let transcript):
       phase = .finalizingVoice
       if presentsGlobally {
-        presentVoiceFeedback(.finalizing(transcript))
+        presentVoiceFeedback(
+          isDictation ? .dictationFinalizing(transcript) : .finalizing(transcript)
+        )
       }
     }
   }
@@ -410,11 +627,165 @@ final class TopherModel: ObservableObject {
     }
 
     let presentsGlobally = activeVoicePresentation == .globalShortcut
-    activeVoicePresentation = nil
+    resetActiveVoiceInteraction()
     phase = .failure(message)
     if presentsGlobally {
       presentVoiceResult(.failure(message))
     }
+  }
+
+  private func startDictationProcessing(
+    _ transcript: String,
+    preparation: FocusedTextPreparationOutcome?,
+    confidence: Double? = nil,
+    captureMetrics: VoiceCaptureMetrics? = nil,
+    presentsGlobally: Bool
+  ) {
+    let clock = ContinuousClock()
+    let startedAt = clock.now
+    phase = .executing
+    if presentsGlobally {
+      presentVoiceFeedback(.dictationInserting(transcript))
+    }
+
+    let dictationText: DictationText
+    do {
+      dictationText = try DictationText(transcript)
+    } catch DictationTextError.tooLong {
+      focusedTextInsertion.discardPreparedTarget()
+      let message = "That dictation is too long to insert safely. Try a shorter hold."
+      phase = .failure(message)
+      if presentsGlobally { presentVoiceResult(.failure(message)) }
+      recordDictationIfEnabled(
+        transcript: transcript,
+        interpretedTranscript: nil,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        outcome: .dictationFailed,
+        capabilityIdentifier: nil,
+        processingDuration: startedAt.duration(to: clock.now)
+      )
+      return
+    } catch {
+      focusedTextInsertion.discardPreparedTarget()
+      let message = "I didn’t hear text to dictate. Hold the shortcut and try again."
+      phase = .failure(message)
+      if presentsGlobally { presentVoiceResult(.failure(message)) }
+      return
+    }
+
+    guard preparation == .ready else {
+      focusedTextInsertion.discardPreparedTarget()
+      presentDictationFallback(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
+      )
+      return
+    }
+
+    switch focusedTextInsertion.insert(dictationText) {
+    case .inserted(let insertedText, let canUndo):
+      canUndoDictation = canUndo
+      let message = "Inserted dictation."
+      phase = .success(message)
+      if presentsGlobally { presentVoiceResult(.success(message)) }
+      recordDictationIfEnabled(
+        transcript: transcript,
+        interpretedTranscript: insertedText == transcript ? nil : insertedText,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        outcome: .dictationInserted,
+        capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
+        processingDuration: startedAt.duration(to: clock.now)
+      )
+
+    case .secureField:
+      // Do not keep a preview or diagnostic when a target becomes secure
+      // during the hold. This is the one deliberate exception to dogfood
+      // transcript logging.
+      let message = "The target became secure, so Topher discarded the dictation."
+      phase = .failure(message)
+      if presentsGlobally { presentVoiceResult(.failure(message)) }
+
+    case .focusChanged, .selectionChanged, .unsupportedField, .failed,
+      .noPreparedTarget:
+      presentDictationFallback(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
+      )
+    }
+  }
+
+  private func presentDictationFallback(
+    _ dictationText: DictationText,
+    transcript: String,
+    confidence: Double?,
+    captureMetrics: VoiceCaptureMetrics?,
+    processingDuration: Duration,
+    presentsGlobally: Bool
+  ) {
+    pendingDictationText = dictationText.value
+    let message = "Couldn’t safely insert there. Open Topher to review or copy the dictation."
+    phase = .failure(message)
+    if presentsGlobally { presentVoiceResult(.failure(message)) }
+    recordDictationIfEnabled(
+      transcript: transcript,
+      interpretedTranscript: dictationText.value == transcript ? nil : dictationText.value,
+      confidence: confidence,
+      captureMetrics: captureMetrics,
+      outcome: .dictationFallback,
+      capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
+      processingDuration: processingDuration
+    )
+  }
+
+  private func recordDictationIfEnabled(
+    transcript: String,
+    interpretedTranscript: String?,
+    confidence: Double?,
+    captureMetrics: VoiceCaptureMetrics?,
+    outcome: AssistantCommandTraceOutcome,
+    capabilityIdentifier: String?,
+    processingDuration: Duration
+  ) {
+    guard let developerDiagnostics else { return }
+    let durationMilliseconds = Self.milliseconds(in: processingDuration)
+    Task {
+      guard let token = await developerDiagnostics.beginTrace() else { return }
+      await developerDiagnostics.record(
+        transcript: transcript,
+        interpretedTranscript: interpretedTranscript,
+        transcriptionConfidence: confidence,
+        captureMetrics: captureMetrics,
+        source: .dictation,
+        trace: AssistantCommandTrace(
+          outcome: outcome,
+          commandKind: nil,
+          capabilityIdentifier: capabilityIdentifier
+        ),
+        processingDurationMilliseconds: durationMilliseconds,
+        using: token
+      )
+    }
+  }
+
+  private func resetActiveVoiceInteraction() {
+    focusedTextInsertion.discardPreparedTarget()
+    clearActiveVoiceStateWithoutDiscardingTarget()
+  }
+
+  private func clearActiveVoiceStateWithoutDiscardingTarget() {
+    activeVoicePresentation = nil
+    activeVoiceMode = nil
+    activeDictationPreparation = nil
   }
 
   private func startCommandProcessing(
@@ -605,4 +976,32 @@ final class TopherModel: ObservableObject {
 private enum VoicePresentation: Equatable, Sendable {
   case globalShortcut
   case menuPreparation
+}
+
+private enum VoiceMode: Equatable, Sendable {
+  case assistantCommand
+  case dictation
+
+  var diagnosticSource: DeveloperTranscriptSource {
+    switch self {
+    case .assistantCommand:
+      .voice
+    case .dictation:
+      .dictation
+    }
+  }
+
+  var noUsableSpeechMessage: String {
+    switch self {
+    case .assistantCommand:
+      "I didn’t hear a command. Hold the shortcut and try again."
+    case .dictation:
+      "I didn’t hear any dictation. Hold the shortcut and try again."
+    }
+  }
+}
+
+enum ShortcutOwner: Equatable, Sendable {
+  case assistantCommand
+  case dictation
 }

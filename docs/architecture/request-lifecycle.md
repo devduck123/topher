@@ -28,10 +28,10 @@ Ingress adapter
   -> originating response channel
 ```
 
-The current push-to-talk implementation already covers a subset:
+The current two-shortcut implementation covers these subsets:
 
 ```text
-global shortcut
+global assistant shortcut
   -> single-instance runtime ownership
   -> PushToTalkCaptureController
   -> raw finalized local transcript plus bounded recognition hypotheses
@@ -43,15 +43,28 @@ global shortcut
      -> CommandPolicy
      -> exactly one registered native capability
   -> visible result
+
+global dictation shortcut
+  -> single-instance runtime and per-shortcut ownership
+  -> explicit Accessibility trust check
+  -> secure focused-field refusal before capture
+  -> PushToTalkCaptureController
+  -> raw finalized local transcript
+  -> TopherModel request-kind routing
+  -> DictationText bounded presentation normalization
+  -> focus + selection + nearby-text + secure-state revalidation
+  -> FocusedTextInsertionCapability replaces only the selection
+  -> inserted result with guarded one-step undo
+     or pending local preview with explicit Copy
 ```
 
 `PushToTalkCaptureController` owns microphone permission, speech assets,
 capture, partial/final transcript state, bounded alternative hypotheses,
 confidence evidence, timeouts, generation guards, and cleanup. It returns the
-raw finalized result and has no command resolver,
-dictation formatter, capability, or user-facing outcome policy. `TopherModel`
-currently routes that result to assistant commands; a future dictation shortcut
-will select a dictation processor at this boundary instead.
+raw finalized result and has no command resolver, dictation formatter,
+capability, or user-facing outcome policy. `TopherModel` records which shortcut
+owns the hold and routes the result to either assistant processing or dictation
+processing. A key-up from the other shortcut cannot finalize the active hold.
 
 `AssistantCommandProcessor` owns the deterministic resolver-to-policy-to-
 capability transaction. Unsupported input is a `CommandResolution`, not an
@@ -344,14 +357,16 @@ Ordinary diagnostic events should identify lifecycle stage, fixed
 capability/provider kind, timing, and outcome without storing transcript, query,
 message, URL, page, screen, or document content. A content-bearing developer
 trace is a separate, explicit exception. During local dogfooding it defaults on
-to preserve recent failed or unsupported commands, must preserve an explicit
+to preserve recent failed/unsupported commands and dictation outcomes, must preserve an explicit
 opt-out and require informed confirmation when re-enabled, show persistent
-enabled state, accept only the finalized user-authored command, enforce short
+enabled state, accept only finalized user-authored request text, enforce short
 age/count/size bounds, and never include audio, partial speech, retrieved
 context, constructed URLs, detailed errors, or app-sourced credentials. When
-interpretation changes a command, the trace may additionally retain the
-bounded interpreted text, fixed correction reason, and confidence summary; it
-does not retain the complete hypothesis list.
+interpretation or dictation formatting changes text, the trace may additionally
+retain bounded final text, a fixed correction reason when applicable, and a
+confidence summary; it does not retain the complete hypothesis list. Dictation
+that targets a secure field is excluded, including when a target becomes secure
+during the hold.
 Disable and clear must invalidate previously issued trace tokens
 and prevent their queued late records. The user-authored command can itself
 contain a query, URL, pasted content, or secret and must be treated accordingly.
@@ -361,9 +376,10 @@ contain a query, URL, pasted content, or secret and must be treated accordingly.
 1. Preserve the current deterministic local command path.
 2. Complete in build 8: add a read-only frontmost-application capability; do
    not build a general broker for one provider.
-3. Add a second structured provider, then introduce shared context request,
+3. Complete in build 9: add focused-field dictation as a separate request kind,
+   Accessibility boundary, and narrowly revalidated mutation capability.
+4. Add a second structured provider, then introduce shared context request,
    freshness, and cancellation behavior if duplication is real.
-4. Add focused-field dictation as a separate mode and permission boundary.
 5. Add a Chrome adapter that returns typed tab/DOM data without arbitrary
    JavaScript.
 6. Add capability-specific confirmation before any message send or remote

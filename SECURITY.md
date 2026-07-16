@@ -37,15 +37,26 @@ development build. There is not yet a notarized public binary release.
 - Retrieved content is untrusted data, never a higher-priority instruction.
 - No arbitrary shell, AppleScript, browser JavaScript, or generated code runs.
 - Permissions are requested incrementally for implemented features.
+- Accessibility is requested only from an explicit dictation action. Focus,
+  selection, immediate surrounding text, and secure-field state are revalidated
+  before insertion; a mismatch fails to a local preview instead of mutating a
+  guessed target.
+- Dictation never synthesizes Return, submits, sends, or mutates the clipboard
+  automatically. Copy is a separate explicit action, and guarded undo refuses
+  to run after the focus, caret, or inserted content changes.
 - Raw audio and screen captures are not persisted beyond the active request by
   default.
 - Sensitive content is excluded from ordinary logs.
-- During the local dogfood phase, final voice/manual command text is retained by
-  the bounded developer trace by default unless the user explicitly opts out.
+- During the local dogfood phase, final voice/manual command text and non-secure
+  dictation are retained by the bounded developer trace by default unless the
+  user explicitly opts out.
   Recording is visibly indicated, stored with restrictive POSIX modes,
   automatically pruned, and immediately clearable. The command can itself
   contain a spoken or pasted credential; Topher never separately appends
-  Keychain or configuration values. Revisit the default before distribution.
+  Keychain or configuration values. Dictation aimed at a secure field is
+  refused before capture; if the target becomes secure during the hold, Topher
+  discards the final text without a preview or developer record. Revisit the
+  default before distribution.
 - Credentials belong in macOS Keychain and never in source control.
 - Every effect requires capability-specific policy. An explicit, present-user
   request may itself confirm a capability-defined, bounded deterministic local

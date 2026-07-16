@@ -2,7 +2,7 @@
 
 Topher has two deliberately separate diagnostic paths:
 
-| Path | Purpose | Contains command text? | Retention owner |
+| Path | Purpose | Contains request text? | Retention owner |
 |---|---|---:|---|
 | macOS Unified Logging | Lifecycle troubleshooting and signpost timing | No | macOS |
 | Bounded developer trace | Recent local dogfood requests and typed outcomes | Yes; defaults on during dogfooding with an explicit off switch | Topher, with hard bounds |
@@ -77,21 +77,25 @@ metadata-only messages; there is no transcript fallback into `Logger` or
 
 ## Bounded developer transcript trace
 
-The menu's **Developer diagnostics** section exposes **Record final command
-transcripts**. During local dogfooding it defaults on so unsupported phrasing is
-captured without setup. Turning it off persists the opt-out; re-enabling it
+The menu's **Developer diagnostics** section exposes **Record final commands
+and dictation**. During local dogfooding it defaults on so unsupported phrasing
+and dictation outcomes are captured without setup. Turning it off persists the
+opt-out; re-enabling it
 presents a warning and requires confirmation. While enabled, an orange dot
 appears in both the diagnostics section and Topher's menu-bar icon.
 
 Each record contains only:
 
-- The exact finalized voice or manual command after surrounding whitespace is
-  removed. This can include a search term or secret typed/spoken by the user.
-- The bounded interpreted command only when it differs, a fixed correction
-  reason, and an available confidence summary.
-- Whether the request came from voice or the manual development field.
+- The exact finalized voice/manual command or non-secure dictation after
+  surrounding whitespace is removed. This can include a search term or secret
+  typed/spoken by the user.
+- The bounded interpreted, formatted, or inserted text only when it differs, a
+  fixed correction reason when applicable, and an available confidence summary.
+- Whether the request came from assistant voice, dictation, or the manual
+  development field.
 - A fixed outcome: unsupported, policy denied, capability succeeded,
-  capability failed, or no usable speech.
+  capability failed, no usable speech, dictation inserted, dictation fallback,
+  or dictation failed.
 - The fixed command kind and registered capability identifier when resolution
   produced one.
 - A fixed unsupported reason when resolution rejects the command.
@@ -112,8 +116,10 @@ Topher does not separately capture or append raw audio, partial transcripts,
 the complete speech-alternative list, microphone buffers, retrieved
 browser/screen/message/document context,
 constructed destination URLs, detailed framework errors, Keychain/config
-values, or arbitrary error text. The exact user-authored command can itself
-contain a query, URL, pasted content, credential, or error string.
+values, or arbitrary error text. The exact user-authored request can itself
+contain a query, URL, pasted content, credential, or error string. Dictation
+aimed at a secure field is refused before capture; if the field becomes secure
+during a hold, the final text is discarded without a preview or trace record.
 
 The JSON file is:
 
@@ -121,9 +127,10 @@ The JSON file is:
 ~/Library/Caches/dev.topher.app/TranscriptDiagnostics/transcript-diagnostics.json
 ```
 
-The latest three menu records expose an **Action** rating and, for voice
-requests, a separate **Transcript** rating. Selecting an already-selected
-rating clears that judgment.
+The latest three menu records expose an **Action** rating for commands or an
+**Insertion** rating for dictation. Voice and dictation records also expose a
+separate **Transcript** rating. Selecting an already-selected rating clears
+that judgment.
 Ratings use the same local file, permissions, retention, and **Clear Now**
 semantics as the corresponding request.
 
@@ -196,9 +203,12 @@ was already collected.”
 
 Raw microphone buffers are passed to Apple's local speech analyzer and are not
 written to an audio file or project-owned cache. Speech text exists transiently
-in Topher's process memory and visible UI until command processing or later UI
-state replaces it. “Not in ordinary logs” is not the same as “never held in
-memory.”
+in Topher's process memory and visible UI until request processing or later UI
+state replaces it. An unsupported dictation target can keep finalized text in
+the in-process pending preview until the user clears it, replaces it with a
+later result, or quits. **Copy** explicitly writes it to the system clipboard;
+Topher never does so automatically. “Not in ordinary logs” is not the same as
+“never held in memory.”
 
 For searches, the query is sent to the selected provider when the default
 browser opens Google or YouTube, and normal browser history or provider

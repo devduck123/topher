@@ -11,7 +11,7 @@ struct DeveloperDiagnosticsView: View {
     DisclosureGroup(isExpanded: $isExpanded) {
       VStack(alignment: .leading, spacing: 10) {
         Toggle(
-          "Record final command transcripts",
+          "Record final commands and dictation",
           isOn: Binding(
             get: { diagnostics.isEnabled },
             set: { enabled in
@@ -25,11 +25,11 @@ struct DeveloperDiagnosticsView: View {
         )
         .disabled(diagnostics.isUpdating)
         .accessibilityHint(
-          "When enabled, exact final voice and manual commands are retained locally for development."
+          "When enabled, exact final voice commands, manual commands, and non-secure dictation are retained locally for development."
         )
 
         Text(
-          "Exact commands may include queries, URLs, pasted content, or secrets. Topher does not separately append audio, partial speech, page or screen context, constructed URLs, or detailed errors."
+          "Exact requests may include queries, URLs, pasted content, or secrets. Secure-field dictation is excluded. Topher does not separately append audio, partial speech, page or screen context, constructed URLs, or detailed errors."
         )
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -161,7 +161,7 @@ struct DeveloperDiagnosticsView: View {
       }
 
       HStack(spacing: 10) {
-        if record.source == .voice {
+        if record.source == .voice || record.source == .dictation {
           feedbackControl(
             label: "Transcript",
             value: record.transcriptWasAccurate,
@@ -170,7 +170,7 @@ struct DeveloperDiagnosticsView: View {
           )
         }
         feedbackControl(
-          label: "Action",
+          label: record.source == .dictation ? "Insertion" : "Action",
           value: record.actionWasCorrect,
           record: record,
           dimension: .actionCorrectness
@@ -270,7 +270,7 @@ struct DeveloperDiagnosticsView: View {
       Alert(
         title: Text("Enable transcript diagnostics?"),
         message: Text(
-          "Topher will save the exact final text you speak or type, which may include queries, URLs, pasted content, or secrets. Records stay on this Mac and are automatically pruned."
+          "Topher will save the exact final text you speak or type, except dictation targeting secure fields. Records may include queries, URLs, pasted content, or secrets; they stay on this Mac and are automatically pruned."
         ),
         primaryButton: .default(Text("Enable")) {
           diagnostics.setEnabled(true)

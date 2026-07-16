@@ -10,6 +10,11 @@ percentiles without printing command text. These subjective ratings help find
 regressions but do not replace the controlled corpus below: Apple confidence,
 capability success, and intent success are not proxies for word error rate.
 
+Dictation records use the same transcript rating plus a separate insertion
+rating, and retain raw versus formatted/inserted text when those differ. A good
+insertion rating is not an accuracy claim: the controlled corpus must evaluate
+recognition, formatting, and focused-field behavior separately.
+
 ## Corpus
 
 Use five natural takes of each phrase in a quiet room and five with typical room
@@ -27,6 +32,13 @@ noise. Do not coach identical cadence between takes.
 10. “Search for pnpm workspace filtering.”
 11. “What app am I currently using?”
 12. “What does the current Chrome tab show?”
+
+Add a distinct prose/dictation corpus with developer terminology and natural
+punctuation, including `GraphQL`, `URLSession`, `pnpm`, repository names,
+domains, selected-text replacement, text adjacent to an existing word, two
+short paragraphs, and an utterance that should not receive terminal
+punctuation. Test the exact same audio independently from assistant commands so
+intent correction cannot hide recognition errors.
 
 Expand this into 40–60 phrases covering supported navigation/search, developer
 terms, personal sites/apps, ambiguous negatives that must not execute, and
@@ -69,6 +81,13 @@ For every clip capture:
 - Idle CPU after warm-up, ten-minute energy impact, thermal-state changes, and
   battery delta under the same brightness/power conditions.
 - Partial-result revisions and early truncation.
+- Raw-to-formatted dictation diff, invented punctuation/capitalization count,
+  missing/extra boundary spaces, and semantic text changes (acceptance: zero).
+- Focused-field insertion success by AppKit field, Chrome form control and
+  contenteditable surface, code editor, chat composer, and multiline editor.
+- Selection replacement, guarded undo, focus-change fallback, secure-field
+  refusal, and proof that no path synthesizes Return or writes the clipboard
+  without the explicit Copy action.
 - Failure and recovery after 100 sessions, sleep/wake, and microphone changes.
 
 Key-up is the end-of-utterance signal for push-to-talk. VAD may skip silence but

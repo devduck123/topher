@@ -34,6 +34,7 @@
 		A00000000000000000000046 /* TopherSingleInstanceLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000045 /* TopherSingleInstanceLock.swift */; };
 		A00000000000000000000048 /* InstalledApplicationCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000047 /* InstalledApplicationCatalog.swift */; };
 		A0000000000000000000004A /* FrontmostApplicationCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000049 /* FrontmostApplicationCapability.swift */; };
+		A00000000000000000000054 /* TopherSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000055 /* TopherSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +65,7 @@
 		A00000000000000000000045 /* TopherSingleInstanceLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopherSingleInstanceLock.swift; sourceTree = "<group>"; };
 		A00000000000000000000047 /* InstalledApplicationCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstalledApplicationCatalog.swift; sourceTree = "<group>"; };
 		A00000000000000000000049 /* FrontmostApplicationCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmostApplicationCapability.swift; sourceTree = "<group>"; };
+		A00000000000000000000055 /* TopherSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopherSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +122,7 @@
 				A0000000000000000000002B /* Topher.entitlements */,
 				A00000000000000000000023 /* TopherApp.swift */,
 				A00000000000000000000024 /* TopherModel.swift */,
+				A00000000000000000000055 /* TopherSettingsView.swift */,
 				A00000000000000000000045 /* TopherSingleInstanceLock.swift */,
 				A0000000000000000000002C /* VoiceFeedbackHUD.swift */,
 				A0000000000000000000002A /* VoiceTranscriptionClient.swift */,
@@ -226,6 +229,7 @@
 				A00000000000000000000043 /* SpeechVocabularyController.swift in Sources */,
 				A00000000000000000000033 /* TopherApp.swift in Sources */,
 				A00000000000000000000034 /* TopherModel.swift in Sources */,
+				A00000000000000000000054 /* TopherSettingsView.swift in Sources */,
 				A00000000000000000000046 /* TopherSingleInstanceLock.swift in Sources */,
 				A0000000000000000000003B /* VoiceFeedbackHUD.swift in Sources */,
 				A0000000000000000000003A /* VoiceTranscriptionClient.swift in Sources */,

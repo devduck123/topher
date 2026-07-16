@@ -105,7 +105,7 @@ final class TopherModel: ObservableObject {
     case dictationInserting(String)
   }
 
-  @Published var manualTranscript = "Open Safari."
+  @Published var manualTranscript = ""
   @Published private(set) var phase: Phase = .idle
   @Published private(set) var voiceReadiness: VoiceReadiness
   @Published private(set) var voiceFeedback: VoiceFeedback = .hidden
@@ -113,6 +113,11 @@ final class TopherModel: ObservableObject {
   @Published private(set) var pendingDictationText: String?
   @Published private(set) var canUndoDictation = false
   @Published private(set) var isDictationPolishEnabled: Bool
+
+  var canRunManualCommand: Bool {
+    !manualTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      && !phase.isBusy
+  }
 
   private let commandProcessor: AssistantCommandProcessor
   private let captureController: PushToTalkCaptureController
@@ -398,12 +403,15 @@ final class TopherModel: ObservableObject {
   func runManually() {
     guard canStartNewInteraction else { return }
 
+    let transcript = manualTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !transcript.isEmpty else { return }
+
     activeVoicePresentation = nil
     activeVoiceMode = nil
     activePermissionFailure = nil
     hideVoiceFeedback()
     phase = .transcribing
-    startCommandProcessing(manualTranscript, source: .manual, yieldBeforeProcessing: true)
+    startCommandProcessing(transcript, source: .manual, yieldBeforeProcessing: true)
   }
 
   func openMicrophoneSettings() {

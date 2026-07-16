@@ -115,80 +115,89 @@ struct SpeechVocabularyView: View {
   @ObservedObject var vocabulary: SpeechVocabularyController
 
   @State private var isExpanded = false
+
+  var body: some View {
+    DisclosureGroup(isExpanded: $isExpanded) {
+      SpeechVocabularyEditor(vocabulary: vocabulary)
+        .padding(.top, 8)
+    } label: {
+      Label("Personal vocabulary", systemImage: "text.book.closed")
+        .font(.caption)
+    }
+  }
+}
+
+struct SpeechVocabularyEditor: View {
+  @ObservedObject var vocabulary: SpeechVocabularyController
+
   @State private var canonicalTerm = ""
   @State private var spokenForms = ""
 
   var body: some View {
-    DisclosureGroup(isExpanded: $isExpanded) {
-      VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 10) {
+      Text(
+        "Topher supplies canonical developer and personal terms to on-device speech. Known mis-transcriptions stay local to Topher and are used only when the corrected command maps to an allowlisted capability."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+
+      TextField("Canonical term, e.g. GitLab", text: $canonicalTerm)
+        .textFieldStyle(.roundedBorder)
+      TextField("Known mis-transcriptions, comma-separated", text: $spokenForms)
+        .textFieldStyle(.roundedBorder)
+
+      HStack {
         Text(
-          "Topher supplies canonical developer and personal terms to on-device speech. Known mis-transcriptions stay local to Topher and are used only when the corrected command maps to an allowlisted capability."
+          "\(vocabulary.entries.count)/\(SpeechVocabularyController.maximumPersonalEntryCount) personal terms"
         )
-        .font(.caption2)
+        .font(.caption)
         .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
 
-        TextField("Canonical term, e.g. GitLab", text: $canonicalTerm)
-          .textFieldStyle(.roundedBorder)
-        TextField("Known mis-transcriptions, comma-separated", text: $spokenForms)
-          .textFieldStyle(.roundedBorder)
+        Spacer()
 
-        HStack {
-          Text(
-            "\(vocabulary.entries.count)/\(SpeechVocabularyController.maximumPersonalEntryCount) personal terms"
-          )
-          .font(.caption2)
-          .foregroundStyle(.secondary)
+        Button("Add") {
+          if vocabulary.add(
+            canonicalTerm: canonicalTerm,
+            spokenFormsText: spokenForms
+          ) {
+            canonicalTerm = ""
+            spokenForms = ""
+          }
+        }
+        .controlSize(.small)
+        .disabled(canonicalTerm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }
+
+      if let validationMessage = vocabulary.validationMessage {
+        Text(validationMessage)
+          .font(.caption)
+          .foregroundStyle(.red)
+      }
+
+      ForEach(Array(vocabulary.entries.enumerated()), id: \.offset) { _, entry in
+        HStack(alignment: .firstTextBaseline) {
+          VStack(alignment: .leading, spacing: 1) {
+            Text(entry.canonicalTerm)
+              .font(.subheadline)
+            if !entry.spokenForms.isEmpty {
+              Text(entry.spokenForms.joined(separator: ", "))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
 
           Spacer()
 
-          Button("Add") {
-            if vocabulary.add(
-              canonicalTerm: canonicalTerm,
-              spokenFormsText: spokenForms
-            ) {
-              canonicalTerm = ""
-              spokenForms = ""
-            }
+          Button(role: .destructive) {
+            vocabulary.remove(entry)
+          } label: {
+            Image(systemName: "trash")
           }
-          .controlSize(.small)
-          .disabled(canonicalTerm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-
-        if let validationMessage = vocabulary.validationMessage {
-          Text(validationMessage)
-            .font(.caption2)
-            .foregroundStyle(.red)
-        }
-
-        ForEach(Array(vocabulary.entries.enumerated()), id: \.offset) { _, entry in
-          HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 1) {
-              Text(entry.canonicalTerm)
-                .font(.caption)
-              if !entry.spokenForms.isEmpty {
-                Text(entry.spokenForms.joined(separator: ", "))
-                  .font(.caption2)
-                  .foregroundStyle(.secondary)
-              }
-            }
-
-            Spacer()
-
-            Button(role: .destructive) {
-              vocabulary.remove(entry)
-            } label: {
-              Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Remove \(entry.canonicalTerm)")
-          }
+          .buttonStyle(.borderless)
+          .accessibilityLabel("Remove \(entry.canonicalTerm)")
         }
       }
-      .padding(.top, 8)
-    } label: {
-      Label("Personal vocabulary", systemImage: "text.book.closed")
-        .font(.caption)
     }
   }
 }

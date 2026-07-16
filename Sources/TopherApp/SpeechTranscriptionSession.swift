@@ -1,12 +1,29 @@
 import AVFAudio
 import Foundation
+import OSLog
 import Speech
+import TopherCore
+
+struct FinalTranscription: Equatable, Sendable {
+  let primary: TranscriptHypothesis
+  let alternatives: [TranscriptHypothesis]
+
+  init(
+    text: String,
+    alternatives: [TranscriptHypothesis] = [],
+    confidence: Double? = nil
+  ) {
+    primary = TranscriptHypothesis(text: text, confidence: confidence)
+    self.alternatives = alternatives
+  }
+}
 
 enum TranscriptionEvent: Equatable, Sendable {
   /// The complete best-known text, including the current volatile phrase.
   case partial(String)
   /// The complete text after the analyzer has consumed and finalized input.
   case final(String)
+  case finalWithEvidence(FinalTranscription)
 }
 
 enum TranscriptionSessionError: Error, Equatable, LocalizedError, Sendable {
@@ -34,11 +51,30 @@ enum TranscriptionSessionError: Error, Equatable, LocalizedError, Sendable {
 
 struct SpeechRecognitionUpdate: Equatable, Sendable {
   let text: String
+  let alternatives: [String]
+  let confidence: Double?
   let isFinal: Bool
+
+  init(
+    text: String,
+    alternatives: [String] = [],
+    confidence: Double? = nil,
+    isFinal: Bool
+  ) {
+    self.text = text
+    self.alternatives = alternatives
+    self.confidence = confidence
+    self.isFinal = isFinal
+  }
 }
 
 @MainActor
 struct SpeechAnalysisRuntime {
+  private static let logger = Logger(
+    subsystem: "dev.topher.app",
+    category: "voice-capture"
+  )
+
   let audioFormat: AVAudioFormat
   let updates: () -> AsyncThrowingStream<SpeechRecognitionUpdate, any Error>
   let prepare: () async throws -> Void
@@ -46,7 +82,7 @@ struct SpeechAnalysisRuntime {
   let finish: () async throws -> Void
   let cancel: () async -> Void
 
-  static func apple(locale: Locale) async throws -> Self {
+  static func apple(locale: Locale, contextualStrings: [String]) async throws -> Self {
     guard SpeechTranscriber.isAvailable else {
       throw TranscriptionSessionError.speechUnavailable
     }
@@ -54,10 +90,10 @@ struct SpeechAnalysisRuntime {
       throw TranscriptionSessionError.unsupportedLocale
     }
 
-    let transcriber = SpeechTranscriber(
-      locale: supportedLocale,
-      preset: .progressiveTranscription
-    )
+    var preset = SpeechTranscriber.Preset.progressiveTranscription
+    preset.reportingOptions.insert(.alternativeTranscriptions)
+    preset.attributeOptions.insert(.transcriptionConfidence)
+    let transcriber = SpeechTranscriber(locale: supportedLocale, preset: preset)
     guard
       let audioFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
         compatibleWith: [transcriber]
@@ -70,6 +106,10 @@ struct SpeechAnalysisRuntime {
       modules: [transcriber],
       options: .init(priority: .userInitiated, modelRetention: .lingering)
     )
+    let context = AnalysisContext()
+    context.contextualStrings[.general] = Array(
+      contextualStrings.prefix(TranscriptVocabulary.maximumContextualStringCount)
+    )
 
     return Self(
       audioFormat: audioFormat,
@@ -81,6 +121,8 @@ struct SpeechAnalysisRuntime {
                 continuation.yield(
                   SpeechRecognitionUpdate(
                     text: String(result.text.characters),
+                    alternatives: result.alternatives.map { String($0.characters) },
+                    confidence: Self.averageConfidence(in: result.text),
                     isFinal: result.isFinal
                   )
                 )
@@ -96,6 +138,15 @@ struct SpeechAnalysisRuntime {
         }
       },
       prepare: {
+        if !contextualStrings.isEmpty {
+          do {
+            try await analyzer.setContext(context)
+          } catch {
+            // Contextual bias is an enhancement, not a voice-readiness gate.
+            // Keep the failure metadata-only and continue with the base model.
+            Self.logger.notice("Contextual speech vocabulary was unavailable")
+          }
+        }
         try await analyzer.prepareToAnalyze(in: audioFormat)
       },
       start: { inputSequence in
@@ -108,6 +159,12 @@ struct SpeechAnalysisRuntime {
         await analyzer.cancelAndFinishNow()
       }
     )
+  }
+
+  private static func averageConfidence(in text: AttributedString) -> Double? {
+    let values = text.runs.compactMap(\.transcriptionConfidence)
+    guard !values.isEmpty else { return nil }
+    return values.reduce(0, +) / Double(values.count)
   }
 }
 
@@ -216,10 +273,20 @@ final class AppleSpeechTranscriptionSession {
   private var resultsTask: Task<Void, Never>?
   private var finalizedText = ""
   private var volatileText = ""
+  private var finalizedHypotheses = [""]
+  private var volatileHypotheses: [String] = []
+  private var latestConfidence: Double?
 
-  convenience init(locale: Locale = Locale(identifier: "en_US")) {
+  convenience init(
+    locale: Locale = Locale(identifier: "en_US"),
+    contextualStrings: @escaping @MainActor () -> [String] = {
+      TranscriptVocabulary.developerDefaults.contextualStrings
+    }
+  ) {
     self.init(
-      runtimeFactory: { try await .apple(locale: locale) },
+      runtimeFactory: {
+        try await .apple(locale: locale, contextualStrings: contextualStrings())
+      },
       microphone: .live(),
       converterFactory: { try SpeechAudioConverter(inputFormat: $0, outputFormat: $1) }
     )
@@ -287,6 +354,9 @@ final class AppleSpeechTranscriptionSession {
     eventContinuation = eventBuilder
     finalizedText = ""
     volatileText = ""
+    finalizedHypotheses = [""]
+    volatileHypotheses = []
+    latestConfidence = nil
     phase = .active
 
     let updates = runtime.updates()
@@ -350,7 +420,12 @@ final class AppleSpeechTranscriptionSession {
 
       guard isCurrent(token, phase: .finishing) else { return }
 
-      eventContinuation?.yield(.final(combinedTranscript))
+      let transcription = finalTranscription
+      if transcription.alternatives.isEmpty, transcription.primary.confidence == nil {
+        eventContinuation?.yield(.final(transcription.primary.text))
+      } else {
+        eventContinuation?.yield(.finalWithEvidence(transcription))
+      }
       eventContinuation?.finish()
       resetState()
     } catch {
@@ -383,21 +458,59 @@ final class AppleSpeechTranscriptionSession {
       // SpeechTranscriber can revoke its current volatile interpretation with
       // an empty result. Never retain or execute the superseded phrase.
       volatileText = ""
+      volatileHypotheses = []
       eventContinuation?.yield(.partial(combinedTranscript))
       return
     }
 
+    let candidates = Self.unique([text] + update.alternatives)
+    latestConfidence = update.confidence
+
     if update.isFinal {
-      finalizedText = joining(finalizedText, text)
+      finalizedHypotheses = Self.combining(finalizedHypotheses, with: candidates)
+      finalizedText = finalizedHypotheses.first ?? joining(finalizedText, text)
       volatileText = ""
+      volatileHypotheses = []
     } else {
       volatileText = text
+      volatileHypotheses = Self.combining(finalizedHypotheses, with: candidates)
     }
     eventContinuation?.yield(.partial(combinedTranscript))
   }
 
   private var combinedTranscript: String {
     joining(finalizedText, volatileText)
+  }
+
+  private var finalTranscription: FinalTranscription {
+    let hypotheses = volatileHypotheses.isEmpty ? finalizedHypotheses : volatileHypotheses
+    let primaryText = hypotheses.first ?? combinedTranscript
+    return FinalTranscription(
+      text: primaryText,
+      alternatives: hypotheses.dropFirst().map { TranscriptHypothesis(text: $0) },
+      confidence: latestConfidence
+    )
+  }
+
+  private static func combining(_ prefixes: [String], with candidates: [String]) -> [String] {
+    unique(
+      prefixes.flatMap { prefix in
+        candidates.map { candidate in
+          if prefix.isEmpty { return candidate }
+          if candidate.isEmpty { return prefix }
+          return prefix + " " + candidate
+        }
+      }
+    )
+  }
+
+  private static func unique(_ values: [String]) -> [String] {
+    var seen = Set<String>()
+    return values.compactMap { value in
+      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmed.isEmpty, seen.insert(trimmed.lowercased()).inserted else { return nil }
+      return trimmed
+    }.prefix(5).map { $0 }
   }
 
   private func joining(_ first: String, _ second: String) -> String {
@@ -456,5 +569,8 @@ final class AppleSpeechTranscriptionSession {
     resultsTask = nil
     finalizedText = ""
     volatileText = ""
+    finalizedHypotheses = [""]
+    volatileHypotheses = []
+    latestConfidence = nil
   }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 struct MenuContentView: View {
   @ObservedObject var model: TopherModel
   @ObservedObject var diagnostics: DeveloperDiagnosticsController
+  @ObservedObject var vocabulary: SpeechVocabularyController
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -68,6 +69,7 @@ struct MenuContentView: View {
       }
 
       DeveloperDiagnosticsView(diagnostics: diagnostics)
+      SpeechVocabularyView(vocabulary: vocabulary)
 
       HStack {
         Button("Run") {

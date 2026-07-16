@@ -30,6 +30,20 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     storageDirectory = nil
   }
 
+  func testLiveStoreDefaultsOnButPreservesExplicitOptOut() throws {
+    let suiteName = "TopherDeveloperDiagnosticsDefaultsTests-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let defaultStore = DeveloperDiagnosticsStore.live(userDefaults: defaults)
+    XCTAssertTrue(defaultStore.initialEnabled)
+
+    defaults.set(false, forKey: DeveloperDiagnosticsStore.preferenceKey)
+    let optedOutStore = DeveloperDiagnosticsStore.live(userDefaults: defaults)
+    XCTAssertFalse(optedOutStore.initialEnabled)
+  }
+
   func testDisabledStoreDoesNotCreateStorage() async throws {
     let store = makeStore(initialEnabled: false)
 
@@ -95,6 +109,41 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     )
     XCTAssertEqual(directoryValues.isExcludedFromBackup, true)
     XCTAssertEqual(fileValues.isExcludedFromBackup, true)
+  }
+
+  func testPersistsRawAndSafelyInterpretedTranscriptEvidence() async throws {
+    let store = makeStore(initialEnabled: true)
+    let token = try await traceToken(for: store)
+    let snapshot = try await store.record(
+      DeveloperTranscriptRecordDraft(
+        recordedAt: Date(timeIntervalSince1970: 499),
+        source: .voice,
+        transcript: "Open gidhub.com",
+        interpretedTranscript: "Open GitHub.com",
+        interpretationReason: .vocabularyCorrection,
+        transcriptionConfidence: 0.42,
+        trace: AssistantCommandTrace(
+          outcome: .capabilitySucceeded,
+          commandKind: .openWebsite,
+          capabilityIdentifier: "webNavigation"
+        ),
+        processingDurationMilliseconds: 18,
+        appVersion: "test",
+        appBuild: "1"
+      ),
+      using: token
+    )
+
+    let record = try XCTUnwrap(snapshot.records.first)
+    XCTAssertEqual(record.transcript, "Open gidhub.com")
+    XCTAssertEqual(record.interpretedTranscript, "Open GitHub.com")
+    XCTAssertEqual(record.interpretationReason, .vocabularyCorrection)
+    XCTAssertEqual(record.transcriptionConfidence, 0.42)
+
+    let reloaded = makeStore(initialEnabled: false)
+    let reloadedSnapshot = try await reloaded.snapshot()
+    let reloadedRecord = try XCTUnwrap(reloadedSnapshot.records.first)
+    XCTAssertEqual(reloadedRecord, record)
   }
 
   func testDisableStopsStaleTraceWithoutDeletingExistingRecords() async throws {

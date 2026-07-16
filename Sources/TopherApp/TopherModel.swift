@@ -130,6 +130,9 @@ final class TopherModel: ObservableObject {
     finalizationTimeout: Duration = .seconds(8),
     voiceFeedbackResultDuration: Duration = .seconds(3),
     developerDiagnostics: DeveloperDiagnosticsController? = nil,
+    vocabularyProvider: @escaping @MainActor () -> TranscriptVocabulary = {
+      .developerDefaults
+    },
     listenForShortcutEvents: Bool = true
   ) {
     let permission = microphonePermission ?? MicrophonePermissionClient()
@@ -143,6 +146,7 @@ final class TopherModel: ObservableObject {
 
     commandProcessor = AssistantCommandProcessor(
       resolver: resolver,
+      vocabularyProvider: vocabularyProvider,
       policy: policy,
       applicationOpener: applicationOpener,
       webOpener: webOpener
@@ -288,6 +292,29 @@ final class TopherModel: ObservableObject {
 
       startCommandProcessing(transcript, source: .voice)
 
+    case .completedWithEvidence(let transcription):
+      let presentsGlobally = activeVoicePresentation == .globalShortcut
+      activeVoicePresentation = nil
+      let transcript = transcription.primary.text.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      )
+      guard !transcript.isEmpty else {
+        recordNoUsableSpeechIfEnabled()
+        let message = "I didn’t hear a command. Hold the shortcut and try again."
+        phase = .failure(message)
+        if presentsGlobally {
+          presentVoiceResult(.failure(message))
+        }
+        return
+      }
+
+      startCommandProcessing(
+        transcript,
+        source: .voice,
+        alternatives: transcription.alternatives,
+        confidence: transcription.primary.confidence
+      )
+
     case .failed(let failure):
       applyCaptureFailure(failure)
     }
@@ -391,6 +418,8 @@ final class TopherModel: ObservableObject {
   private func startCommandProcessing(
     _ transcript: String,
     source: DeveloperTranscriptSource,
+    alternatives: [TranscriptHypothesis] = [],
+    confidence: Double? = nil,
     yieldBeforeProcessing: Bool = false
   ) {
     precondition(commandExecutionTask == nil)
@@ -407,7 +436,11 @@ final class TopherModel: ObservableObject {
       let traceToken = await diagnostics?.beginTrace()
       let clock = ContinuousClock()
       let processingStartedAt = clock.now
-      let result = await processor.process(transcript) { [weak self] in
+      let result = await processor.process(
+        transcript,
+        alternatives: alternatives,
+        confidence: confidence
+      ) { [weak self] in
         guard let self else { return }
         phase = .executing
         if source == .voice {
@@ -425,6 +458,11 @@ final class TopherModel: ObservableObject {
         Task {
           await diagnostics.record(
             transcript: transcript,
+            interpretedTranscript: result.interpretation.wasCorrected
+              ? result.interpretation.selectedTranscript
+              : nil,
+            interpretationReason: result.interpretation.reason,
+            transcriptionConfidence: result.interpretation.confidence,
             source: source,
             trace: result.trace,
             processingDurationMilliseconds: durationMilliseconds,

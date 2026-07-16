@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import OSLog
+import TopherCore
 
 @MainActor
 final class DeveloperDiagnosticsController: ObservableObject {
@@ -120,6 +121,9 @@ final class DeveloperDiagnosticsController: ObservableObject {
 
   func record(
     transcript: String,
+    interpretedTranscript: String? = nil,
+    interpretationReason: TranscriptInterpretationReason? = nil,
+    transcriptionConfidence: Double? = nil,
     source: DeveloperTranscriptSource,
     trace: AssistantCommandTrace,
     processingDurationMilliseconds: UInt64,
@@ -129,6 +133,13 @@ final class DeveloperDiagnosticsController: ObservableObject {
       recordedAt: now(),
       source: source,
       transcript: transcript.trimmingCharacters(in: .whitespacesAndNewlines),
+      interpretedTranscript: interpretedTranscript?.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      ),
+      interpretationReason: interpretationReason,
+      transcriptionConfidence: transcriptionConfidence.flatMap {
+        $0.isFinite ? min(max($0, 0), 1) : nil
+      },
       trace: trace,
       processingDurationMilliseconds: processingDurationMilliseconds,
       appVersion: appVersion,

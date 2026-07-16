@@ -10,6 +10,7 @@ enum AssistantCommandOutcome: Equatable, Sendable {
 struct AssistantCommandProcessingResult: Equatable, Sendable {
   let outcome: AssistantCommandOutcome
   let trace: AssistantCommandTrace
+  let interpretation: TranscriptInterpretation
 }
 
 /// Owns the deterministic transcript-to-capability path.
@@ -20,6 +21,7 @@ struct AssistantCommandProcessingResult: Equatable, Sendable {
 @MainActor
 final class AssistantCommandProcessor {
   private let resolver: CommandResolver
+  private let vocabularyProvider: @MainActor () -> TranscriptVocabulary
   private let policy: CommandPolicy
   private let applicationOpener: ApplicationOpenCapability
   private let webOpener: WebOpenCapability
@@ -27,11 +29,15 @@ final class AssistantCommandProcessor {
 
   init(
     resolver: CommandResolver = .init(),
+    vocabularyProvider: @escaping @MainActor () -> TranscriptVocabulary = {
+      .developerDefaults
+    },
     policy: CommandPolicy = .init(),
     applicationOpener: ApplicationOpenCapability? = nil,
     webOpener: WebOpenCapability? = nil
   ) {
     self.resolver = resolver
+    self.vocabularyProvider = vocabularyProvider
     self.policy = policy
     self.applicationOpener = applicationOpener ?? ApplicationOpenCapability()
     self.webOpener = webOpener ?? WebOpenCapability()
@@ -39,9 +45,19 @@ final class AssistantCommandProcessor {
 
   func process(
     _ transcript: String,
+    alternatives: [TranscriptHypothesis] = [],
+    confidence: Double? = nil,
     executionStarted: @MainActor () -> Void = {}
   ) async -> AssistantCommandProcessingResult {
-    guard case .resolved(let command) = resolver.resolve(transcript) else {
+    let interpretation = TranscriptInterpreter(
+      resolver: resolver,
+      vocabulary: vocabularyProvider()
+    ).interpret(
+      primary: TranscriptHypothesis(text: transcript, confidence: confidence),
+      alternatives: alternatives
+    )
+
+    guard case .resolved(let command) = resolver.resolve(interpretation.selectedTranscript) else {
       logger.notice("Rejected an unsupported command")
       return AssistantCommandProcessingResult(
         outcome: .unsupported,
@@ -49,7 +65,8 @@ final class AssistantCommandProcessor {
           outcome: .unsupported,
           commandKind: nil,
           capabilityIdentifier: nil
-        )
+        ),
+        interpretation: interpretation
       )
     }
 
@@ -66,7 +83,8 @@ final class AssistantCommandProcessor {
           outcome: .policyDenied,
           commandKind: commandMetadata.kind,
           capabilityIdentifier: commandMetadata.capabilityIdentifier
-        )
+        ),
+        interpretation: interpretation
       )
     }
 
@@ -106,7 +124,8 @@ final class AssistantCommandProcessor {
         outcome: traceOutcome,
         commandKind: commandMetadata.kind,
         capabilityIdentifier: commandMetadata.capabilityIdentifier
-      )
+      ),
+      interpretation: interpretation
     )
   }
 

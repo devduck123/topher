@@ -5,7 +5,7 @@ Topher has two deliberately separate diagnostic paths:
 | Path | Purpose | Contains command text? | Retention owner |
 |---|---|---:|---|
 | macOS Unified Logging | Lifecycle troubleshooting and signpost timing | No | macOS |
-| Opt-in developer trace | Recent local dogfood requests and typed outcomes | Yes, when explicitly enabled | Topher, with hard bounds |
+| Bounded developer trace | Recent local dogfood requests and typed outcomes | Yes; defaults on during dogfooding with an explicit off switch | Topher, with hard bounds |
 
 There is no remote telemetry backend. Enabling the developer trace does not
 send its records anywhere.
@@ -75,17 +75,20 @@ detailed errors that might carry user data. Developer-trace failures use fixed
 metadata-only messages; there is no transcript fallback into `Logger` or
 `print`.
 
-## Opt-in developer transcript trace
+## Bounded developer transcript trace
 
 The menu's **Developer diagnostics** section exposes **Record final command
-transcripts**. It is off by default. Enabling it presents a warning and requires
-confirmation; while enabled, an orange dot appears in both the diagnostics
-section and Topher's menu-bar icon.
+transcripts**. During local dogfooding it defaults on so unsupported phrasing is
+captured without setup. Turning it off persists the opt-out; re-enabling it
+presents a warning and requires confirmation. While enabled, an orange dot
+appears in both the diagnostics section and Topher's menu-bar icon.
 
 Each record contains only:
 
 - The exact finalized voice or manual command after surrounding whitespace is
   removed. This can include a search term or secret typed/spoken by the user.
+- The bounded interpreted command only when it differs, a fixed correction
+  reason, and an available confidence summary.
 - Whether the request came from voice or the manual development field.
 - A fixed outcome: unsupported, policy denied, capability succeeded,
   capability failed, or no usable speech.
@@ -94,7 +97,8 @@ Each record contains only:
 - Processing duration, record time, and app version/build.
 
 Topher does not separately capture or append raw audio, partial transcripts,
-microphone buffers, retrieved browser/screen/message/document context,
+the complete speech-alternative list, microphone buffers, retrieved
+browser/screen/message/document context,
 constructed destination URLs, detailed framework errors, Keychain/config
 values, or arbitrary error text. The exact user-authored command can itself
 contain a query, URL, pasted content, credential, or error string.
@@ -123,7 +127,8 @@ All four limits apply:
 - Records older than 24 hours are removed.
 - At most the newest 200 records are kept.
 - The encoded file is at most 1 MiB; oldest records are removed first.
-- Each transcript is at most 4 KiB of valid UTF-8 and is marked when truncated.
+- Each raw or interpreted transcript is at most 4 KiB of valid UTF-8 and the
+  record is marked when content is truncated.
 
 Cleanup runs on load/launch, refresh, writes, setting changes, and hourly while
 Topher is running. If Topher is not running at the 24-hour boundary, stale
@@ -164,6 +169,6 @@ memory.”
 For searches, the query is sent to the selected provider when the default
 browser opens Google or YouTube, and normal browser history or provider
 retention may apply. Manual text remains visible in Topher's field and process
-memory until changed or the app exits. The opt-in developer trace adds the
+memory until changed or the app exits. The bounded developer trace adds the
 bounded local copy described above; it does not change browser/provider
 behavior.

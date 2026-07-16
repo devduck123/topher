@@ -126,6 +126,30 @@ final class AssistantCommandProcessorTests: XCTestCase {
     XCTAssertEqual(executionStartedCount, 0)
   }
 
+  func testUsesAUniqueSupportedSpeechAlternativeWithoutExpandingAuthority() async {
+    var openedURLs: [URL] = []
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      webOpener: WebOpenCapability(
+        workspace: WebWorkspace(open: { openedURLs.append($0) })
+      )
+    )
+
+    let result = await processor.process(
+      "Open kit hub.com",
+      alternatives: [
+        TranscriptHypothesis(text: "Open GitHub.com", confidence: 0.82),
+        TranscriptHypothesis(text: "Open bit tub.com", confidence: 0.61),
+      ],
+      confidence: 0.4
+    )
+
+    XCTAssertEqual(openedURLs.map(\.absoluteString), ["https://github.com/"])
+    XCTAssertEqual(result.interpretation.rawTranscript, "Open kit hub.com")
+    XCTAssertEqual(result.interpretation.selectedTranscript, "Open GitHub.com")
+    XCTAssertEqual(result.interpretation.reason, .speechAlternative)
+  }
+
   func testPolicyDenialDoesNotStartOrExecuteACapability() async {
     var executionStartedCount = 0
     let processor = AssistantCommandProcessor(

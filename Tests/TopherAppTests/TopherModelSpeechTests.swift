@@ -413,10 +413,10 @@ final class TopherModelSpeechTests: XCTestCase {
 
     model.beginPushToTalk()
     await waitUntil { model.phase == .listening("") }
-    voice.yield(.partial("Bring me to"))
-    await waitUntil { model.phase == .listening("Bring me to") }
+    voice.yield(.partial("Summarize this"))
+    await waitUntil { model.phase == .listening("Summarize this") }
     model.endPushToTalk()
-    voice.yield(.final("Bring me to YouTube"))
+    voice.yield(.final("Summarize this page"))
 
     await waitUntil {
       diagnostics.records.count == 1
@@ -427,8 +427,8 @@ final class TopherModelSpeechTests: XCTestCase {
     }
 
     let record = try XCTUnwrap(diagnostics.records.first)
-    XCTAssertEqual(record.transcript, "Bring me to YouTube")
-    XCTAssertFalse(record.transcript.contains("Bring me to\n"))
+    XCTAssertEqual(record.transcript, "Summarize this page")
+    XCTAssertFalse(record.transcript.contains("Summarize this\n"))
     XCTAssertEqual(record.source, .voice)
     XCTAssertEqual(record.outcome, .unsupported)
     XCTAssertNil(record.commandKind)

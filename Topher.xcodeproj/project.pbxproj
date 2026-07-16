@@ -26,6 +26,7 @@
 		A0000000000000000000003E /* DeveloperDiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002F /* DeveloperDiagnosticsStore.swift */; };
 		A0000000000000000000003F /* DeveloperDiagnosticsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000040 /* DeveloperDiagnosticsController.swift */; };
 		A00000000000000000000041 /* DeveloperDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000042 /* DeveloperDiagnosticsView.swift */; };
+		A00000000000000000000043 /* SpeechVocabularyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000044 /* SpeechVocabularyController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +49,7 @@
 		A0000000000000000000002F /* DeveloperDiagnosticsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsStore.swift; sourceTree = "<group>"; };
 		A00000000000000000000040 /* DeveloperDiagnosticsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsController.swift; sourceTree = "<group>"; };
 		A00000000000000000000042 /* DeveloperDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsView.swift; sourceTree = "<group>"; };
+		A00000000000000000000044 /* SpeechVocabularyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechVocabularyController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +96,7 @@
 				A00000000000000000000027 /* SpeechAssetPreparationClient.swift */,
 				A00000000000000000000028 /* SpeechAudioConversion.swift */,
 				A00000000000000000000029 /* SpeechTranscriptionSession.swift */,
+				A00000000000000000000044 /* SpeechVocabularyController.swift */,
 				A0000000000000000000002B /* Topher.entitlements */,
 				A00000000000000000000023 /* TopherApp.swift */,
 				A00000000000000000000024 /* TopherModel.swift */,
@@ -193,6 +196,7 @@
 				A00000000000000000000037 /* SpeechAssetPreparationClient.swift in Sources */,
 				A00000000000000000000038 /* SpeechAudioConversion.swift in Sources */,
 				A00000000000000000000039 /* SpeechTranscriptionSession.swift in Sources */,
+				A00000000000000000000043 /* SpeechVocabularyController.swift in Sources */,
 				A00000000000000000000033 /* TopherApp.swift in Sources */,
 				A00000000000000000000034 /* TopherModel.swift in Sources */,
 				A0000000000000000000003B /* VoiceFeedbackHUD.swift in Sources */,

@@ -91,6 +91,7 @@ enum PushToTalkCaptureEvent: Equatable, Sendable {
   case readyForNextHold
   case releasedBeforeListening
   case completed(String)
+  case completedWithEvidence(FinalTranscription)
   case failed(PushToTalkCaptureFailure)
 }
 
@@ -148,6 +149,7 @@ final class PushToTalkCaptureController {
   private var generation: UInt64 = 0
   private var readinessGeneration: UInt64 = 0
   private var finalTranscript = ""
+  private var finalTranscriptionEvidence: FinalTranscription?
   private var isShutDown = false
   private var preparationInterval: OSSignpostIntervalState?
   private var captureInterval: OSSignpostIntervalState?
@@ -247,10 +249,15 @@ final class PushToTalkCaptureController {
       switch outcome {
       case .completed:
         let transcript = finalTranscript
+        let evidence = finalTranscriptionEvidence
         clearTranscriptionResult()
         endFinalizationInterval()
         phase = .idle
-        onEvent(.completed(transcript))
+        if let evidence {
+          onEvent(.completedWithEvidence(evidence))
+        } else {
+          onEvent(.completed(transcript))
+        }
       case .failed:
         await failAndCancel(.finalizationFailed, token: token)
       case .timedOut:
@@ -285,6 +292,7 @@ final class PushToTalkCaptureController {
     readinessRefreshTask = nil
     endOpenIntervals()
     finalTranscript = ""
+    finalTranscriptionEvidence = nil
 
     let transcription = transcription
     Task { @MainActor in
@@ -457,6 +465,19 @@ final class PushToTalkCaptureController {
             case .idle, .preparing, .cleaningUp:
               break
             }
+          case .finalWithEvidence(let transcription):
+            finalTranscript = transcription.primary.text
+            finalTranscriptionEvidence = transcription
+            switch phase {
+            case .finalizing:
+              phase = .finalizing(transcription.primary.text)
+              onEvent(.stateChanged(.finalizing(transcription.primary.text)))
+            case .listening:
+              phase = .listening(transcription.primary.text)
+              onEvent(.stateChanged(.listening(transcription.primary.text)))
+            case .idle, .preparing, .cleaningUp:
+              break
+            }
           }
         }
 
@@ -564,6 +585,7 @@ final class PushToTalkCaptureController {
     transcriptionEventsTask?.cancel()
     transcriptionEventsTask = nil
     finalTranscript = ""
+    finalTranscriptionEvidence = nil
   }
 
   private func invalidateReadinessRefresh() {

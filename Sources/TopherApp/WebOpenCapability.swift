@@ -92,6 +92,10 @@ final class WebOpenCapability {
 
   private func host(for target: WebsiteTarget) -> String {
     switch target {
+    case .crunchyroll:
+      "www.crunchyroll.com"
+    case .github:
+      "github.com"
     case .google:
       "www.google.com"
     case .youtube:

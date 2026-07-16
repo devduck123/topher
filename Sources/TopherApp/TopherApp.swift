@@ -11,19 +11,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct TopherApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   @StateObject private var diagnostics: DeveloperDiagnosticsController
+  @StateObject private var vocabulary: SpeechVocabularyController
   @StateObject private var model: TopherModel
 
   init() {
     let diagnostics = DeveloperDiagnosticsController()
+    let vocabulary = SpeechVocabularyController()
     _diagnostics = StateObject(wrappedValue: diagnostics)
+    _vocabulary = StateObject(wrappedValue: vocabulary)
     _model = StateObject(
-      wrappedValue: TopherModel(developerDiagnostics: diagnostics)
+      wrappedValue: TopherModel(
+        voiceTranscription: .live(contextualStrings: { vocabulary.contextualStrings }),
+        developerDiagnostics: diagnostics,
+        vocabularyProvider: { vocabulary.vocabulary }
+      )
     )
   }
 
   var body: some Scene {
     MenuBarExtra {
-      MenuContentView(model: model, diagnostics: diagnostics)
+      MenuContentView(model: model, diagnostics: diagnostics, vocabulary: vocabulary)
     } label: {
       ZStack(alignment: .topTrailing) {
         Image(systemName: model.phase.symbolName)

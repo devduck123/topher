@@ -1,4 +1,5 @@
 import SwiftUI
+import TopherCore
 
 struct DeveloperDiagnosticsView: View {
   @ObservedObject var diagnostics: DeveloperDiagnosticsController
@@ -127,6 +128,18 @@ struct DeveloperDiagnosticsView: View {
         .lineLimit(2)
         .help(record.transcript)
 
+      if let interpretedTranscript = record.interpretedTranscript {
+        Text(interpretationSummary(record, interpretedTranscript: interpretedTranscript))
+          .font(.caption2)
+          .foregroundStyle(.orange)
+          .lineLimit(2)
+          .help(interpretedTranscript)
+      } else if let confidence = record.transcriptionConfidence {
+        Text("Speech confidence: \(confidence.formatted(.percent.precision(.fractionLength(0))))")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+
       Text(
         "\(record.recordedAt.formatted(date: .omitted, time: .standard)) · \(record.source.displayName) · \(record.outcome.displayName) · \(record.processingDurationMilliseconds) ms"
       )
@@ -135,6 +148,20 @@ struct DeveloperDiagnosticsView: View {
       .lineLimit(1)
     }
     .accessibilityElement(children: .combine)
+  }
+
+  private func interpretationSummary(
+    _ record: DeveloperTranscriptRecord,
+    interpretedTranscript: String
+  ) -> String {
+    var summary = "Used: \(interpretedTranscript)"
+    if let reason = record.interpretationReason {
+      summary += " · \(reason.displayName)"
+    }
+    if let confidence = record.transcriptionConfidence {
+      summary += " · \(confidence.formatted(.percent.precision(.fractionLength(0))))"
+    }
+    return summary
   }
 
   private func confirmationAlert(_ confirmation: Confirmation) -> Alert {
@@ -159,6 +186,17 @@ struct DeveloperDiagnosticsView: View {
         },
         secondaryButton: .cancel()
       )
+    }
+  }
+}
+
+extension TranscriptInterpretationReason {
+  fileprivate var displayName: String {
+    switch self {
+    case .speechAlternative:
+      "Speech alternative"
+    case .vocabularyCorrection:
+      "Vocabulary correction"
     }
   }
 }

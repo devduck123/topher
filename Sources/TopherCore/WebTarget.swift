@@ -2,11 +2,17 @@ import Foundation
 
 /// Websites Topher may open directly without accepting an arbitrary URL.
 public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
+  case crunchyroll
+  case github
   case google
   case youtube
 
   public var displayName: String {
     switch self {
+    case .crunchyroll:
+      "Crunchyroll"
+    case .github:
+      "GitHub"
     case .google:
       "Google"
     case .youtube:
@@ -16,6 +22,10 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
 
   var aliases: Set<String> {
     switch self {
+    case .crunchyroll:
+      ["crunchyroll", "crunchy roll", "crunchyroll com"]
+    case .github:
+      ["github", "git hub", "github com"]
     case .google:
       ["google", "google com", "google homepage"]
     case .youtube:
@@ -26,6 +36,11 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
   static func matching(_ normalizedName: String) -> Self? {
     allCases.first { $0.aliases.contains(normalizedName) }
   }
+
+  /// A bare `search <destination>` can be navigational for known web brands.
+  /// Query-bearing provider forms such as `search YouTube for cats` are
+  /// resolved before this rule.
+  var acceptsBareSearchAsNavigation: Bool { true }
 }
 
 /// Search providers with application-owned URL construction.

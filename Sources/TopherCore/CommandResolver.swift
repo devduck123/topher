@@ -5,6 +5,10 @@ public struct CommandResolver: Sendable {
   public init() {}
 
   public func resolve(_ transcript: String) -> CommandResolution {
+    if let target = resolveBareWebsiteSearch(transcript) {
+      return .resolved(.openWebsite(target))
+    }
+
     if let command = resolveSearchPreservingQuery(transcript) {
       return .resolved(command)
     }
@@ -30,21 +34,40 @@ public struct CommandResolver: Sendable {
       from: request,
       candidates: [
         "open", "launch", "start", "go to", "visit", "navigate to", "navigate",
-        "switch to", "switch over to", "pull up",
+        "switch to", "switch over to", "pull up", "bring me to", "take me to",
       ]
     ) {
-      if let target = ApplicationTarget.matching(requestedName) {
-        return .resolved(.openApplication(target))
-      }
-
+      // Exact known website brands win before native applications. This keeps
+      // phrases such as "Open Crunchyroll" web-oriented even if a similarly
+      // named native application is supported later.
       if let target = WebsiteTarget.matching(requestedName) {
         return .resolved(.openWebsite(target))
+      }
+
+      if let target = ApplicationTarget.matching(requestedName) {
+        return .resolved(.openApplication(target))
       }
 
       return .unsupported
     }
 
     return .unsupported
+  }
+
+  private func resolveBareWebsiteSearch(_ transcript: String) -> WebsiteTarget? {
+    let request = normalizedRequest(transcript)
+    guard
+      let requestedName = removingFirstPrefix(
+        from: request,
+        candidates: ["search for", "search", "find"]
+      ),
+      let target = WebsiteTarget.matching(requestedName),
+      target.acceptsBareSearchAsNavigation
+    else {
+      return nil
+    }
+
+    return target
   }
 
   private func resolveSearchPreservingQuery(_ transcript: String) -> TopherCommand? {
@@ -63,7 +86,10 @@ public struct CommandResolver: Sendable {
       ),
       (
         .google,
-        ["search google for", "google search for", "search the web for", "search for", "google"]
+        [
+          "search google for", "google search for", "search the web for", "search for",
+          "google", "search",
+        ]
       ),
     ]
 
@@ -80,6 +106,20 @@ public struct CommandResolver: Sendable {
     }
 
     return nil
+  }
+
+  private func normalizedRequest(_ transcript: String) -> String {
+    let normalized = normalize(transcript)
+    let withoutAddress = removingFirstPrefix("topher", from: normalized)
+    let withoutPolitePrefix =
+      removingFirstPrefix(
+        from: withoutAddress,
+        candidates: ["please", "can you", "could you", "would you"]
+      ) ?? withoutAddress
+    return removingFirstSuffix(
+      from: withoutPolitePrefix,
+      candidates: ["please", "for me"]
+    )
   }
 
   private func removingRawAddress(from text: String) -> String {

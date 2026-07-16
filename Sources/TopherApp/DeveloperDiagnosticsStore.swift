@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import OSLog
+import TopherCore
 
 enum DeveloperTranscriptSource: String, Codable, Equatable, Sendable {
   case manual
@@ -60,6 +61,9 @@ struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
   let source: DeveloperTranscriptSource
   let transcript: String
   let transcriptWasTruncated: Bool
+  let interpretedTranscript: String?
+  let interpretationReason: TranscriptInterpretationReason?
+  let transcriptionConfidence: Double?
   let outcome: AssistantCommandTraceOutcome
   let commandKind: AssistantCommandKind?
   let capabilityIdentifier: String?
@@ -72,10 +76,37 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
   let recordedAt: Date
   let source: DeveloperTranscriptSource
   let transcript: String
+  let interpretedTranscript: String?
+  let interpretationReason: TranscriptInterpretationReason?
+  let transcriptionConfidence: Double?
   let trace: AssistantCommandTrace
   let processingDurationMilliseconds: UInt64
   let appVersion: String
   let appBuild: String
+
+  init(
+    recordedAt: Date,
+    source: DeveloperTranscriptSource,
+    transcript: String,
+    interpretedTranscript: String? = nil,
+    interpretationReason: TranscriptInterpretationReason? = nil,
+    transcriptionConfidence: Double? = nil,
+    trace: AssistantCommandTrace,
+    processingDurationMilliseconds: UInt64,
+    appVersion: String,
+    appBuild: String
+  ) {
+    self.recordedAt = recordedAt
+    self.source = source
+    self.transcript = transcript
+    self.interpretedTranscript = interpretedTranscript
+    self.interpretationReason = interpretationReason
+    self.transcriptionConfidence = transcriptionConfidence
+    self.trace = trace
+    self.processingDurationMilliseconds = processingDurationMilliseconds
+    self.appVersion = appVersion
+    self.appBuild = appBuild
+  }
 }
 
 struct DeveloperDiagnosticsSnapshot: Equatable, Sendable {
@@ -152,7 +183,9 @@ actor DeveloperDiagnosticsStore {
       cachesURL
       .appendingPathComponent("dev.topher.app", isDirectory: true)
       .appendingPathComponent("TranscriptDiagnostics", isDirectory: true)
-    let enabled = defaults.bool(forKey: preferenceKey)
+    // Local dogfood builds favor useful evidence: record by default until the
+    // user explicitly opts out. A persisted false value always wins.
+    let enabled = defaults.bool(forKey: preferenceKey, defaultValue: true)
 
     return DeveloperDiagnosticsStore(
       storageDirectoryURL: directoryURL,
@@ -217,6 +250,9 @@ actor DeveloperDiagnosticsStore {
       draft.transcript,
       maximumBytes: retention.maximumTranscriptBytes
     )
+    let boundedInterpretation = draft.interpretedTranscript.map {
+      Self.boundedUTF8($0, maximumBytes: retention.maximumTranscriptBytes)
+    }
     let record = DeveloperTranscriptRecord(
       schemaVersion: DeveloperTranscriptRecord.currentSchemaVersion,
       id: UUID(),
@@ -224,6 +260,9 @@ actor DeveloperDiagnosticsStore {
       source: draft.source,
       transcript: boundedTranscript.value,
       transcriptWasTruncated: boundedTranscript.wasTruncated,
+      interpretedTranscript: boundedInterpretation?.value,
+      interpretationReason: draft.interpretationReason,
+      transcriptionConfidence: draft.transcriptionConfidence,
       outcome: draft.trace.outcome,
       commandKind: draft.trace.commandKind,
       capabilityIdentifier: draft.trace.capabilityIdentifier,
@@ -358,7 +397,12 @@ actor DeveloperDiagnosticsStore {
       record.transcript,
       maximumBytes: retention.maximumTranscriptBytes
     )
-    guard boundedTranscript.wasTruncated else { return record }
+    let boundedInterpretation = record.interpretedTranscript.map {
+      Self.boundedUTF8($0, maximumBytes: retention.maximumTranscriptBytes)
+    }
+    let contentWasTruncated =
+      boundedTranscript.wasTruncated || boundedInterpretation?.wasTruncated == true
+    guard contentWasTruncated else { return record }
 
     return DeveloperTranscriptRecord(
       schemaVersion: record.schemaVersion,
@@ -366,7 +410,10 @@ actor DeveloperDiagnosticsStore {
       recordedAt: record.recordedAt,
       source: record.source,
       transcript: boundedTranscript.value,
-      transcriptWasTruncated: true,
+      transcriptWasTruncated: record.transcriptWasTruncated || contentWasTruncated,
+      interpretedTranscript: boundedInterpretation?.value,
+      interpretationReason: record.interpretationReason,
+      transcriptionConfidence: record.transcriptionConfidence,
       outcome: record.outcome,
       commandKind: record.commandKind,
       capabilityIdentifier: record.capabilityIdentifier,
@@ -553,8 +600,9 @@ private final class SendableUserDefaults: @unchecked Sendable {
     self.userDefaults = userDefaults
   }
 
-  func bool(forKey key: String) -> Bool {
-    userDefaults.bool(forKey: key)
+  func bool(forKey key: String, defaultValue: Bool) -> Bool {
+    guard userDefaults.object(forKey: key) != nil else { return defaultValue }
+    return userDefaults.bool(forKey: key)
   }
 
   func set(_ value: Bool, forKey key: String) {

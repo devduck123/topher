@@ -31,6 +31,21 @@ final class WebOpenCapabilityTests: XCTestCase {
     XCTAssertEqual(outcome, .succeeded(message: "Opened YouTube."))
   }
 
+  func testOpensDeveloperAndEntertainmentWebDestinations() async {
+    var openedURLs: [URL] = []
+    let capability = WebOpenCapability(
+      workspace: WebWorkspace(open: { openedURLs.append($0) })
+    )
+
+    _ = await capability.execute(.github)
+    _ = await capability.execute(.crunchyroll)
+
+    XCTAssertEqual(
+      openedURLs.map(\.absoluteString),
+      ["https://github.com/", "https://www.crunchyroll.com/"]
+    )
+  }
+
   func testBuildsAnEncodedGoogleSearchURL() async throws {
     var openedURL: URL?
     let capability = WebOpenCapability(

@@ -87,6 +87,9 @@ pretending the permanent engine decision has been made.
 - Pending: complete the grant/denial/settings recovery matrix, measure the
   seven-command corpus, and exercise sleep/wake, audio-route changes, and 100
   repeated holds on the user's microphone and voice.
+- Complete in the personalization slice: request Apple alternative hypotheses
+  and confidence attributes, apply a bounded contextual vocabulary, and carry
+  the final evidence without persisting raw audio or the full hypothesis list.
 
 Exit: the seven-command corpus reaches the accepted local bar without a network
 dependency, and installed-app denial/error recovery is verified.
@@ -102,6 +105,12 @@ dependency, and installed-app denial/error recovery is verified.
 - Complete in this foundation slice: `CommandResolution` separates unsupported
   input from executable `TopherCommand`, and `AssistantCommandProcessor` owns
   resolution, policy, and exactly-one capability dispatch.
+- Complete in the personalization slice: add GitHub and Crunchyroll web
+  destinations; target-specific bare search/navigation semantics; general
+  `Search <query>` fallback to Google; and observed-phrase regression tests.
+- Complete in the personalization slice: add a local, bounded personal
+  vocabulary and conservative transcript interpreter. A correction executes
+  only when it selects one uniquely allowlisted typed command.
 - Add validated explicit HTTPS URL opening only if a later use case needs it.
 - Add application discovery plus explicit aliases without accepting arbitrary
   model-provided bundle IDs.
@@ -125,7 +134,7 @@ it does not, remove the model path.
 
 - Exercise 100 repeated sessions, cancellation, timeouts, sleep/wake, and audio
   device changes.
-- Complete: add a default-off local developer trace for the exact finalized
+- Complete: add a bounded local developer trace for the exact finalized
   voice/manual command plus fixed typed outcome, capability kind, timing, and
   app version. Enforce 24-hour, 200-record, 1-MiB, and 4-KiB-per-transcript
   bounds; reject unsafe storage paths; invalidate previously issued tokens and
@@ -133,6 +142,12 @@ it does not, remove the model path.
   partials, retrieved context, constructed URLs, or detailed errors appended by
   Topher. Treat the finalized user-authored command as sensitive because it can
   itself contain those strings.
+- Complete: default that trace on during local dogfooding while preserving a
+  persistent explicit opt-out, confirmation before re-enabling, and immediate
+  deletion.
+- Complete: when interpretation changes a command, retain the bounded raw and
+  interpreted text, fixed reason, and confidence summary without retaining the
+  complete alternative list.
 - Add richer metadata-only lifecycle events only when a measured reliability
   question requires them.
 - Test shortcut conflicts and launch-at-login only if daily use warrants it.

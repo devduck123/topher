@@ -33,9 +33,10 @@ The current push-to-talk implementation already covers a subset:
 ```text
 global shortcut
   -> PushToTalkCaptureController
-  -> raw finalized local transcript
+  -> raw finalized local transcript plus bounded recognition hypotheses
   -> TopherModel request-kind routing
   -> AssistantCommandProcessor
+     -> TranscriptInterpreter (safe alternatives and explicit vocabulary)
      -> CommandResolver
      -> CommandResolution.resolved(TopherCommand) or unsupported
      -> CommandPolicy
@@ -44,8 +45,9 @@ global shortcut
 ```
 
 `PushToTalkCaptureController` owns microphone permission, speech assets,
-capture, partial/final transcript state, timeouts, generation guards, and
-cleanup. It returns the raw finalized text and has no command resolver,
+capture, partial/final transcript state, bounded alternative hypotheses,
+confidence evidence, timeouts, generation guards, and cleanup. It returns the
+raw finalized result and has no command resolver,
 dictation formatter, capability, or user-facing outcome policy. `TopherModel`
 currently routes that result to assistant commands; a future dictation shortcut
 will select a dictation processor at this boundary instead.
@@ -94,10 +96,24 @@ capabilities, and typed results.
 For assistant commands, resolution should remain layered:
 
 1. Exact deterministic commands.
-2. Parameterized deterministic commands with validated value types.
-3. Optional constrained fuzzy/model interpretation for deterministic misses.
-4. An application-owned typed proposal.
-5. Independent policy evaluation.
+2. A conservative transcript interpretation that may select one uniquely
+   supported speech alternative or an explicit vocabulary correction.
+3. Parameterized deterministic commands with validated value types.
+4. Optional constrained model interpretation for deterministic misses.
+5. An application-owned typed proposal.
+6. Independent policy evaluation.
+
+Transcript correction does not create execution authority. The raw transcript
+is preserved, ambiguous alternatives remain unsupported, and a correction is
+accepted only when it resolves to one existing allowlisted command. Personal
+vocabulary is explicit, local, bounded, and user-editable; Topher does not mine
+browser history, repositories, messages, or clipboard content for terms.
+
+Web destinations define their own bounded verb semantics. A bare “Search
+Crunchyroll” can mean navigate to the known Crunchyroll destination, while
+“Search Crunchyroll anime releases” remains a general web query. Unknown search
+subjects use Google through the default browser. Application matching does not
+take priority merely because an installed application resembles a website.
 
 A model may help interpret phrasing, but it cannot create capabilities, grant
 permissions, set policy, or return executable code. Unavailable local reasoning
@@ -266,11 +282,16 @@ Every stage must fail closed and remain cancellable:
 Ordinary diagnostic events should identify lifecycle stage, fixed
 capability/provider kind, timing, and outcome without storing transcript, query,
 message, URL, page, screen, or document content. A content-bearing developer
-trace is a separate, explicit exception: it must default off, require informed
-opt-in, show persistent enabled state, accept only the finalized user-authored
-command, enforce short age/count/size bounds, and never include audio, partial
-speech, retrieved context, constructed URLs, detailed errors, or app-sourced
-credentials. Disable and clear must invalidate previously issued trace tokens
+trace is a separate, explicit exception. During local dogfooding it defaults on
+to preserve recent failed or unsupported commands, must preserve an explicit
+opt-out and require informed confirmation when re-enabled, show persistent
+enabled state, accept only the finalized user-authored command, enforce short
+age/count/size bounds, and never include audio, partial speech, retrieved
+context, constructed URLs, detailed errors, or app-sourced credentials. When
+interpretation changes a command, the trace may additionally retain the
+bounded interpreted text, fixed correction reason, and confidence summary; it
+does not retain the complete hypothesis list.
+Disable and clear must invalidate previously issued trace tokens
 and prevent their queued late records. The user-authored command can itself
 contain a query, URL, pasted content, or secret and must be treated accordingly.
 

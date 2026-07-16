@@ -1,6 +1,6 @@
 # Decision 0005: Opt-in bounded transcript diagnostics
 
-Status: accepted for local dogfooding, 2026-07-15
+Status: superseded for local dogfooding by decision 0006, 2026-07-15
 
 Keep macOS Unified Logging metadata-only. Add a separate developer trace that
 stores finalized voice/manual command text only after an explicit warning and

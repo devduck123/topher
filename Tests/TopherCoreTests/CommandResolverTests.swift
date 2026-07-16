@@ -39,6 +39,8 @@ final class CommandResolverTests: XCTestCase {
       ("Switch to Chrome", .openApplication(.chrome)),
       ("Switch over to Google Chrome", .openApplication(.chrome)),
       ("Pull up YouTube", .openWebsite(.youtube)),
+      ("Bring me to YouTube", .openWebsite(.youtube)),
+      ("Take me to GitHub", .openWebsite(.github)),
     ]
 
     for (transcript, expected) in cases {
@@ -52,10 +54,27 @@ final class CommandResolverTests: XCTestCase {
       ("visit youtube.com", .youtube),
       ("Open Google homepage", .google),
       ("Topher, please open You Tube for me.", .youtube),
+      ("Open GitHub", .github),
+      ("Open github.com", .github),
+      ("Open Crunchyroll", .crunchyroll),
     ]
 
     for (transcript, expected) in cases {
       XCTAssertEqual(resolver.resolve(transcript), .resolved(.openWebsite(expected)))
+    }
+  }
+
+  func testKnownWebsiteBrandsUseTargetSpecificBareSearchNavigation() {
+    let cases: [(String, WebsiteTarget)] = [
+      ("Search Crunchyroll", .crunchyroll),
+      ("Search crunchy roll", .crunchyroll),
+      ("Search for Crunchyroll", .crunchyroll),
+      ("Search GitHub", .github),
+      ("Find YouTube", .youtube),
+    ]
+
+    for (transcript, target) in cases {
+      XCTAssertEqual(resolver.resolve(transcript), .resolved(.openWebsite(target)))
     }
   }
 
@@ -66,6 +85,8 @@ final class CommandResolverTests: XCTestCase {
       ("Search the web for Swift speech APIs", .google, "Swift speech APIs"),
       ("Topher, could you search for M4 benchmarks", .google, "M4 benchmarks"),
       ("Search YouTube for C++ & Swift #1", .youtube, "C++ & Swift #1"),
+      ("Search Crunchyroll anime releases", .google, "Crunchyroll anime releases"),
+      ("Search Chrome extensions", .google, "Chrome extensions"),
     ]
 
     for (transcript, provider, queryText) in cases {

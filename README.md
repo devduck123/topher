@@ -37,7 +37,8 @@ The comparative speech benchmark is still open.
 - A 30-second listening watchdog, an 8-second finalization watchdog, immediate
   stream-error recovery, and generation guards against late results.
 - Direct Apple on-device transcription for fixed `en_US`, with on-demand asset
-  preparation and no raw-audio file writes.
+  preparation, alternative hypotheses, confidence evidence, contextual
+  vocabulary, and no raw-audio file writes.
 - Manual execution for development without speech.
 - A dedicated capture controller that owns permission, assets, microphone
   lifetime, finalization, timeouts, and cancellation while returning raw text
@@ -47,14 +48,18 @@ The comparative speech benchmark is still open.
 - Typed, allowlisted commands for Chrome, Notion, Safari, and Visual Studio
   Code, including bounded phrasing such as “Navigate Chrome,” “Switch to
   Chrome,” and “Pull up YouTube.”
-- Typed, allowlisted navigation to Google and YouTube.
-- Google, general web, and YouTube searches built from fixed HTTPS endpoints.
+- Typed, allowlisted navigation to Crunchyroll, GitHub, Google, and YouTube.
+- Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
+  known site, provider searches retain their provider, and unknown bare
+  searches use Google in the default browser (Chrome in dogfood use).
+- A bounded local personal-vocabulary editor for developer and product terms;
+  corrections can only select an already allowlisted typed command.
 - Native launch through `NSWorkspace`.
 - A separate policy decision before execution.
 - Safe rejection of unknown text and applications.
-- An explicitly enabled, bounded developer trace for recent final command
-  transcripts and typed outcomes. It is off by default and can be cleared at
-  any time.
+- A bounded developer trace for recent final command
+  transcripts and typed outcomes. Local dogfood builds start with it on; an
+  explicit off switch and **Clear Now** remain available at any time.
 - XCTest coverage for parsing, policy, native capabilities, audio conversion,
   permission/assets, transcription, cancellation, and push-to-talk races.
 
@@ -111,6 +116,13 @@ For normal app development, open `Topher.xcodeproj`, select the `TopherApp`
 scheme, and Run. The separate SwiftPM `Topher` scheme builds a bare executable;
 it is useful for compiler checks but is not the deployable app bundle.
 
+On macOS 26, third-party status items are also controlled by **System Settings
+→ Menu Bar → Allow in the Menu Bar**. If Topher is allowed and running but its
+icon is absent, reveal the menu bar outside full screen and make room by hiding
+or rearranging unused status items; a crowded MacBook menu bar can clip app
+items behind the notch. Launch the app bundle through Xcode, Finder, or `open`
+rather than invoking `Contents/MacOS/Topher` directly.
+
 For an interactive smoke test:
 
 1. Click Topher's sparkles icon in the menu bar.
@@ -120,8 +132,9 @@ For an interactive smoke test:
    is ready.
 4. Say “Open Safari,” release, and confirm the HUD changes from listening to
    finalizing before Safari opens exactly once.
-5. Try “Open Notion,” “Navigate Chrome,” “Pull up YouTube,” “Search YouTube for
-   C++ and Swift,” and “Search Google for best local speech model.”
+5. Try “Open Notion,” “Navigate Chrome,” “Pull up YouTube,” “Open GitHub,”
+   “Search Crunchyroll,” “Search YouTube for C++ and Swift,” and “Search for
+   best local speech model.”
 6. Speak unknown text and confirm it fails closed.
 7. Use the manual transcript field and **Run** as a development fallback.
 
@@ -140,9 +153,10 @@ access.
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
 not written to disk. Partial transcripts exist transiently in process memory
 and UI so the requested command can run. Ordinary logging never includes
-transcript text. When the developer explicitly enables **Record final command
-transcripts**, Topher retains the bounded final voice or manual text described
-below; audio and partial transcripts are still never retained. Denied
+transcript text. During local dogfooding, **Record final command transcripts**
+defaults on and retains the bounded final voice or manual text described below;
+it can be turned off or cleared at any time. Audio and partial transcripts are
+still never retained. Denied
 microphone access links to the macOS Microphone privacy pane and is rechecked
 when Topher becomes active again.
 
@@ -177,11 +191,14 @@ the manual transcript, search query, URL, raw audio, application name, or
 detailed error text.
 
 For local dogfooding, the menu's **Developer diagnostics** section can retain a
-separate command trace. Recording is off by default, requires a warning and
-confirmation, and adds an orange dot to the menu-bar icon while enabled. Each
-record contains the exact finalized voice or manual command, its source, a
-fixed typed outcome, fixed command/capability metadata when available,
-processing duration, and app version/build. It never contains raw audio,
+separate command trace. Recording starts on for the current local-development
+phase, preserves an explicit opt-out, and adds an orange dot to the menu-bar
+icon while enabled. Re-enabling after an opt-out requires confirmation. Each
+record contains the exact finalized voice or manual command, the interpreted
+command and correction reason when Topher safely selected a different reading,
+an available confidence summary, its source, a fixed typed outcome, fixed
+command/capability metadata, processing duration, and app version/build. It
+never contains raw audio,
 partials, or content Topher separately captures from a page, screen, message, or
 document. Topher does not append constructed destination URLs, Keychain/config
 values, or detailed framework errors. The user-authored command itself can

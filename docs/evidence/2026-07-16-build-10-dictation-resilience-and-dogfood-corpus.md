@@ -87,6 +87,12 @@ No Screen Recording, Automation/Apple Events, direct network, App Sandbox, or
 new signing entitlement was added. Release remains a local ad-hoc Hardened
 Runtime build; this is not distribution or notarization evidence.
 
+The checked installer then replaced `/Applications/Topher.app`, validated the
+source, temporary, and installed signatures, launched once, and reported one
+active process. A separate installed-product check confirmed build `10`, the
+same executable SHA-256 shown above, a valid strict signature, and exactly one
+installed Topher process.
+
 ## Remaining live acceptance
 
 Automated validation proves bounded state transitions and packaging, not real

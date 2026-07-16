@@ -1,4 +1,5 @@
 import Foundation
+import TopherCore
 
 /// The stateful test seam between Topher's UI lifecycle and a speech engine.
 ///
@@ -11,8 +12,16 @@ struct VoiceTranscriptionClient {
   let finish: () async throws -> Void
   let cancel: () async -> Void
 
-  static func live(locale: Locale = Locale(identifier: "en_US")) -> Self {
-    let session = AppleSpeechTranscriptionSession(locale: locale)
+  static func live(
+    locale: Locale = Locale(identifier: "en_US"),
+    contextualStrings: @escaping @MainActor () -> [String] = {
+      TranscriptVocabulary.developerDefaults.contextualStrings
+    }
+  ) -> Self {
+    let session = AppleSpeechTranscriptionSession(
+      locale: locale,
+      contextualStrings: contextualStrings
+    )
     return Self(
       prepare: { try await session.prepare() },
       start: { try await session.start() },

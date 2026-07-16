@@ -51,6 +51,31 @@ final class ApplicationOpenCapabilityTests: XCTestCase {
     XCTAssertEqual(outcome, .failed(message: "Google Chrome is not installed."))
   }
 
+  func testOpensADiscoveredApplicationByRevalidatedBundleIdentifier() async {
+    let expectedURL = URL(fileURLWithPath: "/Applications/Figma.app")
+    let target = InstalledApplicationTarget(
+      displayName: "Figma",
+      bundleIdentifier: "com.figma.Desktop"
+    )
+    var requestedBundleIdentifier: String?
+    var openedURL: URL?
+    let capability = ApplicationOpenCapability(
+      workspace: ApplicationWorkspace(
+        applicationURL: {
+          requestedBundleIdentifier = $0
+          return expectedURL
+        },
+        openApplication: { openedURL = $0 }
+      )
+    )
+
+    let outcome = await capability.execute(target)
+
+    XCTAssertEqual(requestedBundleIdentifier, "com.figma.Desktop")
+    XCTAssertEqual(openedURL, expectedURL)
+    XCTAssertEqual(outcome, .succeeded(message: "Opened Figma."))
+  }
+
   func testReportsAWorkspaceLaunchError() async {
     struct LaunchError: LocalizedError {
       var errorDescription: String? { "Simulated launch failure" }

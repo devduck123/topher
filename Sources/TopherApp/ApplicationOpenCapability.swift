@@ -42,17 +42,34 @@ final class ApplicationOpenCapability {
   }
 
   func execute(_ target: ApplicationTarget) async -> ActionOutcome {
+    await execute(
+      displayName: target.displayName,
+      bundleIdentifier: target.bundleIdentifier
+    )
+  }
+
+  func execute(_ target: InstalledApplicationTarget) async -> ActionOutcome {
+    await execute(
+      displayName: target.displayName,
+      bundleIdentifier: target.bundleIdentifier
+    )
+  }
+
+  private func execute(
+    displayName: String,
+    bundleIdentifier: String
+  ) async -> ActionOutcome {
     guard
-      let applicationURL = workspace.applicationURL(target.bundleIdentifier)
+      let applicationURL = workspace.applicationURL(bundleIdentifier)
     else {
-      return .failed(message: "\(target.displayName) is not installed.")
+      return .failed(message: "\(displayName) is not installed.")
     }
 
     do {
       try await workspace.openApplication(applicationURL)
-      return .succeeded(message: "Opened \(target.displayName).")
+      return .succeeded(message: "Opened \(displayName).")
     } catch {
-      return .failed(message: "Could not open \(target.displayName): \(error.localizedDescription)")
+      return .failed(message: "Could not open \(displayName): \(error.localizedDescription)")
     }
   }
 }

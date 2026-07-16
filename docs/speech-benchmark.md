@@ -3,22 +3,36 @@
 Status: not yet run. No user voice recordings were provided, and no result below
 should be read as an accuracy or latency claim.
 
+During ordinary dogfooding, Topher's bounded local diagnostics provide separate
+thumb ratings for transcript accuracy and action correctness. Run
+`scripts/summarize_dogfood_diagnostics.rb` for aggregate counts and latency
+percentiles without printing command text. These subjective ratings help find
+regressions but do not replace the controlled corpus below: Apple confidence,
+capability success, and intent success are not proxies for word error rate.
+
 ## Corpus
 
 Use five natural takes of each phrase in a quiet room and five with typical room
 noise. Do not coach identical cadence between takes.
 
 1. “Topher, open Chrome.”
-2. “Open YouTube.”
+2. “Bring me to YouTube.”
 3. “Search YouTube for Jujutsu Kaisen season three.”
 4. “Open Visual Studio Code.”
-5. “What app am I currently using?”
-6. “Search for Oracle Fusion Data Intelligence.”
-7. “Can you pull up YouTube for me?”
+5. “Open GitHub dot com.”
+6. “Search Crunchyroll.”
+7. “Search for Oracle Fusion Data Intelligence.”
+8. “Open Notion.”
+9. “Open Xcode.”
+10. “Search for pnpm workspace filtering.”
+11. “What app am I currently using?”
+12. “What does the current Chrome tab show?”
 
-Add five unscripted variations that express the same intents. Run each engine
-once without contextual vocabulary and once with installed application names,
-“Topher,” “Jujutsu Kaisen,” and “Oracle Fusion Data Intelligence.”
+Expand this into 40–60 phrases covering supported navigation/search, developer
+terms, personal sites/apps, ambiguous negatives that must not execute, and
+context-dependent requests that must report a missing capability. Add five
+unscripted variations. Run each engine without context, with the built-in
+developer vocabulary, and with accepted personal terms.
 
 Record only after explicit consent. Keep recordings only for the benchmark,
 store them outside source control, and delete them after results are accepted.
@@ -43,7 +57,10 @@ whether model assets were already warm.
 For every clip capture:
 
 - Exact normalized command success.
+- Semantic command success even when wording differs.
 - Word error rate and proper-noun accuracy.
+- Developer-term accuracy, correction reason, and false-correction count.
+- False execution count across unsupported and ambiguous negatives.
 - Time from capture start to first nonempty partial.
 - Time from key-up/end-of-audio to stable final text.
 - Cold model/session start time and warm session time.
@@ -64,7 +81,10 @@ with a written reason recorded before comparing candidates.
 
 - Exact normalized intent success: at least 98% in quiet and 95% in typical room
   noise.
+- Semantic command success on the supported corpus: at least 95%.
 - Exact proper-noun phrase success: at least 95% across the named-term clips.
+- Developer-term accuracy: at least 90%, with zero false auto-corrections and
+  zero unintended executions in the negative corpus.
 - Warm speech-onset-to-first-partial latency: p50 at most 300 ms and p95 at most
   600 ms.
 - Warm key-up-to-final latency: p50 at most 350 ms and p95 at most 800 ms.
@@ -87,7 +107,8 @@ bad result; revise the command/audio experiment and rerun it.
 | Candidate/configuration | Exact intent quiet/noise | Proper nouns | Cold p95 | Warm partial p50/p95 | Key-up final p50/p95 | Peak/baseline memory | CPU/GPU/ANE | Idle/10-min energy and thermal | Model storage | 100-session/recovery notes |
 |---|---:|---:|---:|---:|---:|---:|---|---|---:|---|
 | Apple direct, no context | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | OS-managed, measure | Not run |
-| Apple direct, context | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | OS-managed, measure | Not run |
+| Apple direct, alternatives/confidence | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | OS-managed, measure | Not run |
+| Apple direct, developer/personal context | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | OS-managed, measure | Not run |
 | AuralKit, context | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | OS-managed, measure | Not run |
 | FluidAudio, chosen model | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Measure | Not run |
 | WhisperKit, chosen model | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Measure | Not run |

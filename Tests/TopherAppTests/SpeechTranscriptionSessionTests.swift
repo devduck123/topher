@@ -1,5 +1,6 @@
 import AVFAudio
 import Speech
+import TopherCore
 import XCTest
 
 @testable import TopherApp
@@ -57,6 +58,40 @@ final class SpeechTranscriptionSessionTests: XCTestCase {
         .partial(""),
         .final(""),
       ]
+    )
+  }
+
+  func testPublishesAlternativeHypothesesAndConfidenceWithTheFinalTranscript() async throws {
+    let runtime = RuntimeProbe()
+    let session = makeSession(runtime: runtime, capture: CaptureProbe())
+
+    try await session.prepare()
+    let stream = try await session.start()
+    let collected = Task { try await collect(stream) }
+
+    runtime.yield(
+      .init(
+        text: "Open gidhub.com",
+        alternatives: ["Open GitHub.com", "Open bit hub.com"],
+        confidence: 0.42,
+        isFinal: true
+      )
+    )
+    try await session.finish()
+
+    let events = try await collected.value
+    XCTAssertEqual(
+      events.last,
+      .finalWithEvidence(
+        FinalTranscription(
+          text: "Open gidhub.com",
+          alternatives: [
+            TranscriptHypothesis(text: "Open GitHub.com"),
+            TranscriptHypothesis(text: "Open bit hub.com"),
+          ],
+          confidence: 0.42
+        )
+      )
     )
   }
 

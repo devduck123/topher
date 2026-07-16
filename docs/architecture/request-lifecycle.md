@@ -32,13 +32,37 @@ The current push-to-talk implementation already covers a subset:
 
 ```text
 global shortcut
-  -> local speech transcript
-  -> CommandResolver
-  -> TopherCommand
-  -> CommandPolicy
-  -> native capability
+  -> single-instance runtime ownership
+  -> PushToTalkCaptureController
+  -> raw finalized local transcript plus bounded recognition hypotheses
+  -> TopherModel request-kind routing
+  -> AssistantCommandProcessor
+     -> TranscriptInterpreter (safe alternatives and explicit vocabulary)
+     -> CommandResolver (fixed targets plus launch-time installed-app catalog)
+     -> CommandResolution.resolved(TopherCommand) or typed unsupported reason
+     -> CommandPolicy
+     -> exactly one registered native capability
   -> visible result
 ```
+
+`PushToTalkCaptureController` owns microphone permission, speech assets,
+capture, partial/final transcript state, bounded alternative hypotheses,
+confidence evidence, timeouts, generation guards, and cleanup. It returns the
+raw finalized result and has no command resolver,
+dictation formatter, capability, or user-facing outcome policy. `TopherModel`
+currently routes that result to assistant commands; a future dictation shortcut
+will select a dictation processor at this boundary instead.
+
+`AssistantCommandProcessor` owns the deterministic resolver-to-policy-to-
+capability transaction. Unsupported input is a `CommandResolution`, not an
+executable `TopherCommand`, and never crosses the policy boundary. Once an
+allowed command is resolved, the processor awaits one typed capability exactly
+once and returns its typed outcome to the presentation layer.
+
+Only the process holding Topher's per-user runtime lock may subscribe to the
+global shortcut. A duplicate or unsafe lock state terminates before shortcut
+registration, so one physical key release cannot create multiple independent
+requests. This is an execution invariant, not merely an installer convention.
 
 Do not introduce every future type now. The model below defines boundaries to
 preserve as real providers and channels are added.
@@ -54,7 +78,7 @@ application-owned value may carry:
 - Authenticated source identity and conversation, when remote.
 - Receipt time and expiry.
 - Whether local user presence was established.
-- Original user-authored text or a reference to the transient transcript.
+- Original user-authored text or a reference to the finalized transcript.
 - A bounded session reference, when follow-up is explicitly enabled.
 - A response route that cannot be replaced by retrieved content.
 
@@ -68,34 +92,104 @@ received remotely while the Mac is unattended.
 ## Request-kind routing and intention resolution
 
 Assistant commands and focused-field dictation are different request kinds.
-Assistant commands enter `CommandResolver` and become typed command proposals.
-Dictation never enters `CommandResolver`; its dedicated processor may format
-transcribed prose and propose insertion into a revalidated focused editable
-element. Both paths converge on typed proposals, independent policy,
-confirmation rules, registered capabilities, and typed results.
+Assistant commands enter `AssistantCommandProcessor`, whose resolver produces a
+typed command proposal or an unsupported outcome. Dictation never enters
+`CommandResolver`; its dedicated processor may format transcribed prose and
+propose insertion into a revalidated focused editable element. Both paths
+converge on typed proposals, independent policy, confirmation rules, registered
+capabilities, and typed results.
 
 For assistant commands, resolution should remain layered:
 
 1. Exact deterministic commands.
-2. Parameterized deterministic commands with validated value types.
-3. Optional constrained fuzzy/model interpretation for deterministic misses.
-4. An application-owned typed proposal.
-5. Independent policy evaluation.
+2. A conservative transcript interpretation that may select one uniquely
+   supported speech alternative or an explicit vocabulary correction.
+3. Parameterized deterministic commands with validated value types.
+4. Optional constrained model interpretation for deterministic misses.
+5. An application-owned typed proposal.
+6. Independent policy evaluation.
+
+Transcript correction does not create execution authority. The raw transcript
+is preserved, ambiguous alternatives remain unsupported, and a correction is
+accepted only when it resolves to one existing allowlisted command. Personal
+vocabulary is explicit, local, bounded, and user-editable; Topher does not mine
+browser history, repositories, messages, or clipboard content for terms.
+Only canonical desired terms are supplied to Apple's contextual recognition.
+Known ASR mistakes are interpreter-only correction aliases; valid application
+and website synonyms belong to the deterministic target resolver. An already
+resolved application or website target is not rewritten merely to canonicalize
+its transcript.
+
+Web destinations define their own bounded verb semantics. A bare “Search
+Crunchyroll” can mean navigate to the known Crunchyroll destination, while
+“Search Crunchyroll anime releases” remains a general web query. Unknown search
+subjects use Google through the default browser. Application matching does not
+take priority merely because an installed application resembles a website.
+Browser-owned internal routes, such as Chrome Extensions, are distinct typed
+targets rather than arbitrary URL strings. They are delivered as URLs to the
+registered browser application, not as launch-only process arguments.
+
+Installed applications are discovered once per launch from `/Applications`,
+`/System/Applications`, `~/Applications`, and one bounded child directory.
+Symlinked applications and invalid bundle identities are ignored. Resolution
+uses normalized exact aliases only; it does not perform substring or fuzzy
+application matching. The typed command contains a display name and bundle
+identifier, never a filesystem path. The execution capability asks
+`NSWorkspace` to resolve that bundle identifier again before opening it.
+
+Application and website precedence is part of the deterministic contract:
+
+1. An explicit `app`, `application`, or `desktop app` suffix requires a unique
+   installed application; a miss does not become a web search.
+2. An explicit `site` or `website` suffix uses a known web target or a visibly
+   labeled Google fallback; it never opens a similarly named native app.
+3. Without a qualifier, a known website brand wins before a native app. This
+   keeps “Open Netflix” web-oriented even if Netflix is installed.
+4. Other unique installed-app names open the discovered application.
+5. An unfamiliar generic “Open X” becomes the typed
+   `searchUnknownDestination` command and visibly reports that Google was used.
+   Topher never guesses `x.com`.
+
+Address-shaped values are different from unknown names. If a spoken value
+looks like an address but fails `HTTPSDomain` validation, it remains
+unsupported instead of falling back to search. Ambiguous installed-app names
+also remain unsupported until the user says a unique full name.
+
+An explicit navigation request may produce `HTTPSDomain`, a typed public-host
+value that always constructs HTTPS and rejects paths, credentials, ports, IP
+addresses, custom schemes, and local or reserved names. Known application and
+website targets still win before domain parsing. The original transcript is
+retained for diagnostics; only an extracted command search/domain value drops
+likely terminal sentence punctuation. Dictation formatting remains a separate
+mode and does not inherit command normalization.
+
+Known web brands map to application-owned canonical hosts; Topher never invents
+`<spoken-name>.com`. For voice-originated unfamiliar domains, recognition
+alternatives are also authority evidence. If the hypotheses resolve to more
+than one host, the processor fails before policy or browser handoff and asks
+the user to repeat or type the domain. An explicit manual domain is not subject
+to speech-evidence gating. A vocabulary correction may narrow a recognized
+free domain to one existing canonical website, but cannot manufacture another
+arbitrary host.
+
+A request that independently resolves to multiple executable actions is
+rejected as compound until a future planner and confirmation design can
+preserve ordering and authority safely.
 
 A model may help interpret phrasing, but it cannot create capabilities, grant
 permissions, set policy, or return executable code. Unavailable local reasoning
 must not break deterministic behavior.
 
-Some requests can resolve without context:
+Some requests can resolve without broader context:
 
 - “Open Safari.”
 - “Go to YouTube.”
 - “Search Google for local speech recognition.”
+- “What app am I using?” reads only macOS's frontmost-application identity.
 
 Other requests should resolve first into a typed context need instead of a
 guessed action:
 
-- “What app am I using?” needs the frontmost application.
 - “Summarize the selected text” needs a validated selection.
 - “What’s on my YouTube feed?” needs structured browser-page data.
 - “What am I looking at?” may need accessibility data or a focused-window image.
@@ -246,15 +340,27 @@ Every stage must fail closed and remain cancellable:
 - Confirmation timeout cancels the proposal.
 - Adapter retries cannot execute the same request twice.
 
-Diagnostic events should identify lifecycle stage, fixed capability/provider
-kind, timing, and outcome without storing transcript, query, message, URL, page,
-screen, or document content.
+Ordinary diagnostic events should identify lifecycle stage, fixed
+capability/provider kind, timing, and outcome without storing transcript, query,
+message, URL, page, screen, or document content. A content-bearing developer
+trace is a separate, explicit exception. During local dogfooding it defaults on
+to preserve recent failed or unsupported commands, must preserve an explicit
+opt-out and require informed confirmation when re-enabled, show persistent
+enabled state, accept only the finalized user-authored command, enforce short
+age/count/size bounds, and never include audio, partial speech, retrieved
+context, constructed URLs, detailed errors, or app-sourced credentials. When
+interpretation changes a command, the trace may additionally retain the
+bounded interpreted text, fixed correction reason, and confidence summary; it
+does not retain the complete hypothesis list.
+Disable and clear must invalidate previously issued trace tokens
+and prevent their queued late records. The user-authored command can itself
+contain a query, URL, pasted content, or secret and must be treated accordingly.
 
 ## Incremental implementation path
 
 1. Preserve the current deterministic local command path.
-2. Add a read-only `ActiveApplicationProvider`; do not build a general broker
-   for one provider.
+2. Complete in build 8: add a read-only frontmost-application capability; do
+   not build a general broker for one provider.
 3. Add a second structured provider, then introduce shared context request,
    freshness, and cancellation behavior if duplication is real.
 4. Add focused-field dictation as a separate mode and permission boundary.

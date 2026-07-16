@@ -47,12 +47,18 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.3.0 speech branch passes 62 tests and adds only the Release
-audio-input entitlement required for microphone capture. See the dated
+The current 0.3.0 development tree defines 110 tests and adds only the Release
+audio-input entitlement required for microphone capture. The latest complete
+local normal and Thread Sanitizer runs passed all 109 tests present before the
+final transcript-reload regression; that new bounded-reload path separately
+passed compiler and executable-smoke validation and awaits the full CI rerun.
+See the dated
 [speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
 installed bundle and live callback verification, and the
 [pre-merge hardening evidence](evidence/2026-07-15-pre-merge-hardening.md) for
-the latest automated lifecycle and HUD checks.
+the lifecycle and HUD checks, and the
+[developer transcript diagnostics evidence](evidence/2026-07-15-developer-transcript-diagnostics.md)
+for the current validation state.
 
 Live framework probes, run outside the restricted build sandbox, returned:
 
@@ -179,17 +185,21 @@ The current control path is intentionally concrete:
 
 ```text
 shortcut/manual input
-  → deterministic CommandResolver
-  → TopherCommand
-  → CommandPolicy
-  → registered native capability
+  → AssistantCommandProcessor
+    → deterministic CommandResolver
+    → CommandResolution.resolved(TopherCommand) or unsupported
+    → CommandPolicy
+    → exactly one registered native capability
   → typed outcome and visible state
 ```
 
-`ApplicationTarget` is an enum with three application-owned bundle IDs. Unknown
-names do not become strings passed to `NSWorkspace`; they become
-`unsupported`. This is both smaller and safer than generalized application
-discovery in Slice 1.
+`ApplicationTarget` retains application-owned identities for important fixed
+targets. Build 8 adds bounded launch-time discovery as
+`InstalledApplicationTarget`: exact catalog names become typed bundle
+identities, never paths or launch arguments, and `NSWorkspace` re-resolves the
+identifier at execution. Explicitly missing or ambiguous apps remain
+unsupported. Unknown generic navigation becomes a separately typed and visibly
+labeled Google fallback rather than an invented application identity or domain.
 
 Later resolution should remain layered:
 
@@ -235,8 +245,8 @@ detection, and remote chat ingress are distinct modes. A source-aware boundary
 routes each request kind before typed proposals converge on shared downstream
 controls.
 
-Do not create a general `ContextBroker` yet. The first context command can query
-`NSWorkspace.frontmostApplication` directly behind a small read-only provider.
+Do not create a general `ContextBroker` yet. Build 8's first context command
+queries `NSWorkspace.frontmostApplication` directly behind a small read-only provider.
 Introduce a broker only when at least two independently requested providers
 exist and demand-driven selection has real behavior to coordinate.
 
@@ -274,22 +284,28 @@ stay below structured app/browser interfaces in the execution hierarchy.
 
 Authored, tested, and built now:
 
-- `TopherCommand`, fixed `ApplicationTarget`, deterministic resolver, and policy.
+- `TopherCommand`, fixed and launch-time discovered application targets,
+  deterministic resolver, policy, and an `AssistantCommandProcessor` that owns
+  exactly-one dispatch.
 - Fixed `WebsiteTarget`, `SearchProvider`, and bounded `SearchQuery` values.
-- Native application-open and web-navigation capabilities with risk/access
-  metadata and small injected `NSWorkspace` facades.
-- One observable UI state model.
+- Native application-open, frontmost-application read, and web-navigation
+  capabilities with risk/access metadata and small injected `NSWorkspace`
+  facades.
+- One observable presentation/routing model, with capture and command execution
+  delegated to focused lifecycle components.
 - Direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine` capture,
   `AVAudioConverter`, runtime asset preparation, and microphone permission
   boundaries.
 - Real push-to-talk start/partial/finalize/cancel behavior with listening and
   finalization watchdogs, generation guards, and immediate stream recovery.
+- Payload-free preparation, capture, and finalization signpost intervals for
+  local latency investigation.
 - Menu-bar UI, transient non-activating voice HUD, manual transcript fallback,
   and typed outcome.
 - Parser, query validation, policy, native capability, permission, asset,
-  conversion, transcription-session, and lifecycle-race tests. Injected facades
-  keep unit tests from launching applications, opening a browser, or using a
-  real microphone.
+  conversion, transcription-session, capture-controller, command-processor,
+  and lifecycle-race tests. Injected facades keep unit tests from launching
+  applications, opening a browser, or using a real microphone.
 
 Waits for measured need:
 

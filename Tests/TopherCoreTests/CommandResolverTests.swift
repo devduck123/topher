@@ -256,7 +256,108 @@ final class CommandResolverTests: XCTestCase {
 
   func testUnknownApplicationNeverBecomesExecutableIdentifier() {
     let transcript = "Open Totally Real App"
-    XCTAssertEqual(resolver.resolve(transcript), .unsupported(reason: .unknownTarget))
+    XCTAssertEqual(
+      resolver.resolve(transcript),
+      .unsupported(reason: .applicationNotFound)
+    )
+  }
+
+  func testResolvesDiscoveredInstalledApplicationsWithoutConstructingPaths() throws {
+    let figma = InstalledApplicationTarget(
+      displayName: "Figma",
+      bundleIdentifier: "com.figma.Desktop"
+    )
+    let dynamicResolver = CommandResolver(installedApplications: [figma])
+
+    for transcript in ["Open Figma", "Launch Figma app", "Figma."] {
+      XCTAssertEqual(
+        dynamicResolver.resolve(transcript),
+        .resolved(.openInstalledApplication(figma))
+      )
+    }
+  }
+
+  func testWebsiteAndApplicationQualifiersMakePrecedenceExplicit() throws {
+    let netflix = InstalledApplicationTarget(
+      displayName: "Netflix",
+      bundleIdentifier: "com.netflix.Netflix"
+    )
+    let dynamicResolver = CommandResolver(installedApplications: [netflix])
+
+    XCTAssertEqual(
+      dynamicResolver.resolve("Open Netflix"),
+      .resolved(.openWebsite(.netflix))
+    )
+    XCTAssertEqual(
+      dynamicResolver.resolve("Open Netflix website"),
+      .resolved(.openWebsite(.netflix))
+    )
+    XCTAssertEqual(
+      dynamicResolver.resolve("Open Netflix app"),
+      .resolved(.openInstalledApplication(netflix))
+    )
+  }
+
+  func testUnknownNavigationFallsBackToTransparentGoogleSearch() throws {
+    let spotify = try XCTUnwrap(SearchQuery("Spotify"))
+    let crunchyroll = try XCTUnwrap(SearchQuery("Crunchyroll"))
+
+    XCTAssertEqual(
+      resolver.resolve("Open Spotify."),
+      .resolved(.searchUnknownDestination(spotify))
+    )
+    XCTAssertEqual(
+      resolver.resolve("Bring me to Crunchyroll website"),
+      .resolved(.openWebsite(.crunchyroll))
+    )
+    XCTAssertEqual(
+      resolver.resolve("Open Acme Streaming website."),
+      .resolved(.searchUnknownDestination(try XCTUnwrap(SearchQuery("Acme Streaming"))))
+    )
+    XCTAssertNotEqual(
+      resolver.resolve("Open Crunchyroll"),
+      .resolved(.searchUnknownDestination(crunchyroll))
+    )
+  }
+
+  func testExplicitMissingApplicationDoesNotBecomeAWebSearch() {
+    XCTAssertEqual(
+      resolver.resolve("Open Spotify desktop app"),
+      .unsupported(reason: .applicationNotFound)
+    )
+  }
+
+  func testAmbiguousInstalledApplicationNameFailsClearly() {
+    let first = InstalledApplicationTarget(
+      displayName: "Preview",
+      bundleIdentifier: "com.example.PreviewOne"
+    )
+    let second = InstalledApplicationTarget(
+      displayName: "Preview",
+      bundleIdentifier: "com.example.PreviewTwo"
+    )
+    let dynamicResolver = CommandResolver(installedApplications: [first, second])
+
+    XCTAssertEqual(
+      dynamicResolver.resolve("Open Preview"),
+      .unsupported(reason: .ambiguousTarget)
+    )
+  }
+
+  func testRecognizesBoundedFrontmostApplicationQuestions() {
+    let cases = [
+      "What app am I using?",
+      "What application am I in?",
+      "What app is open?",
+      "What app is this?",
+    ]
+
+    for transcript in cases {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .resolved(.identifyFrontmostApplication)
+      )
+    }
   }
 
   func testNonCommandTextFailsClosed() {

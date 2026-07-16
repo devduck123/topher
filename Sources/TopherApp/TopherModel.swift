@@ -491,6 +491,10 @@ final class TopherModel: ObservableObject {
 
   private func unsupportedMessage(for reason: UnsupportedCommandReason) -> String {
     switch reason {
+    case .ambiguousTarget:
+      "I found more than one installed app with that name. Say the full app name."
+    case .applicationNotFound:
+      "I couldn't find that application installed on this Mac."
     case .compoundRequest:
       "I can perform one action at a time. Try each request separately."
     case .contextRequired:

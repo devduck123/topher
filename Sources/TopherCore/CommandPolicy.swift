@@ -8,15 +8,18 @@ public enum PolicyDecision: Equatable, Sendable {
 /// The policy boundary is independent of how a command was proposed.
 public struct CommandPolicy: Sendable {
   private let injectedEvaluation: (@Sendable (TopherCommand) -> PolicyDecision)?
+  private let installedApplications: Set<InstalledApplicationTarget>
 
-  public init() {
+  public init(installedApplications: [InstalledApplicationTarget] = []) {
     injectedEvaluation = nil
+    self.installedApplications = Set(installedApplications)
   }
 
   /// A focused test seam. Production uses the exhaustive registered-command
   /// policy below so adding a command still requires an explicit policy choice.
   init(evaluate: @escaping @Sendable (TopherCommand) -> PolicyDecision) {
     injectedEvaluation = evaluate
+    installedApplications = []
   }
 
   public func evaluate(_ command: TopherCommand) -> PolicyDecision {
@@ -25,7 +28,15 @@ public struct CommandPolicy: Sendable {
     }
 
     switch command {
-    case .openApplication, .openBrowserRoute, .openDomain, .openWebsite, .searchWeb:
+    case .identifyFrontmostApplication:
+      return .allowed
+    case .openInstalledApplication(let target):
+      guard installedApplications.contains(target) else {
+        return .denied(reason: "That application is not in this launch's catalog.")
+      }
+      return .allowed
+    case .openApplication, .openBrowserRoute, .openDomain, .openWebsite, .searchWeb,
+      .searchUnknownDestination:
       return .allowed
     }
   }

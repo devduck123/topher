@@ -73,6 +73,92 @@ final class AssistantCommandProcessorTests: XCTestCase {
     XCTAssertEqual(executionStartedCount, 1)
   }
 
+  func testDiscoveredApplicationCommandExecutesExactlyOnce() async {
+    let figma = InstalledApplicationTarget(
+      displayName: "Figma",
+      bundleIdentifier: "com.figma.Desktop"
+    )
+    let expectedURL = URL(fileURLWithPath: "/Applications/Figma.app")
+    var openCount = 0
+    let processor = AssistantCommandProcessor(
+      resolver: CommandResolver(installedApplications: [figma]),
+      policy: CommandPolicy(installedApplications: [figma]),
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: {
+            XCTAssertEqual($0, "com.figma.Desktop")
+            return expectedURL
+          },
+          openApplication: {
+            XCTAssertEqual($0, expectedURL)
+            openCount += 1
+          }
+        )
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    let result = await processor.process("Open Figma")
+
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "Opened Figma.")))
+    XCTAssertEqual(result.trace.commandKind, .openInstalledApplication)
+    XCTAssertEqual(
+      result.trace.capabilityIdentifier,
+      ApplicationOpenCapability.descriptor.identifier
+    )
+    XCTAssertEqual(openCount, 1)
+  }
+
+  func testUnknownDestinationSearchesGoogleExactlyOnce() async throws {
+    var openedURLs: [URL] = []
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      webOpener: WebOpenCapability(
+        workspace: WebWorkspace(open: { openedURLs.append($0) })
+      )
+    )
+
+    let result = await processor.process("Open Spotify")
+
+    XCTAssertEqual(
+      result.outcome,
+      .completed(
+        .succeeded(
+          message: "No matching app or website was found, so I searched Google instead."
+        )
+      )
+    )
+    XCTAssertEqual(result.trace.commandKind, .searchUnknownDestination)
+    XCTAssertEqual(openedURLs.count, 1)
+    let components = try XCTUnwrap(
+      openedURLs.first.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+    )
+    XCTAssertEqual(components.host, "www.google.com")
+    XCTAssertEqual(components.queryItems, [URLQueryItem(name: "q", value: "Spotify")])
+  }
+
+  func testFrontmostApplicationQuestionUsesReadOnlyCapability() async {
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      frontmostApplicationReader: FrontmostApplicationCapability(
+        workspace: FrontmostApplicationWorkspace(applicationName: { "Xcode" })
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    let result = await processor.process("What app am I using?")
+
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "You're using Xcode.")))
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilitySucceeded,
+        commandKind: .identifyFrontmostApplication,
+        capabilityIdentifier: FrontmostApplicationCapability.descriptor.identifier
+      )
+    )
+  }
+
   func testBrowserRouteCommandExecutesExactlyOnce() async {
     let applicationURL = URL(fileURLWithPath: "/Applications/Google Chrome.app")
     var openCount = 0

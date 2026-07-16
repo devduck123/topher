@@ -138,6 +138,21 @@ final class WebOpenCapability {
     }
   }
 
+  func searchUnknownDestination(_ query: SearchQuery) async -> ActionOutcome {
+    guard let url = searchURL(provider: .google, query: query) else {
+      return .failed(message: "I couldn't search for that destination.")
+    }
+
+    do {
+      try await workspace.open(url)
+      return .succeeded(
+        message: "No matching app or website was found, so I searched Google instead."
+      )
+    } catch {
+      return .failed(message: "I couldn't search for that destination.")
+    }
+  }
+
   private func homepageURL(for target: WebsiteTarget) -> URL? {
     var components = URLComponents()
     components.scheme = "https"

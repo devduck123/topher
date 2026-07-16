@@ -7,6 +7,31 @@ final class CommandPolicyTests: XCTestCase {
 
   func testAllowsRegisteredApplication() {
     XCTAssertEqual(policy.evaluate(.openApplication(.safari)), .allowed)
+    let installed = InstalledApplicationTarget(
+      displayName: "Figma",
+      bundleIdentifier: "com.figma.Desktop"
+    )
+    let catalogPolicy = CommandPolicy(installedApplications: [installed])
+    XCTAssertEqual(catalogPolicy.evaluate(.openInstalledApplication(installed)), .allowed)
+    XCTAssertEqual(policy.evaluate(.identifyFrontmostApplication), .allowed)
+  }
+
+  func testDeniesAnInstalledApplicationIdentityOutsideTheLaunchCatalog() {
+    let registered = InstalledApplicationTarget(
+      displayName: "Figma",
+      bundleIdentifier: "com.figma.Desktop"
+    )
+    let reconstructedOutsideCatalog = InstalledApplicationTarget(
+      displayName: registered.displayName,
+      bundleIdentifier: registered.bundleIdentifier,
+      aliases: registered.aliases
+    )
+    let catalogPolicy = CommandPolicy(installedApplications: [registered])
+
+    XCTAssertEqual(
+      catalogPolicy.evaluate(.openInstalledApplication(reconstructedOutsideCatalog)),
+      .denied(reason: "That application is not in this launch's catalog.")
+    )
   }
 
   func testAllowsRegisteredWebCapabilities() {
@@ -23,6 +48,7 @@ final class CommandPolicyTests: XCTestCase {
     XCTAssertNotNil(query)
     if let query {
       XCTAssertEqual(policy.evaluate(.searchWeb(provider: .google, query: query)), .allowed)
+      XCTAssertEqual(policy.evaluate(.searchUnknownDestination(query)), .allowed)
     }
   }
 

@@ -8,10 +8,9 @@ speech-to-action loop survives the reliability slice.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The tree defines 110 Swift tests. The latest complete local normal and
-   Thread Sanitizer runs passed the 109 tests present before the final
-   storage-reload regression; that added path separately passed compiler and
-   executable-smoke checks and awaits the full CI rerun.
+2. The tree defines 179 Swift tests. Normal, Thread Sanitizer, Xcode Debug and
+   Release, static analysis, signature, entitlement, installation, and process
+   checks are rerun at each dogfood checkpoint.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
@@ -128,10 +127,22 @@ dependency, and installed-app denial/error recovery is verified.
   narrow known `grock` and `ballaslive` recognition errors; and reject an
   unfamiliar voice domain before execution when Apple supplies conflicting
   host hypotheses. Manual exact domains retain their existing behavior.
-- Add application discovery plus explicit aliases without accepting arbitrary
-  model-provided bundle IDs.
-- Add a read-only active-application provider for “What app am I using?”
-- Expand parser, policy, URL validation, and executor tests.
+- Complete in build 8: discover applications at launch from bounded conventional
+  macOS application directories; resolve exact names to typed bundle identities;
+  re-resolve the bundle identifier through `NSWorkspace` at execution; and bias
+  on-device recognition toward installed display names. Speech never becomes an
+  application path, process argument, or free-form bundle identifier.
+- Complete in build 8: make target precedence explicit. Known websites win for
+  generic phrases, `app`/`application` requires an installed app,
+  `site`/`website` requires web behavior, and unfamiliar generic navigation
+  transparently searches Google instead of guessing a `.com`. Malformed
+  address-shaped values, ambiguous app names, and explicitly missing apps fail
+  closed.
+- Complete in build 8: add the read-only `frontmostApplication` capability for
+  bounded variants of “What app am I using?” through `NSWorkspace`, with no
+  Accessibility or Screen Recording permission.
+- Complete in build 8: expand parser, policy, catalog, symlink-boundary,
+  capability, exactly-once dispatch, and fallback URL tests.
 
 Exit: every proposed MVP command works without an LLM, Accessibility, or Screen
 Recording.
@@ -179,6 +190,8 @@ it does not, remove the model path.
 - Complete in build 7: acquire a per-user runtime lock before global-shortcut
   registration, reject unsafe lock paths, and provide one verified local
   install-and-launch script that asserts exactly one Topher process.
+- Complete in build 8: make the metadata-only dogfood summary show the latest
+  launch session separately before retained cross-build history.
 - Test shortcut conflicts and launch-at-login only if daily use warrants it.
 
 Exit: the core loop recovers without restarting Topher and meets the measured
@@ -191,10 +204,11 @@ not parallel implementation projects. The canonical contracts are
 [Interaction modes](product/interaction-modes.md) and
 [Request lifecycle and context](architecture/request-lifecycle.md).
 
-### First context slice
+### First context slice — native app identity complete
 
-- Add a read-only active-application provider for “What app am I using?”
-- Request no Accessibility or Screen Recording permission.
+- Complete in build 8: add a read-only active-application provider for “What
+  app am I using?”
+- Complete in build 8: request no Accessibility or Screen Recording permission.
 - Introduce a shared context coordinator only after a second provider creates
   real freshness, selection, or cancellation behavior to coordinate.
 

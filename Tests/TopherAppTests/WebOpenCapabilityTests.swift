@@ -134,6 +134,28 @@ final class WebOpenCapabilityTests: XCTestCase {
     XCTAssertEqual(outcome, .succeeded(message: "Searched Google."))
   }
 
+  func testUnknownDestinationUsesGoogleAndExplainsTheFallback() async throws {
+    var openedURL: URL?
+    let capability = WebOpenCapability(
+      workspace: WebWorkspace(open: { openedURL = $0 })
+    )
+    let query = try XCTUnwrap(SearchQuery("Spotify"))
+
+    let outcome = await capability.searchUnknownDestination(query)
+
+    let components = try XCTUnwrap(
+      openedURL.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+    )
+    XCTAssertEqual(components.host, "www.google.com")
+    XCTAssertEqual(components.queryItems, [URLQueryItem(name: "q", value: "Spotify")])
+    XCTAssertEqual(
+      outcome,
+      .succeeded(
+        message: "No matching app or website was found, so I searched Google instead."
+      )
+    )
+  }
+
   func testBuildsAnEncodedYouTubeSearchURL() async throws {
     var openedURL: URL?
     let capability = WebOpenCapability(

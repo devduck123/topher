@@ -2,7 +2,11 @@ import Foundation
 
 /// A deliberately narrow deterministic resolver for typed local capabilities.
 public struct CommandResolver: Sendable {
-  public init() {}
+  private let installedApplications: [InstalledApplicationTarget]
+
+  public init(installedApplications: [InstalledApplicationTarget] = []) {
+    self.installedApplications = installedApplications
+  }
 
   public func resolve(_ transcript: String) -> CommandResolution {
     let request = normalizedRequest(transcript)
@@ -31,6 +35,11 @@ public struct CommandResolver: Sendable {
     }
 
     let request = normalizedRequest(transcript)
+
+    if isFrontmostApplicationRequest(request) {
+      return .resolved(.identifyFrontmostApplication)
+    }
+
     if requiresContext(request) {
       return .unsupported(reason: .contextRequired)
     }
@@ -45,13 +54,47 @@ public struct CommandResolver: Sendable {
       return .resolved(.openApplication(target))
     }
 
+    switch matchingInstalledApplication(request) {
+    case .unique(let target):
+      return .resolved(.openInstalledApplication(target))
+    case .ambiguous:
+      return .unsupported(reason: .ambiguousTarget)
+    case .none:
+      break
+    }
+
     if let requestedName = removingFirstPrefix(
       from: request,
-      candidates: [
-        "open", "launch", "start", "go to", "visit", "navigate to", "navigate",
-        "switch to", "switch over to", "pull up", "bring me to", "take me to",
-      ]
+      candidates: Self.navigationPrefixes
     ) {
+      if let applicationName = removingExplicitSuffix(
+        from: requestedName,
+        candidates: ["desktop application", "desktop app", "application", "app"]
+      ) {
+        if let target = ApplicationTarget.matching(applicationName) {
+          return .resolved(.openApplication(target))
+        }
+
+        switch matchingInstalledApplication(applicationName) {
+        case .unique(let target):
+          return .resolved(.openInstalledApplication(target))
+        case .ambiguous:
+          return .unsupported(reason: .ambiguousTarget)
+        case .none:
+          return .unsupported(reason: .applicationNotFound)
+        }
+      }
+
+      if let websiteName = removingExplicitSuffix(
+        from: requestedName,
+        candidates: ["website", "web site", "site"]
+      ) {
+        if let target = WebsiteTarget.matching(websiteName) {
+          return .resolved(.openWebsite(target))
+        }
+        return fallbackSearchResolution(transcript, strippingExplicitQualifier: true)
+      }
+
       // Exact known website brands win before native applications. This keeps
       // phrases such as "Open Crunchyroll" web-oriented even if a similarly
       // named native application is supported later.
@@ -67,6 +110,15 @@ public struct CommandResolver: Sendable {
         return .resolved(.openApplication(target))
       }
 
+      switch matchingInstalledApplication(requestedName) {
+      case .unique(let target):
+        return .resolved(.openInstalledApplication(target))
+      case .ambiguous:
+        return .unsupported(reason: .ambiguousTarget)
+      case .none:
+        break
+      }
+
       if let resolution = resolveTargetQuery(transcript) {
         return resolution
       }
@@ -75,12 +127,102 @@ public struct CommandResolver: Sendable {
         return .resolved(.openDomain(domain))
       }
 
-      return .unsupported(
-        reason: containsKnownTargetPrefix(requestedName) ? .unsupportedAction : .unknownTarget
-      )
+      if containsKnownTargetPrefix(requestedName) {
+        return .unsupported(reason: .unsupportedAction)
+      }
+
+      // Address-shaped input that failed HTTPSDomain validation stays closed.
+      // Free-form words can fall back to a transparent Google search, but a
+      // malformed URL must never be silently reinterpreted as navigation.
+      if let rawTarget = rawNavigationTarget(transcript), looksLikeAddress(rawTarget) {
+        return .unsupported(reason: .unknownTarget)
+      }
+
+      return fallbackSearchResolution(transcript)
     }
 
     return .unsupported(reason: .unsupportedPhrasing)
+  }
+
+  private static let navigationPrefixes = [
+    "navigate to", "switch over to", "switch to", "bring me to", "take me to",
+    "pull up", "open", "launch", "start", "go to", "visit", "navigate",
+  ]
+
+  private enum InstalledApplicationMatch {
+    case none
+    case unique(InstalledApplicationTarget)
+    case ambiguous
+  }
+
+  private func matchingInstalledApplication(
+    _ normalizedName: String
+  ) -> InstalledApplicationMatch {
+    let matches = installedApplications.filter { $0.aliases.contains(normalizedName) }
+    guard let first = matches.first else { return .none }
+    guard matches.dropFirst().isEmpty else { return .ambiguous }
+    return .unique(first)
+  }
+
+  private func fallbackSearchResolution(
+    _ transcript: String,
+    strippingExplicitQualifier: Bool = false
+  ) -> CommandResolution {
+    guard var rawTarget = rawNavigationTarget(transcript) else {
+      return .unsupported(reason: .missingValue)
+    }
+
+    if strippingExplicitQualifier {
+      rawTarget = removingRawSuffix(
+        from: rawTarget,
+        candidates: ["website", "web site", "site"]
+      )
+    }
+
+    guard let query = commandSearchQuery(rawTarget) else {
+      return .unsupported(reason: .missingValue)
+    }
+    return .resolved(.searchUnknownDestination(query))
+  }
+
+  private func rawNavigationTarget(_ transcript: String) -> String? {
+    let request = rawCommandRequest(transcript)
+    guard
+      var target = removingRawPrefix(from: request, candidates: Self.navigationPrefixes)
+    else { return nil }
+
+    target = removingLikelySentencePunctuation(from: target)
+    target = removingRawSuffix(from: target, candidates: ["please", "for me"])
+    return removingLikelySentencePunctuation(from: target)
+  }
+
+  private func removingExplicitSuffix(
+    from text: String,
+    candidates: [String]
+  ) -> String? {
+    for candidate in candidates {
+      if text == candidate { return "" }
+      if text.hasSuffix(" " + candidate) {
+        return String(text.dropLast(candidate.count + 1))
+      }
+    }
+    return nil
+  }
+
+  private func looksLikeAddress(_ value: String) -> Bool {
+    value.contains(".")
+      || value.contains(":")
+      || value.contains("/")
+      || value.contains("@")
+      || value == "localhost"
+  }
+
+  private func isFrontmostApplicationRequest(_ request: String) -> Bool {
+    [
+      "what app am i using", "what application am i using", "what app is open",
+      "what application is open", "what app am i in", "what application am i in",
+      "what app is this", "what application is this",
+    ].contains(request)
   }
 
   private func resolveBareWebsiteSearch(_ transcript: String) -> WebsiteTarget? {

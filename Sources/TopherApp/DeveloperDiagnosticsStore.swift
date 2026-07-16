@@ -18,11 +18,14 @@ enum DeveloperTranscriptSource: String, Codable, Equatable, Sendable {
 }
 
 enum AssistantCommandKind: String, Codable, Equatable, Sendable {
+  case identifyFrontmostApplication
   case openApplication
+  case openInstalledApplication
   case openBrowserRoute
   case openDomain
   case openWebsite
   case searchWeb
+  case searchUnknownDestination
 }
 
 enum AssistantCommandTraceOutcome: String, Codable, Equatable, Sendable {

@@ -164,7 +164,7 @@ public struct TranscriptInterpreter: Sendable {
       return correction
     }
 
-    if rawCommand != nil {
+    if let rawCommand, !rawCommand.isFallbackSearch {
       return unchanged(raw, confidence: primary.confidence)
     }
 
@@ -228,7 +228,8 @@ public struct TranscriptInterpreter: Sendable {
   }
 
   private func resolves(_ text: String) -> Bool {
-    command(for: text) != nil
+    guard let command = command(for: text) else { return false }
+    return !command.isFallbackSearch
   }
 
   private func command(for text: String) -> TopherCommand? {
@@ -244,6 +245,11 @@ public struct TranscriptInterpreter: Sendable {
     switch (first, second) {
     case (.openApplication(let firstTarget), .openApplication(let secondTarget)):
       firstTarget == secondTarget
+    case (
+      .openInstalledApplication(let firstTarget),
+      .openInstalledApplication(let secondTarget)
+    ):
+      firstTarget == secondTarget
     case (.openWebsite(let firstTarget), .openWebsite(let secondTarget)):
       firstTarget == secondTarget
     case (.openDomain(let firstDomain), .openDomain(let secondDomain)):
@@ -254,6 +260,15 @@ public struct TranscriptInterpreter: Sendable {
       allowKnownDomainNarrowing
     case (.searchWeb(let firstProvider, _), .searchWeb(let secondProvider, _)):
       firstProvider == secondProvider
+    case (.searchUnknownDestination, .openApplication),
+      (.searchUnknownDestination, .openInstalledApplication),
+      (.searchUnknownDestination, .openWebsite):
+      // A vocabulary correction may narrow a transparent search to a
+      // registered destination, but it cannot construct a new destination.
+      true
+    case (.searchUnknownDestination, .searchUnknownDestination),
+      (.identifyFrontmostApplication, .identifyFrontmostApplication):
+      true
     default:
       false
     }
@@ -318,12 +333,21 @@ public struct TranscriptInterpreter: Sendable {
 
 extension TopherCommand {
   fileprivate var isWebSearch: Bool {
-    if case .searchWeb = self { return true }
-    return false
+    switch self {
+    case .searchWeb, .searchUnknownDestination:
+      true
+    default:
+      false
+    }
   }
 
   fileprivate var isExplicitDomain: Bool {
     if case .openDomain = self { return true }
+    return false
+  }
+
+  fileprivate var isFallbackSearch: Bool {
+    if case .searchUnknownDestination = self { return true }
     return false
   }
 }

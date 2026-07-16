@@ -134,6 +134,11 @@ percentiles without printing command text:
 scripts/summarize_dogfood_diagnostics.rb
 ```
 
+The summary prints the newest launch session first, labeled only with app
+version/build, and then prints all retained history. This keeps the current
+installed build's dogfood signal separate from older sessions without exposing
+the random session identifier or transcript text.
+
 Capability success is not a transcription-accuracy metric. The transcript
 rating is useful dogfood evidence, while controlled corpus runs remain the
 source of word-error-rate and proper-noun claims.

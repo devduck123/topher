@@ -28,6 +28,8 @@
 		A00000000000000000000041 /* DeveloperDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000042 /* DeveloperDiagnosticsView.swift */; };
 		A00000000000000000000043 /* SpeechVocabularyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000044 /* SpeechVocabularyController.swift */; };
 		A00000000000000000000046 /* TopherSingleInstanceLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000045 /* TopherSingleInstanceLock.swift */; };
+		A00000000000000000000048 /* InstalledApplicationCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000047 /* InstalledApplicationCatalog.swift */; };
+		A0000000000000000000004A /* FrontmostApplicationCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000049 /* FrontmostApplicationCapability.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +54,8 @@
 		A00000000000000000000042 /* DeveloperDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsView.swift; sourceTree = "<group>"; };
 		A00000000000000000000044 /* SpeechVocabularyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechVocabularyController.swift; sourceTree = "<group>"; };
 		A00000000000000000000045 /* TopherSingleInstanceLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopherSingleInstanceLock.swift; sourceTree = "<group>"; };
+		A00000000000000000000047 /* InstalledApplicationCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstalledApplicationCatalog.swift; sourceTree = "<group>"; };
+		A00000000000000000000049 /* FrontmostApplicationCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmostApplicationCapability.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +95,8 @@
 				A00000000000000000000040 /* DeveloperDiagnosticsController.swift */,
 				A0000000000000000000002F /* DeveloperDiagnosticsStore.swift */,
 				A00000000000000000000042 /* DeveloperDiagnosticsView.swift */,
+				A00000000000000000000049 /* FrontmostApplicationCapability.swift */,
+				A00000000000000000000047 /* InstalledApplicationCatalog.swift */,
 				A00000000000000000000021 /* KeyboardShortcut.swift */,
 				A00000000000000000000022 /* MenuContentView.swift */,
 				A00000000000000000000026 /* MicrophonePermissionClient.swift */,
@@ -192,6 +198,8 @@
 				A0000000000000000000003F /* DeveloperDiagnosticsController.swift in Sources */,
 				A0000000000000000000003E /* DeveloperDiagnosticsStore.swift in Sources */,
 				A00000000000000000000041 /* DeveloperDiagnosticsView.swift in Sources */,
+				A0000000000000000000004A /* FrontmostApplicationCapability.swift in Sources */,
+				A00000000000000000000048 /* InstalledApplicationCatalog.swift in Sources */,
 				A00000000000000000000031 /* KeyboardShortcut.swift in Sources */,
 				A00000000000000000000032 /* MenuContentView.swift in Sources */,
 				A00000000000000000000036 /* MicrophonePermissionClient.swift in Sources */,
@@ -264,7 +272,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -293,7 +301,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;

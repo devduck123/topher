@@ -50,45 +50,64 @@ def print_counts(label, values)
   values.each { |name, count| puts "  #{name}: #{count}" }
 end
 
+def print_summary(title, records)
+  puts title
+  puts "Records: #{records.length}"
+  print_counts("Sources:", counts(records, "source"))
+  print_counts("Outcomes:", counts(records, "outcome"))
+  unsupported_records = records.select { |record| record["unsupportedReason"] }
+  print_counts("Unsupported reasons:", counts(unsupported_records, "unsupportedReason"))
+
+  transcript_ratings = records
+    .select { |record| !record["transcriptWasAccurate"].nil? }
+    .map { |record| record["transcriptWasAccurate"] }
+  action_ratings = records
+    .select { |record| !record["actionWasCorrect"].nil? }
+    .map { |record| record["actionWasCorrect"] }
+  puts "Feedback:"
+  transcript_accuracy = percentage(transcript_ratings.count(true), transcript_ratings.length)
+  action_correctness = percentage(action_ratings.count(true), action_ratings.length)
+  puts "  transcript accurate: #{transcript_accuracy}"
+  puts "  action correct: #{action_correctness}"
+
+  interpreted = records.count { |record| record["interpretedTranscript"] }
+  puts "Interpretation changes: #{interpreted}/#{records.length}"
+
+  timings = {
+    "hold to listening" => "holdToListeningMilliseconds",
+    "listening to first text" => "listeningToFirstTranscriptMilliseconds",
+    "key-up to final" => "keyUpToFinalMilliseconds",
+    "command processing" => "processingDurationMilliseconds",
+  }
+  puts "Timing (milliseconds):"
+  timings.each do |label, key|
+    values = records.map { |record| record[key] }.compact
+    next if values.empty?
+
+    puts "  #{label}: p50 #{percentile(values, 0.50)}, p95 #{percentile(values, 0.95)}, n #{values.length}"
+  end
+end
+
 puts "Topher dogfood diagnostics"
-puts "Records: #{records.length}"
+latest_session_record = records.reverse.find { |record| record["launchSessionID"] }
+if latest_session_record
+  latest_session_id = latest_session_record.fetch("launchSessionID")
+  latest_session_records = records.select do |record|
+    record["launchSessionID"] == latest_session_id
+  end
+  version = latest_session_record["appVersion"] || "unknown"
+  build = latest_session_record["appBuild"] || "unknown"
+  print_summary("Latest launch session (version #{version}, build #{build})", latest_session_records)
+else
+  puts "Latest launch session: not recorded (pre-Build-7 records)"
+end
+
+puts
+print_summary("All retained history", records)
 session_records = records.select { |record| record["launchSessionID"] }
 session_count = session_records.map { |record| record["launchSessionID"] }.uniq.length
 if session_records.empty?
-  puts "Launch sessions: not recorded (pre-Build-7 records)"
+  puts "Launch sessions: not recorded"
 else
   puts "Launch sessions: #{session_count} (recorded on #{session_records.length}/#{records.length} requests)"
-end
-print_counts("Sources:", counts(records, "source"))
-print_counts("Outcomes:", counts(records, "outcome"))
-unsupported_records = records.select { |record| record["unsupportedReason"] }
-print_counts("Unsupported reasons:", counts(unsupported_records, "unsupportedReason"))
-
-transcript_ratings = records
-  .select { |record| !record["transcriptWasAccurate"].nil? }
-  .map { |record| record["transcriptWasAccurate"] }
-action_ratings = records
-  .select { |record| !record["actionWasCorrect"].nil? }
-  .map { |record| record["actionWasCorrect"] }
-puts "Feedback:"
-transcript_accuracy = percentage(transcript_ratings.count(true), transcript_ratings.length)
-action_correctness = percentage(action_ratings.count(true), action_ratings.length)
-puts "  transcript accurate: #{transcript_accuracy}"
-puts "  action correct: #{action_correctness}"
-
-interpreted = records.count { |record| record["interpretedTranscript"] }
-puts "Interpretation changes: #{interpreted}/#{records.length}"
-
-timings = {
-  "hold to listening" => "holdToListeningMilliseconds",
-  "listening to first text" => "listeningToFirstTranscriptMilliseconds",
-  "key-up to final" => "keyUpToFinalMilliseconds",
-  "command processing" => "processingDurationMilliseconds",
-}
-puts "Timing (milliseconds):"
-timings.each do |label, key|
-  values = records.map { |record| record[key] }.compact
-  next if values.empty?
-
-  puts "  #{label}: p50 #{percentile(values, 0.50)}, p95 #{percentile(values, 0.95)}, n #{values.length}"
 end

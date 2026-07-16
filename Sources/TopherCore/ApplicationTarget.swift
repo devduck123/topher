@@ -74,3 +74,42 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
     allCases.first { $0.aliases.contains(normalizedName) }
   }
 }
+
+/// An installed application discovered from bounded, user-visible macOS
+/// application directories at launch.
+///
+/// The command carries a bundle identifier instead of an application path.
+/// Execution resolves that identifier through `NSWorkspace` again, so speech
+/// text never becomes an unchecked filesystem path or launch argument.
+public struct InstalledApplicationTarget: Equatable, Hashable, Sendable {
+  public let displayName: String
+  public let bundleIdentifier: String
+  public let aliases: Set<String>
+  // The production policy receives the same catalog values as the resolver.
+  // A separately reconstructed target has different provenance and is denied.
+  private let catalogIdentity: UUID
+
+  public init(
+    displayName: String,
+    bundleIdentifier: String,
+    aliases: Set<String> = []
+  ) {
+    catalogIdentity = UUID()
+    self.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    self.bundleIdentifier = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+    self.aliases = Set(
+      aliases
+        .union([displayName])
+        .map(Self.normalized)
+        .filter { !$0.isEmpty }
+    )
+  }
+
+  static func normalized(_ value: String) -> String {
+    value
+      .lowercased()
+      .components(separatedBy: CharacterSet.alphanumerics.inverted)
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
+  }
+}

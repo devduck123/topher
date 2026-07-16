@@ -304,6 +304,10 @@ extension TranscriptInterpretationReason {
 extension UnsupportedCommandReason {
   fileprivate var displayName: String {
     switch self {
+    case .ambiguousTarget:
+      "Ambiguous target"
+    case .applicationNotFound:
+      "Application not found"
     case .compoundRequest:
       "Compound request"
     case .contextRequired:

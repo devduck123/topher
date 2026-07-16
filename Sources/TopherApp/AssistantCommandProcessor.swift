@@ -30,6 +30,7 @@ final class AssistantCommandProcessor {
   private let policy: CommandPolicy
   private let applicationOpener: ApplicationOpenCapability
   private let browserRouteOpener: BrowserRouteOpenCapability
+  private let frontmostApplicationReader: FrontmostApplicationCapability
   private let webOpener: WebOpenCapability
   private let logger = Logger(subsystem: "dev.topher.app", category: "control-path")
 
@@ -41,6 +42,7 @@ final class AssistantCommandProcessor {
     policy: CommandPolicy = .init(),
     applicationOpener: ApplicationOpenCapability? = nil,
     browserRouteOpener: BrowserRouteOpenCapability? = nil,
+    frontmostApplicationReader: FrontmostApplicationCapability? = nil,
     webOpener: WebOpenCapability? = nil
   ) {
     self.resolver = resolver
@@ -48,6 +50,8 @@ final class AssistantCommandProcessor {
     self.policy = policy
     self.applicationOpener = applicationOpener ?? ApplicationOpenCapability()
     self.browserRouteOpener = browserRouteOpener ?? BrowserRouteOpenCapability()
+    self.frontmostApplicationReader =
+      frontmostApplicationReader ?? FrontmostApplicationCapability()
     self.webOpener = webOpener ?? WebOpenCapability()
   }
 
@@ -131,7 +135,13 @@ final class AssistantCommandProcessor {
 
     let outcome: ActionOutcome
     switch command {
+    case .identifyFrontmostApplication:
+      logExecution(FrontmostApplicationCapability.descriptor)
+      outcome = frontmostApplicationReader.execute()
     case .openApplication(let target):
+      logExecution(ApplicationOpenCapability.descriptor)
+      outcome = await applicationOpener.execute(target)
+    case .openInstalledApplication(let target):
       logExecution(ApplicationOpenCapability.descriptor)
       outcome = await applicationOpener.execute(target)
     case .openBrowserRoute(let target):
@@ -146,6 +156,9 @@ final class AssistantCommandProcessor {
     case .searchWeb(let provider, let query):
       logExecution(WebOpenCapability.descriptor)
       outcome = await webOpener.execute(provider: provider, query: query)
+    case .searchUnknownDestination(let query):
+      logExecution(WebOpenCapability.descriptor)
+      outcome = await webOpener.searchUnknownDestination(query)
     }
 
     switch outcome {
@@ -198,7 +211,8 @@ final class AssistantCommandProcessor {
           return domain.host
         case .openWebsite(let target):
           return target.canonicalHost
-        case .openApplication, .openBrowserRoute, .searchWeb:
+        case .identifyFrontmostApplication, .openApplication, .openInstalledApplication,
+          .openBrowserRoute, .searchWeb, .searchUnknownDestination:
           return nil
         }
       }
@@ -210,8 +224,15 @@ final class AssistantCommandProcessor {
     for command: TopherCommand
   ) -> (kind: AssistantCommandKind, capabilityIdentifier: String) {
     switch command {
+    case .identifyFrontmostApplication:
+      (
+        .identifyFrontmostApplication,
+        FrontmostApplicationCapability.descriptor.identifier
+      )
     case .openApplication:
       (.openApplication, ApplicationOpenCapability.descriptor.identifier)
+    case .openInstalledApplication:
+      (.openInstalledApplication, ApplicationOpenCapability.descriptor.identifier)
     case .openBrowserRoute:
       (.openBrowserRoute, BrowserRouteOpenCapability.descriptor.identifier)
     case .openDomain:
@@ -220,6 +241,8 @@ final class AssistantCommandProcessor {
       (.openWebsite, WebOpenCapability.descriptor.identifier)
     case .searchWeb:
       (.searchWeb, WebOpenCapability.descriptor.identifier)
+    case .searchUnknownDestination:
+      (.searchUnknownDestination, WebOpenCapability.descriptor.identifier)
     }
   }
 }

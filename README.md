@@ -11,8 +11,8 @@ can reuse capture without inheriting command authority.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development tree currently defines 161 Swift tests. The
-latest complete local run passed all 161 tests; Thread Sanitizer and final
+Status: the 0.3.0 development tree currently defines 179 Swift tests. The
+latest complete local run passed all 179 tests; Thread Sanitizer and final
 app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -46,6 +46,10 @@ The comparative speech benchmark is still open.
 - Typed, allowlisted commands for ChatGPT/Codex, Chrome, Notes, Notion, Safari,
   Visual Studio Code, and Xcode, including bounded phrasing such as “Navigate
   Chrome,” “Switch to Chrome,” and “Open Codex.”
+- Launch-time discovery of apps in conventional macOS Applications directories.
+  Discovered names resolve to typed bundle identities; execution asks macOS to
+  resolve the bundle identifier again and never turns speech into a path,
+  process argument, or arbitrary identifier.
 - Typed, allowlisted navigation to Crunchyroll, Gmail, GitHub, Google, YouTube,
   Amazon, Ballislife, Hulu, Netflix, and the browser-owned Chrome Extensions
   route. Internal Chrome routes are
@@ -53,6 +57,11 @@ The comparative speech benchmark is still open.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
   known site, provider searches retain their provider, and unknown bare
   searches use Google in the default browser (Chrome in dogfood use).
+- Explicit app/site precedence: “Open Netflix” prefers the known website,
+  “Open Netflix app” requires an installed app, and “Open Netflix website”
+  requires web navigation. An unfamiliar “Open X” opens an installed exact
+  app match or visibly falls back to a Google search; Topher does not guess
+  `x.com`.
 - Exact known targets can be terse commands such as “Notes,” “VS Code,” and
   “YouTube.” Target-first query phrasing such as “YouTube for dining with
   Derek” is supported, and likely sentence-ending punctuation is removed only
@@ -71,8 +80,12 @@ The comparative speech benchmark is still open.
   in Topher's deterministic correction layer, which can only select an already
   allowlisted typed command.
 - Native launch through `NSWorkspace`.
+- Read-only “What app am I using?” support through
+  `NSWorkspace.frontmostApplication`, without Accessibility or Screen
+  Recording permission.
 - A separate policy decision before execution.
-- Safe rejection of unknown text and applications.
+- Safe rejection of malformed address-like input, ambiguous installed-app
+  names, and explicitly requested applications that are not installed.
 - A bounded developer trace for recent final command
   transcripts and typed outcomes. Local dogfood builds start with it on; an
   explicit off switch and **Clear Now** remain available at any time. Each
@@ -90,7 +103,7 @@ resolver and policy.
 
 It is not yet general-purpose text dictation into the focused field. Always-on
 wake listening, remote chat requests, conversational follow-ups, browser-page
-reading, Accessibility context, and screen understanding are also not
+reading, Accessibility context, and visual screen understanding are also not
 implemented. They are separate modes and trust boundaries rather than flags on
 the current command path.
 
@@ -111,9 +124,10 @@ The intended layers are:
    YouTube,” and “Search YouTube for local AI.” These do not need AI.
 2. A future optional local model that interprets fuzzier phrasing into the same
    typed commands. It proposes; the policy layer still decides what can execute.
-3. Permissioned browser context for requests such as “What’s on my feed?” or
-   “Go to this Chrome tab.” Those require a narrow Chrome extension/native
-   adapter and are not implemented yet.
+3. Read-only native application context now supports “What app am I using?”
+   without an LLM or a new permission. Permissioned browser context for
+   “What’s on my feed?” or “Go to this Chrome tab” still requires a narrow
+   Chrome extension/native adapter and is not implemented yet.
 
 ## Build and run
 
@@ -159,10 +173,12 @@ For an interactive smoke test:
    is ready.
 4. Say “Open Safari,” release, and confirm the HUD changes from listening to
    finalizing before Safari opens exactly once.
-5. Try “Notion,” “Notes,” “Go to my Gmail,” “Open Chrome extensions,” “YouTube
-   for dining with Derek,” “Go to tnc.com,” “Search Crunchyroll,” and “Search
-   for best local speech model.”
-6. Speak unknown text and confirm it fails closed.
+5. Try “Notion,” “Open Figma” (or another installed app), “Open Netflix,”
+   “Open Netflix app,” “What app am I using?”, “Open Chrome extensions,”
+   “YouTube for dining with Derek,” “Go to tnc.com,” and “Search Crunchyroll.”
+6. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
+   fallback. Say a malformed address or an explicitly missing app and confirm
+   it fails closed.
 7. Use the manual transcript field and **Run** as a development fallback.
 
 No default shortcut is claimed. This avoids silently overriding an existing
@@ -196,9 +212,10 @@ ad-hoc signing; Debug also receives Xcode's development-only
 `com.apple.security.get-task-allow` entitlement. There is no Developer ID
 signature or notarized release.
 
-The current web commands construct fixed allowlisted destinations or accept an
-explicit public DNS host through the bounded `HTTPSDomain` type, then hand the
-HTTPS URL to the user's default browser through `NSWorkspace`. Browser-owned
+The current web commands construct fixed allowlisted destinations, encode an
+explicit fallback search, or accept an explicit public DNS host through the
+bounded `HTTPSDomain` type, then hand the HTTPS URL to the user's default
+browser through `NSWorkspace`. Browser-owned
 internal routes are delivered only to their registered browser application.
 Topher itself has no direct network client, embedded browser, Chrome
 extension/native-messaging host,
@@ -247,6 +264,10 @@ macOS account and system administrators can read it, and filesystem ACLs may
 grant additional access. Do not paste it into a public issue or pull request
 without reviewing and redacting it.
 
+`scripts/summarize_dogfood_diagnostics.rb` prints metadata-only results for the
+latest launch session first, then the full retained history, so an older build
+does not obscure the current dogfood run.
+
 Stream new events while testing:
 
 ```sh
@@ -268,7 +289,9 @@ mental model.
 
 ## Read next
 
+- [Build 8 application-awareness verification](docs/evidence/2026-07-15-build-8-application-awareness.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
+- [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

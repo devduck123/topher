@@ -38,7 +38,7 @@ global shortcut
   -> TopherModel request-kind routing
   -> AssistantCommandProcessor
      -> TranscriptInterpreter (safe alternatives and explicit vocabulary)
-     -> CommandResolver
+     -> CommandResolver (fixed targets plus launch-time installed-app catalog)
      -> CommandResolution.resolved(TopherCommand) or typed unsupported reason
      -> CommandPolicy
      -> exactly one registered native capability
@@ -129,6 +129,32 @@ Browser-owned internal routes, such as Chrome Extensions, are distinct typed
 targets rather than arbitrary URL strings. They are delivered as URLs to the
 registered browser application, not as launch-only process arguments.
 
+Installed applications are discovered once per launch from `/Applications`,
+`/System/Applications`, `~/Applications`, and one bounded child directory.
+Symlinked applications and invalid bundle identities are ignored. Resolution
+uses normalized exact aliases only; it does not perform substring or fuzzy
+application matching. The typed command contains a display name and bundle
+identifier, never a filesystem path. The execution capability asks
+`NSWorkspace` to resolve that bundle identifier again before opening it.
+
+Application and website precedence is part of the deterministic contract:
+
+1. An explicit `app`, `application`, or `desktop app` suffix requires a unique
+   installed application; a miss does not become a web search.
+2. An explicit `site` or `website` suffix uses a known web target or a visibly
+   labeled Google fallback; it never opens a similarly named native app.
+3. Without a qualifier, a known website brand wins before a native app. This
+   keeps “Open Netflix” web-oriented even if Netflix is installed.
+4. Other unique installed-app names open the discovered application.
+5. An unfamiliar generic “Open X” becomes the typed
+   `searchUnknownDestination` command and visibly reports that Google was used.
+   Topher never guesses `x.com`.
+
+Address-shaped values are different from unknown names. If a spoken value
+looks like an address but fails `HTTPSDomain` validation, it remains
+unsupported instead of falling back to search. Ambiguous installed-app names
+also remain unsupported until the user says a unique full name.
+
 An explicit navigation request may produce `HTTPSDomain`, a typed public-host
 value that always constructs HTTPS and rejects paths, credentials, ports, IP
 addresses, custom schemes, and local or reserved names. Known application and
@@ -154,16 +180,16 @@ A model may help interpret phrasing, but it cannot create capabilities, grant
 permissions, set policy, or return executable code. Unavailable local reasoning
 must not break deterministic behavior.
 
-Some requests can resolve without context:
+Some requests can resolve without broader context:
 
 - “Open Safari.”
 - “Go to YouTube.”
 - “Search Google for local speech recognition.”
+- “What app am I using?” reads only macOS's frontmost-application identity.
 
 Other requests should resolve first into a typed context need instead of a
 guessed action:
 
-- “What app am I using?” needs the frontmost application.
 - “Summarize the selected text” needs a validated selection.
 - “What’s on my YouTube feed?” needs structured browser-page data.
 - “What am I looking at?” may need accessibility data or a focused-window image.
@@ -333,8 +359,8 @@ contain a query, URL, pasted content, or secret and must be treated accordingly.
 ## Incremental implementation path
 
 1. Preserve the current deterministic local command path.
-2. Add a read-only `ActiveApplicationProvider`; do not build a general broker
-   for one provider.
+2. Complete in build 8: add a read-only frontmost-application capability; do
+   not build a general broker for one provider.
 3. Add a second structured provider, then introduce shared context request,
    freshness, and cancellation behavior if duplication is real.
 4. Add focused-field dictation as a separate mode and permission boundary.

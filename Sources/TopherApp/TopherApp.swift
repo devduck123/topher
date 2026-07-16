@@ -1,6 +1,7 @@
 import AppKit
 import OSLog
 import SwiftUI
+import TopherCore
 
 @MainActor
 private enum TopherRuntime {
@@ -38,16 +39,46 @@ struct TopherApp: App {
   init() {
     let diagnostics = DeveloperDiagnosticsController()
     let vocabulary = SpeechVocabularyController()
+    let installedApplications = InstalledApplicationCatalog.discover().applications
+    let resolver = CommandResolver(installedApplications: installedApplications)
+    let policy = CommandPolicy(installedApplications: installedApplications)
+    let installedApplicationNames = installedApplications.map(\.displayName)
     _diagnostics = StateObject(wrappedValue: diagnostics)
     _vocabulary = StateObject(wrappedValue: vocabulary)
     _model = StateObject(
       wrappedValue: TopherModel(
-        voiceTranscription: .live(contextualStrings: { vocabulary.contextualStrings }),
+        resolver: resolver,
+        policy: policy,
+        voiceTranscription: .live(contextualStrings: {
+          Self.contextualStrings(
+            personal: vocabulary.entries.map(\.canonicalTerm),
+            installedApplications: installedApplicationNames,
+            defaults: TranscriptVocabulary.developerDefaults.contextualStrings
+          )
+        }),
         developerDiagnostics: diagnostics,
         vocabularyProvider: { vocabulary.vocabulary },
         listenForShortcutEvents: TopherRuntime.instanceLock.isPrimary
       )
     )
+  }
+
+  private static func contextualStrings(
+    personal: [String],
+    installedApplications: [String],
+    defaults: [String]
+  ) -> [String] {
+    var seen = Set<String>()
+    return (personal + installedApplications + defaults)
+      .filter {
+        let key = $0.folding(
+          options: [.caseInsensitive, .diacriticInsensitive],
+          locale: .current
+        )
+        return !key.isEmpty && seen.insert(key).inserted
+      }
+      .prefix(TranscriptVocabulary.maximumContextualStringCount)
+      .map { $0 }
   }
 
   var body: some Scene {

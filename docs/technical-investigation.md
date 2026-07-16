@@ -193,10 +193,13 @@ shortcut/manual input
   → typed outcome and visible state
 ```
 
-`ApplicationTarget` is an enum with four application-owned bundle IDs: Chrome,
-Notion, Safari, and Visual Studio Code. Unknown names do not become strings
-passed to `NSWorkspace`; they become an unsupported `CommandResolution`. This
-is both smaller and safer than generalized application discovery.
+`ApplicationTarget` retains application-owned identities for important fixed
+targets. Build 8 adds bounded launch-time discovery as
+`InstalledApplicationTarget`: exact catalog names become typed bundle
+identities, never paths or launch arguments, and `NSWorkspace` re-resolves the
+identifier at execution. Explicitly missing or ambiguous apps remain
+unsupported. Unknown generic navigation becomes a separately typed and visibly
+labeled Google fallback rather than an invented application identity or domain.
 
 Later resolution should remain layered:
 
@@ -242,8 +245,8 @@ detection, and remote chat ingress are distinct modes. A source-aware boundary
 routes each request kind before typed proposals converge on shared downstream
 controls.
 
-Do not create a general `ContextBroker` yet. The first context command can query
-`NSWorkspace.frontmostApplication` directly behind a small read-only provider.
+Do not create a general `ContextBroker` yet. Build 8's first context command
+queries `NSWorkspace.frontmostApplication` directly behind a small read-only provider.
 Introduce a broker only when at least two independently requested providers
 exist and demand-driven selection has real behavior to coordinate.
 
@@ -281,11 +284,13 @@ stay below structured app/browser interfaces in the execution hierarchy.
 
 Authored, tested, and built now:
 
-- `TopherCommand`, fixed `ApplicationTarget`, deterministic resolver, policy,
-  and an `AssistantCommandProcessor` that owns exactly-one dispatch.
+- `TopherCommand`, fixed and launch-time discovered application targets,
+  deterministic resolver, policy, and an `AssistantCommandProcessor` that owns
+  exactly-one dispatch.
 - Fixed `WebsiteTarget`, `SearchProvider`, and bounded `SearchQuery` values.
-- Native application-open and web-navigation capabilities with risk/access
-  metadata and small injected `NSWorkspace` facades.
+- Native application-open, frontmost-application read, and web-navigation
+  capabilities with risk/access metadata and small injected `NSWorkspace`
+  facades.
 - One observable presentation/routing model, with capture and command execution
   delegated to focused lifecycle components.
 - Direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine` capture,

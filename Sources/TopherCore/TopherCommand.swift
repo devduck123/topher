@@ -13,6 +13,7 @@ public enum UnsupportedCommandReason: String, Codable, Equatable, Sendable {
   case contextRequired
   case emptyInput
   case missingValue
+  case uncertainDomain
   case unknownTarget
   case unsupportedAction
   case unsupportedPhrasing

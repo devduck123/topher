@@ -25,6 +25,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
   private let now: @Sendable () -> Date
   private let appVersion: String
   private let appBuild: String
+  private let launchSessionID: UUID
   private let logger = Logger(subsystem: "dev.topher.app", category: "developer-diagnostics")
   private var maintenanceTask: Task<Void, Never>?
   private var lastAppliedRevision: UInt64?
@@ -37,6 +38,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
     now: @escaping @Sendable () -> Date = Date.init,
     appVersion: String? = nil,
     appBuild: String? = nil,
+    launchSessionID: UUID = UUID(),
     maintenanceInterval: Duration? = .seconds(60 * 60)
   ) {
     self.store = store
@@ -49,6 +51,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
       appBuild
       ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
       ?? "development"
+    self.launchSessionID = launchSessionID
     isEnabled = store.initialEnabled
     storageFileURL = store.storageFileURL
 
@@ -159,6 +162,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
   ) async {
     let draft = DeveloperTranscriptRecordDraft(
       recordedAt: now(),
+      launchSessionID: launchSessionID,
       source: source,
       transcript: transcript.trimmingCharacters(in: .whitespacesAndNewlines),
       interpretedTranscript: interpretedTranscript?.trimmingCharacters(

@@ -32,6 +32,7 @@ The current push-to-talk implementation already covers a subset:
 
 ```text
 global shortcut
+  -> single-instance runtime ownership
   -> PushToTalkCaptureController
   -> raw finalized local transcript plus bounded recognition hypotheses
   -> TopherModel request-kind routing
@@ -57,6 +58,11 @@ capability transaction. Unsupported input is a `CommandResolution`, not an
 executable `TopherCommand`, and never crosses the policy boundary. Once an
 allowed command is resolved, the processor awaits one typed capability exactly
 once and returns its typed outcome to the presentation layer.
+
+Only the process holding Topher's per-user runtime lock may subscribe to the
+global shortcut. A duplicate or unsafe lock state terminates before shortcut
+registration, so one physical key release cannot create multiple independent
+requests. This is an execution invariant, not merely an installer convention.
 
 Do not introduce every future type now. The model below defines boundaries to
 preserve as real providers and channels are added.
@@ -130,6 +136,15 @@ website targets still win before domain parsing. The original transcript is
 retained for diagnostics; only an extracted command search/domain value drops
 likely terminal sentence punctuation. Dictation formatting remains a separate
 mode and does not inherit command normalization.
+
+Known web brands map to application-owned canonical hosts; Topher never invents
+`<spoken-name>.com`. For voice-originated unfamiliar domains, recognition
+alternatives are also authority evidence. If the hypotheses resolve to more
+than one host, the processor fails before policy or browser handoff and asks
+the user to repeat or type the domain. An explicit manual domain is not subject
+to speech-evidence gating. A vocabulary correction may narrow a recognized
+free domain to one existing canonical website, but cannot manufacture another
+arbitrary host.
 
 A request that independently resolves to multiple executable actions is
 rejected as compound until a future planner and confirmation design can

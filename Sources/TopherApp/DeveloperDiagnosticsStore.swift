@@ -77,6 +77,7 @@ struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
 
   let schemaVersion: Int
   let id: UUID
+  let launchSessionID: UUID?
   let recordedAt: Date
   let source: DeveloperTranscriptSource
   let transcript: String
@@ -100,6 +101,7 @@ struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
 
 struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
   let recordedAt: Date
+  let launchSessionID: UUID?
   let source: DeveloperTranscriptSource
   let transcript: String
   let interpretedTranscript: String?
@@ -115,6 +117,7 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
 
   init(
     recordedAt: Date,
+    launchSessionID: UUID? = nil,
     source: DeveloperTranscriptSource,
     transcript: String,
     interpretedTranscript: String? = nil,
@@ -129,6 +132,7 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
     appBuild: String
   ) {
     self.recordedAt = recordedAt
+    self.launchSessionID = launchSessionID
     self.source = source
     self.transcript = transcript
     self.interpretedTranscript = interpretedTranscript
@@ -292,6 +296,7 @@ actor DeveloperDiagnosticsStore {
     let record = DeveloperTranscriptRecord(
       schemaVersion: DeveloperTranscriptRecord.currentSchemaVersion,
       id: UUID(),
+      launchSessionID: draft.launchSessionID,
       recordedAt: draft.recordedAt,
       source: draft.source,
       transcript: boundedTranscript.value,
@@ -501,6 +506,7 @@ actor DeveloperDiagnosticsStore {
     return DeveloperTranscriptRecord(
       schemaVersion: record.schemaVersion,
       id: record.id,
+      launchSessionID: record.launchSessionID,
       recordedAt: record.recordedAt,
       source: record.source,
       transcript: boundedTranscript.value,

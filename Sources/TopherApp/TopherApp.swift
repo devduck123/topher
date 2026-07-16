@@ -1,8 +1,29 @@
 import AppKit
+import OSLog
 import SwiftUI
 
+@MainActor
+private enum TopherRuntime {
+  static let instanceLock = TopherSingleInstanceLock()
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private let logger = Logger(subsystem: "dev.topher.app", category: "lifecycle")
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    switch TopherRuntime.instanceLock.state {
+    case .primary:
+      return
+    case .secondary:
+      logger.notice("Exiting duplicate Topher process before shortcut registration")
+    case .unavailable:
+      logger.error("Exiting because the single-instance lock is unavailable")
+    }
+    NSApplication.shared.terminate(nil)
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
+    guard TopherRuntime.instanceLock.isPrimary else { return }
     NSApplication.shared.setActivationPolicy(.accessory)
   }
 }
@@ -23,7 +44,8 @@ struct TopherApp: App {
       wrappedValue: TopherModel(
         voiceTranscription: .live(contextualStrings: { vocabulary.contextualStrings }),
         developerDiagnostics: diagnostics,
-        vocabularyProvider: { vocabulary.vocabulary }
+        vocabularyProvider: { vocabulary.vocabulary },
+        listenForShortcutEvents: TopherRuntime.instanceLock.isPrimary
       )
     )
   }

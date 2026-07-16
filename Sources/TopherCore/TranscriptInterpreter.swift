@@ -26,7 +26,12 @@ public struct TranscriptVocabulary: Equatable, Sendable {
   public static let developerDefaults = TranscriptVocabulary(
     entries: [
       .init(canonicalTerm: "Crunchyroll", spokenForms: ["crunchy role"]),
+      .init(canonicalTerm: "Amazon"),
+      .init(canonicalTerm: "Ballislife", spokenForms: ["ball is life", "ballaslive"]),
       .init(canonicalTerm: "GitHub", spokenForms: ["git hub", "gidhub"]),
+      .init(canonicalTerm: "Grok", spokenForms: ["grock"]),
+      .init(canonicalTerm: "Hulu"),
+      .init(canonicalTerm: "Netflix"),
       .init(canonicalTerm: "YouTube", spokenForms: ["you tube"]),
       .init(canonicalTerm: "Notion"),
       .init(canonicalTerm: "Google Chrome"),
@@ -137,7 +142,8 @@ public struct TranscriptInterpreter: Sendable {
 
   public func interpret(
     primary: TranscriptHypothesis,
-    alternatives: [TranscriptHypothesis] = []
+    alternatives: [TranscriptHypothesis] = [],
+    allowKnownDomainNarrowing: Bool = false
   ) -> TranscriptInterpretation {
     let raw = primary.text.trimmingCharacters(in: .whitespacesAndNewlines)
     let rawCommand = command(for: raw)
@@ -145,14 +151,15 @@ public struct TranscriptInterpreter: Sendable {
     // Resolver aliases already understand valid target wording such as
     // "crunchy roll" and "chat g p t". Preserve that raw transcript instead
     // of reporting a correction that cannot change the selected target.
-    if let rawCommand, !rawCommand.isWebSearch {
+    if let rawCommand, !rawCommand.isWebSearch, !rawCommand.isExplicitDomain {
       return unchanged(raw, confidence: primary.confidence)
     }
 
     if let correction = vocabularyCorrection(
       raw,
       rawCommand: rawCommand,
-      confidence: primary.confidence
+      confidence: primary.confidence,
+      allowKnownDomainNarrowing: allowKnownDomainNarrowing
     ) {
       return correction
     }
@@ -178,7 +185,8 @@ public struct TranscriptInterpreter: Sendable {
   private func vocabularyCorrection(
     _ raw: String,
     rawCommand: TopherCommand?,
-    confidence: Double?
+    confidence: Double?,
+    allowKnownDomainNarrowing: Bool
   ) -> TranscriptInterpretation? {
     for entry in vocabulary.entries {
       for spokenForm in entry.spokenForms {
@@ -190,7 +198,13 @@ public struct TranscriptInterpreter: Sendable {
         guard
           corrected != raw,
           let correctedCommand = command(for: corrected),
-          rawCommand.map({ hasSameAuthority($0, correctedCommand) }) ?? true
+          rawCommand.map({
+            hasSameAuthority(
+              $0,
+              correctedCommand,
+              allowKnownDomainNarrowing: allowKnownDomainNarrowing
+            )
+          }) ?? true
         else { continue }
 
         return TranscriptInterpretation(
@@ -222,7 +236,11 @@ public struct TranscriptInterpreter: Sendable {
     return command
   }
 
-  private func hasSameAuthority(_ first: TopherCommand, _ second: TopherCommand) -> Bool {
+  private func hasSameAuthority(
+    _ first: TopherCommand,
+    _ second: TopherCommand,
+    allowKnownDomainNarrowing: Bool
+  ) -> Bool {
     switch (first, second) {
     case (.openApplication(let firstTarget), .openApplication(let secondTarget)):
       firstTarget == secondTarget
@@ -230,6 +248,10 @@ public struct TranscriptInterpreter: Sendable {
       firstTarget == secondTarget
     case (.openDomain(let firstDomain), .openDomain(let secondDomain)):
       firstDomain == secondDomain
+    case (.openDomain, .openWebsite):
+      // Correcting an arbitrary recognized domain to a fixed application-owned
+      // destination narrows authority; it never constructs another free URL.
+      allowKnownDomainNarrowing
     case (.searchWeb(let firstProvider, _), .searchWeb(let secondProvider, _)):
       firstProvider == secondProvider
     default:
@@ -297,6 +319,11 @@ public struct TranscriptInterpreter: Sendable {
 extension TopherCommand {
   fileprivate var isWebSearch: Bool {
     if case .searchWeb = self { return true }
+    return false
+  }
+
+  fileprivate var isExplicitDomain: Bool {
+    if case .openDomain = self { return true }
     return false
   }
 }

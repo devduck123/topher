@@ -7,6 +7,11 @@ enum AssistantCommandOutcome: Equatable, Sendable {
   case completed(ActionOutcome)
 }
 
+enum AssistantCommandInputSource: Equatable, Sendable {
+  case manual
+  case voice
+}
+
 struct AssistantCommandProcessingResult: Equatable, Sendable {
   let outcome: AssistantCommandOutcome
   let trace: AssistantCommandTrace
@@ -50,6 +55,7 @@ final class AssistantCommandProcessor {
     _ transcript: String,
     alternatives: [TranscriptHypothesis] = [],
     confidence: Double? = nil,
+    inputSource: AssistantCommandInputSource = .manual,
     executionStarted: @MainActor () -> Void = {}
   ) async -> AssistantCommandProcessingResult {
     let interpretation = TranscriptInterpreter(
@@ -57,7 +63,8 @@ final class AssistantCommandProcessor {
       vocabulary: vocabularyProvider()
     ).interpret(
       primary: TranscriptHypothesis(text: transcript, confidence: confidence),
-      alternatives: alternatives
+      alternatives: alternatives,
+      allowKnownDomainNarrowing: inputSource == .voice
     )
 
     let resolution = resolver.resolve(interpretation.selectedTranscript)
@@ -69,6 +76,27 @@ final class AssistantCommandProcessor {
           UnsupportedCommandReason.unsupportedPhrasing
         }
       logger.notice("Rejected an unsupported command")
+      return AssistantCommandProcessingResult(
+        outcome: .unsupported(reason: reason),
+        trace: AssistantCommandTrace(
+          outcome: .unsupported,
+          commandKind: nil,
+          capabilityIdentifier: nil,
+          unsupportedReason: reason
+        ),
+        interpretation: interpretation
+      )
+    }
+
+    if inputSource == .voice,
+      hasConflictingDomainEvidence(
+        for: command,
+        primaryTranscript: transcript,
+        alternatives: alternatives
+      )
+    {
+      let reason = UnsupportedCommandReason.uncertainDomain
+      logger.notice("Rejected voice domain navigation with conflicting hypotheses")
       return AssistantCommandProcessingResult(
         outcome: .unsupported(reason: reason),
         trace: AssistantCommandTrace(
@@ -150,6 +178,32 @@ final class AssistantCommandProcessor {
     logger.info(
       "Executing registered capability: \(descriptor.identifier, privacy: .public)"
     )
+  }
+
+  private func hasConflictingDomainEvidence(
+    for command: TopherCommand,
+    primaryTranscript: String,
+    alternatives: [TranscriptHypothesis]
+  ) -> Bool {
+    guard case .openDomain = command else { return false }
+
+    let hypotheses = [TranscriptHypothesis(text: primaryTranscript)] + alternatives
+    let hosts = Set(
+      hypotheses.compactMap { hypothesis -> String? in
+        guard case .resolved(let candidate) = resolver.resolve(hypothesis.text) else {
+          return nil
+        }
+        switch candidate {
+        case .openDomain(let domain):
+          return domain.host
+        case .openWebsite(let target):
+          return target.canonicalHost
+        case .openApplication, .openBrowserRoute, .searchWeb:
+          return nil
+        }
+      }
+    )
+    return hosts.count > 1
   }
 
   private func traceMetadata(

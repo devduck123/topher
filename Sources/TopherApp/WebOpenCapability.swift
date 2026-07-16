@@ -141,7 +141,7 @@ final class WebOpenCapability {
   private func homepageURL(for target: WebsiteTarget) -> URL? {
     var components = URLComponents()
     components.scheme = "https"
-    components.host = host(for: target)
+    components.host = target.canonicalHost
     components.path = "/"
     return components.url
   }
@@ -167,20 +167,5 @@ final class WebOpenCapability {
     )
 
     return components.url
-  }
-
-  private func host(for target: WebsiteTarget) -> String {
-    switch target {
-    case .crunchyroll:
-      "www.crunchyroll.com"
-    case .gmail:
-      "mail.google.com"
-    case .github:
-      "github.com"
-    case .google:
-      "www.google.com"
-    case .youtube:
-      "www.youtube.com"
-    }
   }
 }

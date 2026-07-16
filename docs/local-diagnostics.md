@@ -104,6 +104,9 @@ Each record contains only:
 - Command processing duration, record time, and app version/build. Command
   processing begins after final transcription, so it must not be reported as
   speech latency.
+- An ephemeral random launch-session identifier. It groups records written by
+  one app process and makes accidental concurrent instances detectable; it is
+  regenerated on launch and is not a device or user identifier.
 
 Topher does not separately capture or append raw audio, partial transcripts,
 the complete speech-alternative list, microphone buffers, retrieved

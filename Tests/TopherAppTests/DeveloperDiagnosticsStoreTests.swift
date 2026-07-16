@@ -114,9 +114,11 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
   func testPersistsRawAndSafelyInterpretedTranscriptEvidence() async throws {
     let store = makeStore(initialEnabled: true)
     let token = try await traceToken(for: store)
+    let launchSessionID = UUID()
     let snapshot = try await store.record(
       DeveloperTranscriptRecordDraft(
         recordedAt: Date(timeIntervalSince1970: 499),
+        launchSessionID: launchSessionID,
         source: .voice,
         transcript: "Open gidhub.com",
         interpretedTranscript: "Open GitHub.com",
@@ -138,6 +140,7 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     )
 
     let record = try XCTUnwrap(snapshot.records.first)
+    XCTAssertEqual(record.launchSessionID, launchSessionID)
     XCTAssertEqual(record.transcript, "Open gidhub.com")
     XCTAssertEqual(record.interpretedTranscript, "Open GitHub.com")
     XCTAssertEqual(record.interpretationReason, .vocabularyCorrection)

@@ -11,8 +11,8 @@ can reuse capture without inheriting command authority.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development tree currently defines 151 Swift tests. The
-latest complete local run passed all 151 tests; Thread Sanitizer and final
+Status: the 0.3.0 development tree currently defines 161 Swift tests. The
+latest complete local run passed all 161 tests; Thread Sanitizer and final
 app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -47,7 +47,8 @@ The comparative speech benchmark is still open.
   Visual Studio Code, and Xcode, including bounded phrasing such as “Navigate
   Chrome,” “Switch to Chrome,” and “Open Codex.”
 - Typed, allowlisted navigation to Crunchyroll, Gmail, GitHub, Google, YouTube,
-  and the browser-owned Chrome Extensions route. Internal Chrome routes are
+  Amazon, Ballislife, Hulu, Netflix, and the browser-owned Chrome Extensions
+  route. Internal Chrome routes are
   delivered as URLs to Chrome even when it is already running.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
   known site, provider searches retain their provider, and unknown bare
@@ -59,6 +60,11 @@ The comparative speech benchmark is still open.
 - Explicit navigation to validated public domains such as “Go to tnc.com” uses
   HTTPS only. Paths, credentials, ports, IP addresses, custom schemes, and
   local/reserved names fail closed.
+- Voice requests with recognition hypotheses that disagree on an unfamiliar
+  domain fail before browser handoff. Known recognition errors may narrow to a
+  fixed canonical destination; exact manual domains keep their direct path.
+- A per-user runtime lock ensures only one Topher process can register the
+  global shortcut, including when a second bundle process is forced manually.
 - Fail-closed rejection of multiple executable actions in one request.
 - A bounded local personal-vocabulary editor for developer and product terms.
   Canonical terms may bias on-device recognition; known mis-transcriptions stay
@@ -123,6 +129,15 @@ xcodebuild -project Topher.xcodeproj -scheme TopherApp -configuration Debug buil
 Tests remain SwiftPM-owned in this slice. The `TopherApp` scheme has no Xcode
 test target, so use `swift test` as the authoritative test command rather than
 Cmd-U.
+
+After producing a signed Release bundle, install it through the checked helper:
+
+```sh
+scripts/install_local_build.sh /path/to/Build/Products/Release/Topher.app
+```
+
+The helper verifies the source and installed signatures, stops the previous
+local build, launches once, and fails unless exactly one Topher process remains.
 
 For normal app development, open `Topher.xcodeproj`, select the `TopherApp`
 scheme, and Run. The separate SwiftPM `Topher` scheme builds a bare executable;
@@ -211,10 +226,10 @@ phase, preserves an explicit opt-out, and adds an orange dot to the menu-bar
 icon while enabled. Re-enabling after an opt-out requires confirmation. Each
 record contains the exact finalized voice or manual command, the interpreted
 command and correction reason when Topher safely selected a different reading,
-an available confidence summary, its source, a fixed typed outcome, fixed
-command/capability metadata, a typed unsupported reason, optional local
-transcript/action ratings, capture-stage and processing durations, and app
-version/build. It never contains raw audio, partials, or content Topher
+an available confidence summary, its source, an ephemeral launch-session ID, a
+fixed typed outcome, fixed command/capability metadata, a typed unsupported
+reason, optional local transcript/action ratings, capture-stage and processing
+durations, and app version/build. It never contains raw audio, partials, or content Topher
 separately captures from a page, screen, message, or document. Topher does not
 append constructed destination URLs, Keychain/config values, or detailed
 framework errors. The user-authored command itself can contain a query, URL,

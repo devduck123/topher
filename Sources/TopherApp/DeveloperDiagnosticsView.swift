@@ -312,6 +312,8 @@ extension UnsupportedCommandReason {
       "Empty input"
     case .missingValue:
       "Missing value"
+    case .uncertainDomain:
+      "Uncertain spoken domain"
     case .unknownTarget:
       "Unknown target"
     case .unsupportedAction:

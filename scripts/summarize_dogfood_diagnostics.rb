@@ -52,6 +52,13 @@ end
 
 puts "Topher dogfood diagnostics"
 puts "Records: #{records.length}"
+session_records = records.select { |record| record["launchSessionID"] }
+session_count = session_records.map { |record| record["launchSessionID"] }.uniq.length
+if session_records.empty?
+  puts "Launch sessions: not recorded (pre-Build-7 records)"
+else
+  puts "Launch sessions: #{session_count} (recorded on #{session_records.length}/#{records.length} requests)"
+end
 print_counts("Sources:", counts(records, "source"))
 print_counts("Outcomes:", counts(records, "outcome"))
 unsupported_records = records.select { |record| record["unsupportedReason"] }

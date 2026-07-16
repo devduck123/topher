@@ -70,6 +70,38 @@ final class TranscriptInterpreterTests: XCTestCase {
     XCTAssertEqual(result.reason, .vocabularyCorrection)
   }
 
+  func testCorrectsObservedDeveloperSearchVocabularyWithoutChangingProvider() {
+    let result = interpreter.interpret(
+      primary: TranscriptHypothesis(text: "Search for grock")
+    )
+
+    XCTAssertEqual(result.selectedTranscript, "Search for Grok")
+    XCTAssertEqual(result.reason, .vocabularyCorrection)
+  }
+
+  func testNarrowsAMisrecognizedDomainToAKnownCanonicalDestination() {
+    let result = interpreter.interpret(
+      primary: TranscriptHypothesis(text: "Open ballaslive.com"),
+      allowKnownDomainNarrowing: true
+    )
+
+    XCTAssertEqual(result.selectedTranscript, "Open Ballislife.com")
+    XCTAssertEqual(result.reason, .vocabularyCorrection)
+    XCTAssertEqual(
+      CommandResolver().resolve(result.selectedTranscript),
+      .resolved(.openWebsite(.ballislife))
+    )
+  }
+
+  func testDoesNotRewriteAnExactManualDomainWithoutVoiceNarrowing() {
+    let result = interpreter.interpret(
+      primary: TranscriptHypothesis(text: "Open ballaslive.com")
+    )
+
+    XCTAssertEqual(result.selectedTranscript, "Open ballaslive.com")
+    XCTAssertNil(result.reason)
+  }
+
   func testDoesNotRewriteDeveloperTermsInsideUnsupportedFreeformText() {
     let result = interpreter.interpret(
       primary: TranscriptHypothesis(text: "Delete the gidhub repository")

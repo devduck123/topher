@@ -2,14 +2,22 @@ import Foundation
 
 /// Websites Topher may open directly without accepting an arbitrary URL.
 public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
+  case amazon
+  case ballislife
   case crunchyroll
   case gmail
   case github
   case google
+  case hulu
+  case netflix
   case youtube
 
   public var displayName: String {
     switch self {
+    case .amazon:
+      "Amazon"
+    case .ballislife:
+      "Ballislife"
     case .crunchyroll:
       "Crunchyroll"
     case .gmail:
@@ -18,13 +26,46 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
       "GitHub"
     case .google:
       "Google"
+    case .hulu:
+      "Hulu"
+    case .netflix:
+      "Netflix"
     case .youtube:
       "YouTube"
     }
   }
 
+  /// The application-owned host for a known web brand. A spoken brand never
+  /// becomes a guessed `<brand>.com` domain.
+  public var canonicalHost: String {
+    switch self {
+    case .amazon:
+      "www.amazon.com"
+    case .ballislife:
+      "ballislife.com"
+    case .crunchyroll:
+      "www.crunchyroll.com"
+    case .gmail:
+      "mail.google.com"
+    case .github:
+      "github.com"
+    case .google:
+      "www.google.com"
+    case .hulu:
+      "www.hulu.com"
+    case .netflix:
+      "www.netflix.com"
+    case .youtube:
+      "www.youtube.com"
+    }
+  }
+
   var aliases: Set<String> {
     switch self {
+    case .amazon:
+      ["amazon", "amazon com", "amazon shopping", "amazon website"]
+    case .ballislife:
+      ["ballislife", "ball is life", "ballislife com", "ball is life com"]
     case .crunchyroll:
       ["crunchyroll", "crunchy roll", "crunchyroll com"]
     case .gmail:
@@ -33,6 +74,10 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
       ["github", "git hub", "github com", "gidhub com"]
     case .google:
       ["google", "google com", "google homepage"]
+    case .hulu:
+      ["hulu", "hulu com"]
+    case .netflix:
+      ["netflix", "netflix com"]
     case .youtube:
       ["youtube", "youtube com", "you tube"]
     }
@@ -53,7 +98,7 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
       .google
     case .youtube:
       .youtube
-    case .crunchyroll, .gmail, .github:
+    case .amazon, .ballislife, .crunchyroll, .gmail, .github, .hulu, .netflix:
       nil
     }
   }

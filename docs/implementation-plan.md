@@ -123,6 +123,11 @@ dependency, and installed-app denial/error recovery is verified.
   rather than launch-only arguments; accept exact bare known targets and
   destination-first provider searches; normalize sentence punctuation only in
   extracted command values; and add bounded explicit HTTPS domain navigation.
+- Complete in build 7: add canonical Amazon, Ballislife, Hulu, and Netflix web
+  destinations; bias recognition toward the observed proper nouns; safely
+  narrow known `grock` and `ballaslive` recognition errors; and reject an
+  unfamiliar voice domain before execution when Apple supplies conflicting
+  host hypotheses. Manual exact domains retain their existing behavior.
 - Add application discovery plus explicit aliases without accepting arbitrary
   model-provided bundle IDs.
 - Add a read-only active-application provider for “What app am I using?”
@@ -168,6 +173,12 @@ it does not, remove the model path.
   Do not infer speech accuracy from capability outcomes or confidence alone.
 - Add richer metadata-only lifecycle events only when a measured reliability
   question requires them.
+- Complete in build 7: retain an ephemeral launch-session identifier with each
+  new developer record so accidental concurrent app instances are detectable
+  without collecting more user content.
+- Complete in build 7: acquire a per-user runtime lock before global-shortcut
+  registration, reject unsafe lock paths, and provide one verified local
+  install-and-launch script that asserts exactly one Topher process.
 - Test shortcut conflicts and launch-at-login only if daily use warrants it.
 
 Exit: the core loop recovers without restarting Topher and meets the measured
@@ -215,3 +226,32 @@ not parallel implementation projects. The canonical contracts are
 - Keep only the detector's bounded in-memory rolling audio, continuously discard
   it, and never persist, log, transmit, or transcribe it before a confirmed wake.
 - Provide a persistent enabled indicator and kill switch.
+
+## Product polish backlog
+
+### Topher visual identity: the assistant that helps drive your Mac
+
+- Design a small, friendly car combined with Topher's existing spark motif.
+  The character should feel like a capable little copilot rather than a generic
+  automobile or navigation app.
+- Produce two related assets instead of scaling one image everywhere:
+  - a simple single-color macOS template symbol that remains recognizable at
+    menu-bar size and works in both light and dark appearances;
+  - a full-color macOS app icon for Finder, Spotlight, permissions, About, and
+    any future Dock presence, following the current macOS icon shape, safe-area,
+    and resolution requirements.
+- Preserve clear listening, processing, success, and failure state feedback
+  without making the base logo visually noisy. Prefer small state treatments
+  around the car/spark silhouette over entirely different icons.
+- Verify the menu-bar symbol at native scale, standard and increased display
+  scaling, light/dark mode, and with transcript diagnostics enabled. Include an
+  accessible label; never communicate state through color alone.
+- Decide explicitly whether Topher remains an `LSUIElement` menu-bar-only app
+  or offers an intentional Dock mode. Do not add a permanent Dock presence as
+  an accidental side effect of installing the new app icon.
+- Keep source artwork and exported assets in the repository, document the
+  export process, and check licensing/originality before shipping.
+
+Exit: Topher has a distinctive car-plus-spark identity that is legible in the
+menu bar, polished everywhere macOS displays its app icon, accessible across
+states and appearances, and does not change menu-bar-only lifecycle behavior.

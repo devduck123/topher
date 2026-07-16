@@ -442,7 +442,8 @@ final class TopherModel: ObservableObject {
       let result = await processor.process(
         transcript,
         alternatives: alternatives,
-        confidence: confidence
+        confidence: confidence,
+        inputSource: source == .voice ? .voice : .manual
       ) { [weak self] in
         guard let self else { return }
         phase = .executing
@@ -496,6 +497,8 @@ final class TopherModel: ObservableObject {
       "That request needs app, browser, or screen context that Topher does not have yet."
     case .emptyInput, .missingValue:
       "That command is missing a target or search value."
+    case .uncertainDomain:
+      "I heard more than one possible domain. Say it again or type the exact domain in Topher."
     case .unknownTarget:
       "Topher does not know that app or destination yet."
     case .unsupportedAction:

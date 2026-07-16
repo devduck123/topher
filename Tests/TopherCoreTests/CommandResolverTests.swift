@@ -85,6 +85,10 @@ final class CommandResolverTests: XCTestCase {
       ("Open github.com", .github),
       ("Open gidhub.com", .github),
       ("Open Crunchyroll", .crunchyroll),
+      ("Open Netflix", .netflix),
+      ("Open Hulu", .hulu),
+      ("Open Amazon", .amazon),
+      ("Open Ballislife", .ballislife),
       ("Go to my Gmail", .gmail),
       ("Open Gmail", .gmail),
     ]
@@ -204,6 +208,9 @@ final class CommandResolverTests: XCTestCase {
       ("Search crunchy roll", .crunchyroll),
       ("Search for Crunchyroll", .crunchyroll),
       ("Search GitHub", .github),
+      ("Search Netflix", .netflix),
+      ("Search Hulu", .hulu),
+      ("Search Amazon", .amazon),
       ("Find YouTube", .youtube),
     ]
 

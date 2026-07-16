@@ -40,10 +40,18 @@ final class WebOpenCapabilityTests: XCTestCase {
     _ = await capability.execute(.github)
     _ = await capability.execute(.crunchyroll)
     _ = await capability.execute(.gmail)
+    _ = await capability.execute(.netflix)
+    _ = await capability.execute(.hulu)
+    _ = await capability.execute(.amazon)
+    _ = await capability.execute(.ballislife)
 
     XCTAssertEqual(
       openedURLs.map(\.absoluteString),
-      ["https://github.com/", "https://www.crunchyroll.com/", "https://mail.google.com/"]
+      [
+        "https://github.com/", "https://www.crunchyroll.com/", "https://mail.google.com/",
+        "https://www.netflix.com/", "https://www.hulu.com/", "https://www.amazon.com/",
+        "https://ballislife.com/",
+      ]
     )
   }
 

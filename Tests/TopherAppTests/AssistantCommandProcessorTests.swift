@@ -209,6 +209,99 @@ final class AssistantCommandProcessorTests: XCTestCase {
     XCTAssertEqual(result.interpretation.reason, .speechAlternative)
   }
 
+  func testVoiceDomainWithConflictingRecognitionEvidenceFailsBeforeExecution() async {
+    var openedURLs: [URL] = []
+    var executionStartedCount = 0
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      webOpener: WebOpenCapability(
+        workspace: WebWorkspace(open: { openedURLs.append($0) })
+      )
+    )
+
+    let result = await processor.process(
+      "Open balaslive.com",
+      alternatives: [
+        TranscriptHypothesis(text: "Open ballislive.com", confidence: 0.71),
+        TranscriptHypothesis(text: "Open balaslive.com", confidence: 0.65),
+      ],
+      confidence: 0.69,
+      inputSource: .voice
+    ) {
+      executionStartedCount += 1
+    }
+
+    XCTAssertEqual(result.outcome, .unsupported(reason: .uncertainDomain))
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .unsupported,
+        commandKind: nil,
+        capabilityIdentifier: nil,
+        unsupportedReason: .uncertainDomain
+      )
+    )
+    XCTAssertTrue(openedURLs.isEmpty)
+    XCTAssertEqual(executionStartedCount, 0)
+  }
+
+  func testManualDomainDoesNotUseVoiceAlternativeGate() async {
+    var openedURLs: [URL] = []
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      webOpener: WebOpenCapability(
+        workspace: WebWorkspace(open: { openedURLs.append($0) })
+      )
+    )
+
+    let result = await processor.process(
+      "Open example.org",
+      alternatives: [TranscriptHypothesis(text: "Open example.net")],
+      inputSource: .manual
+    )
+
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "Opened example.org.")))
+    XCTAssertEqual(openedURLs.map(\.absoluteString), ["https://example.org/"])
+  }
+
+  func testManualExactDomainDoesNotUseVoiceVocabularyNarrowing() async {
+    var openedURLs: [URL] = []
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      webOpener: WebOpenCapability(
+        workspace: WebWorkspace(open: { openedURLs.append($0) })
+      )
+    )
+
+    let result = await processor.process("Open ballaslive.com", inputSource: .manual)
+
+    XCTAssertEqual(
+      result.outcome,
+      .completed(.succeeded(message: "Opened ballaslive.com."))
+    )
+    XCTAssertEqual(openedURLs.map(\.absoluteString), ["https://ballaslive.com/"])
+    XCTAssertNil(result.interpretation.reason)
+  }
+
+  func testObservedDomainMisrecognitionNarrowsToCanonicalWebsite() async {
+    var openedURLs: [URL] = []
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      webOpener: WebOpenCapability(
+        workspace: WebWorkspace(open: { openedURLs.append($0) })
+      )
+    )
+
+    let result = await processor.process(
+      "Open ballaslive.com",
+      inputSource: .voice
+    )
+
+    XCTAssertEqual(result.outcome, .completed(.succeeded(message: "Opened Ballislife.")))
+    XCTAssertEqual(openedURLs.map(\.absoluteString), ["https://ballislife.com/"])
+    XCTAssertEqual(result.interpretation.reason, .vocabularyCorrection)
+  }
+
   func testPolicyDenialDoesNotStartOrExecuteACapability() async {
     var executionStartedCount = 0
     let processor = AssistantCommandProcessor(

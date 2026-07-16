@@ -63,6 +63,16 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
         "recordedAt" => "2026-07-16T00:01:00Z",
         "outcome" => "dictationInserted",
         "dictationFailureReason" => "wrongField",
+        "dictationInsertionEvidence" => {
+          "method" => "wholeValue",
+          "verification" => "contentAndCaret",
+          "target" => {
+            "role" => "textArea",
+            "canSetSelectedText" => true,
+            "canSetSelectedRange" => true,
+            "canSetValue" => true
+          }
+        },
         "appVersion" => "0.4.0",
         "appBuild" => "10"
       }
@@ -102,6 +112,13 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
   with_dictation = JSON.parse(File.read(output, encoding: "UTF-8"))
   assert(with_dictation["includesDictation"] == true, "dictation opt-in must remain visible")
   assert(with_dictation.fetch("queries").length == 2, "explicit dictation export")
+  dictation = with_dictation.fetch("queries").find { |entry| entry["source"] == "dictation" }
+  assert(dictation.dig("dictationInsertionMethods", "wholeValue") == 1, "insertion method")
+  assert(
+    dictation.dig("dictationInsertionVerifications", "contentAndCaret") == 1,
+    "insertion verification"
+  )
+  assert(dictation.dig("dictationTargetRoles", "textArea") == 1, "target role")
 
   outside = File.join(input_directory, "outside.json")
   File.write(outside, "unchanged", mode: "w", perm: 0o600)

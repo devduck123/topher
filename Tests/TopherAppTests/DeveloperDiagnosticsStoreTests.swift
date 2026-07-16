@@ -265,7 +265,17 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
           outcome: .captureFailed,
           commandKind: nil,
           capabilityIdentifier: nil,
-          dictationFailureReason: .mutationFailed
+          dictationFailureReason: .mutationUnverified,
+          dictationInsertionEvidence: FocusedTextInsertionEvidence(
+            method: .selectedText,
+            verification: .unavailable,
+            target: FocusedTextTargetProfile(
+              role: .textArea,
+              canSetSelectedText: true,
+              canSetSelectedRange: true,
+              canSetValue: false
+            )
+          )
         ),
         processingDurationMilliseconds: 0,
         appVersion: "test",
@@ -277,7 +287,10 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     let record = try XCTUnwrap(snapshot.records.first)
     XCTAssertEqual(record.maximumDurationReached, true)
     XCTAssertEqual(record.captureFailureReason, .finalizationTimedOut)
-    XCTAssertEqual(record.dictationFailureReason, .mutationFailed)
+    XCTAssertEqual(record.dictationFailureReason, .mutationUnverified)
+    XCTAssertEqual(record.dictationInsertionEvidence?.method, .selectedText)
+    XCTAssertEqual(record.dictationInsertionEvidence?.verification, .unavailable)
+    XCTAssertEqual(record.dictationInsertionEvidence?.target.role, .textArea)
 
     let reloaded = try await makeStore(initialEnabled: false).snapshot()
     XCTAssertEqual(reloaded.records.first, record)

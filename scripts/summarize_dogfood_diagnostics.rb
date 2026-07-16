@@ -89,6 +89,25 @@ def print_summary(title, records)
     "Interpretation/polish reasons:",
     counts(interpretation_records, "interpretationReason")
   )
+  insertion_records = records.select { |record| record["dictationInsertionEvidence"] }
+  print_counts(
+    "Dictation insertion methods:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      result[record.dig("dictationInsertionEvidence", "method")] += 1
+    end
+  )
+  print_counts(
+    "Dictation verification results:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      result[record.dig("dictationInsertionEvidence", "verification")] += 1
+    end
+  )
+  print_counts(
+    "Dictation target roles:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      result[record.dig("dictationInsertionEvidence", "target", "role")] += 1
+    end
+  )
 
   timings = {
     "hold to listening" => "holdToListeningMilliseconds",

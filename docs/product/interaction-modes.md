@@ -89,6 +89,12 @@ The implemented foundation contract is:
 - Request Accessibility only from an explicit dictation hold or enable action.
 - Revalidate focus, selection, surrounding text, and secure-field state after
   transcription and before mutation. A mismatch produces a preview, not a guess.
+- Treat native setter completion as an attempt and report insertion only after
+  bounded content readback. Use one preselected method so a late host-app update
+  cannot cause a second insertion.
+- Permit a whole-value mutation only for a bounded plain text field, an empty
+  text area, or full-value text-area replacement. Keep rich and ambiguous
+  surfaces on the narrower compatibility/fallback path.
 - Never mutate the clipboard automatically; copying a fallback is explicit.
 - Exclude secure-field dictation from the content-bearing developer trace.
 - Automatically finalize at the 120-second dictation maximum instead of
@@ -97,11 +103,12 @@ The implemented foundation contract is:
   review/copy preview; never insert, persist, or disfluency-polish that partial
   automatically.
 
-The foundation uses Accessibility selected-text and selected-range attributes.
-Editors that do not expose a safely settable selection are intentionally routed
-to the pending preview. Broad app compatibility, spoken formatting commands,
-punctuation quality, and multi-paragraph behavior remain measured acceptance
-work rather than implied guarantees.
+The foundation uses Accessibility value, selected-text, and selected-range
+attributes behind a fixed target profile. Editors that do not expose a safely
+verifiable mutation are intentionally routed to the pending preview. Broad app
+compatibility, spoken formatting commands, punctuation quality, and multi-
+paragraph behavior remain measured acceptance work rather than implied
+guarantees.
 
 Dictation quality is a system-level result. The benchmark must cover recognition
 accuracy, partial stability, endpoint latency, punctuation, application-specific

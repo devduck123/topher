@@ -137,6 +137,113 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertFalse(model.isDictationPolishEnabled)
   }
 
+  func testUnverifiedDictationMutationNeverReportsSuccessfulInsertion() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherUnverifiedMutationDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.selectedTextMutationSucceeds = false
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL: temporaryRoot.appendingPathComponent(
+          "TranscriptDiagnostics",
+          isDirectory: true
+        ),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("keep this pending"))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "keep this pending" }
+    await waitUntil { diagnostics.records.count == 1 }
+    XCTAssertEqual(field.content, "")
+    XCTAssertEqual(diagnostics.records[0].outcome, .dictationFallback)
+    XCTAssertEqual(diagnostics.records[0].dictationFailureReason, .mutationUnverified)
+    XCTAssertEqual(
+      diagnostics.records[0].dictationInsertionEvidence,
+      FocusedTextInsertionEvidence(
+        method: .selectedText,
+        verification: .unavailable,
+        target: field.profile
+      )
+    )
+  }
+
+  func testWholeValueAdapterInsertsIntoEmptyCompatibleSurface() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherWholeValueDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.selectedTextMutationSucceeds = false
+    field.exposesValue = true
+    field.canSetValue = true
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL: temporaryRoot.appendingPathComponent(
+          "TranscriptDiagnostics",
+          isDirectory: true
+        ),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("verified value insertion"))
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    await waitUntil { diagnostics.records.count == 1 }
+    XCTAssertEqual(field.content, "verified value insertion")
+    XCTAssertFalse(model.canUndoDictation)
+    XCTAssertEqual(diagnostics.records[0].outcome, .dictationInserted)
+    XCTAssertEqual(diagnostics.records[0].dictationInsertionEvidence?.method, .wholeValue)
+    XCTAssertEqual(
+      diagnostics.records[0].dictationInsertionEvidence?.verification,
+      .contentAndCaret
+    )
+  }
+
   func testDictationPermissionPromptIsExplicitAndStopsBeforeMicrophoneCapture() async {
     var promptCount = 0
     let accessibility = AccessibilityPermissionClient(
@@ -1319,7 +1426,12 @@ private final class ModelFocusedTextHarness {
   var content: String
   var selection: FocusedTextRange
   var isSecure = false
+  var role: FocusedTextTargetRole = .textArea
   var canSetSelectedText = true
+  var canSetValue = false
+  var exposesValue = false
+  var selectedTextMutationSucceeds = true
+  var valueMutationSucceeds = true
   var selectedTextReadCount = 0
 
   init(content: String, selection: FocusedTextRange) {
@@ -1327,11 +1439,22 @@ private final class ModelFocusedTextHarness {
     self.selection = selection
   }
 
+  var profile: FocusedTextTargetProfile {
+    FocusedTextTargetProfile(
+      role: role,
+      canSetSelectedText: canSetSelectedText,
+      canSetSelectedRange: true,
+      canSetValue: canSetValue
+    )
+  }
+
   var environment: FocusedTextInsertionEnvironment {
     FocusedTextInsertionEnvironment(
       focusedElement: { [weak self] in self?.element },
       sameElement: { $0 == $1 },
+      processIdentifier: { _ in 1001 },
       isSecure: { [weak self] _ in self?.isSecure ?? true },
+      role: { [weak self] _ in self?.role ?? .other },
       selectedText: { [weak self] _ in
         guard let self else { return nil }
         selectedTextReadCount += 1
@@ -1340,6 +1463,16 @@ private final class ModelFocusedTextHarness {
         )
       },
       selectedRange: { [weak self] _ in self?.selection },
+      value: { [weak self] _ in
+        guard let self, exposesValue else { return nil }
+        return content
+      },
+      text: { [weak self] _, range in
+        guard let self else { return nil }
+        let value = content as NSString
+        guard range.endLocation <= value.length else { return nil }
+        return value.substring(with: range.nsRange)
+      },
       textContext: { [weak self] _, range in
         guard let self else { return FocusedTextContext() }
         let value = content as NSString
@@ -1359,18 +1492,29 @@ private final class ModelFocusedTextHarness {
       },
       canSetSelectedText: { [weak self] _ in self?.canSetSelectedText ?? false },
       canSetSelectedRange: { _ in true },
+      canSetValue: { [weak self] _ in self?.canSetValue ?? false },
       setSelectedText: { [weak self] _, text in
         guard let self, canSetSelectedText else { return false }
-        content = (content as NSString).replacingCharacters(
-          in: NSRange(location: selection.location, length: selection.length),
-          with: text
-        )
+        if selectedTextMutationSucceeds {
+          content = (content as NSString).replacingCharacters(
+            in: NSRange(location: selection.location, length: selection.length),
+            with: text
+          )
+        }
         return true
       },
       setSelectedRange: { [weak self] _, range in
         self?.selection = range
         return self != nil
       },
+      setValue: { [weak self] _, value in
+        guard let self, canSetValue else { return false }
+        if valueMutationSucceeds {
+          content = value
+        }
+        return true
+      },
+      waitForMutation: { _ in },
       release: { _ in }
     )
   }

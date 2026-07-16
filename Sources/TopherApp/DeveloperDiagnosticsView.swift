@@ -390,6 +390,10 @@ extension DictationFailureReason {
       "Focus changed"
     case .mutationFailed:
       "Text mutation failed"
+    case .mutationNotObserved:
+      "Text mutation was not observed"
+    case .mutationUnverified:
+      "Text mutation could not be verified"
     case .noFocusedElement:
       "No focused field"
     case .noPreparedTarget:

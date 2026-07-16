@@ -104,6 +104,11 @@ Each record contains only:
 - A fixed unsupported reason when resolution rejects the command.
 - Fixed dictation-fallback and content-free capture-failure reasons when those
   paths occur, plus whether the maximum duration caused automatic finalization.
+- For an insertion attempt, fixed content-free evidence: selected-text or
+  whole-value method, content-and-caret/content-only/not-observed/unavailable
+  verification, target role, and whether its three relevant attributes were
+  settable. This evidence never includes the app name, process identifier,
+  selected text, full field value, or native error.
 - Optional user-set judgments for whether the transcript text was accurate and
   whether Topher's action was correct. These are independent because correct
   transcription can still lead to the wrong intent, and vice versa.
@@ -148,8 +153,9 @@ record contains an empty transcript and a fixed capture-failure reason. It is
 never silently executed or inserted. If a prepared dictation target becomes
 secure, even that preview is discarded and no content-bearing record is made.
 
-Summarize retained outcomes, feedback rates, interpretation/polish reasons, and timing
-percentiles without printing command text:
+Summarize retained outcomes, feedback rates, insertion methods/verification/
+roles, interpretation/polish reasons, and timing percentiles without printing
+command text:
 
 ```sh
 scripts/summarize_dogfood_diagnostics.rb

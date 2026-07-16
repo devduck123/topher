@@ -47,7 +47,7 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.4.0 development tree defines 223 tests and still adds only the
+The current 0.4.0 development tree defines 231 tests and still adds only the
 Release audio-input entitlement required for microphone capture. Build 9 also
 adds an explicit Accessibility TCC boundary for narrow focused-field dictation;
 Accessibility does not add a code-signing entitlement. See the latest dated

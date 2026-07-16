@@ -91,6 +91,10 @@ is not a substitute for reviewing `git status` and the full diff.
 - No arbitrary shell, AppleScript, browser JavaScript, or raw input synthesis.
 - Acquire only the context required for the active request.
 - Command mode and focused-field dictation remain separate.
+- A successful Accessibility setter is not insertion evidence. Verify the
+  intended text through a bounded readback, keep full-value mutation limited to
+  the documented plain-text profile, and add false-success plus delayed-host
+  regression coverage when changing insertion behavior.
 - Every effect requires capability-specific policy. An explicit present-user
   request may confirm a defined, bounded deterministic local handoff; sensitive
   remote, model- or context-derived, destructive, or other externally visible

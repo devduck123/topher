@@ -54,10 +54,14 @@ global dictation shortcut
   -> TopherModel request-kind routing
   -> DictationText bounded presentation normalization
      plus optional fast conservative adjacent-restart cleanup
-  -> focus + selection + nearby-text + secure-state revalidation
-  -> FocusedTextInsertionCapability replaces only the selection
-  -> inserted result with guarded one-step undo
-     or pending local preview with explicit Copy
+  -> process + focus + selection + nearby-text + secure-state revalidation
+  -> FocusedTextInsertionCapability chooses one bounded mutation method
+     -> standard whole value for a small compatible plain surface
+     -> selected-text compatibility path for other safely exposed selections
+  -> bounded content/caret readback
+  -> verified inserted result, with guarded one-step undo when supported
+     or typed uncertain/failed result plus pending local preview
+     and explicit Copy
 ```
 
 `PushToTalkCaptureController` owns microphone permission, speech assets,
@@ -79,6 +83,13 @@ secure or newly secure dictation target discards it. Diagnostics record only a
 fixed content-free failure reason for this path. Because a partial is incomplete
 and may still be revised, recovery applies presentation normalization only and
 never disfluency cleanup.
+
+An Accessibility setter result is an attempted mutation, not completion
+evidence. Topher verifies content immediately and with at most 30 ms of bounded
+retry. A readable unchanged target and an unreadable target have different
+typed outcomes; neither is shown as successful insertion. It never follows an
+ambiguous first mutation with a second method, which prevents late host-app
+updates from duplicating text.
 
 `AssistantCommandProcessor` owns the deterministic resolver-to-policy-to-
 capability transaction. Unsupported input is a `CommandResolution`, not an

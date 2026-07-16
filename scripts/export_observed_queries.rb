@@ -135,6 +135,9 @@ eligible_records.each do |record|
     "observationCount" => 0,
     "outcomes" => {},
     "interpretationReasons" => {},
+    "dictationInsertionMethods" => {},
+    "dictationInsertionVerifications" => {},
+    "dictationTargetRoles" => {},
     "unsupportedReasons" => {},
     "dictationFailureReasons" => {},
     "captureFailureReasons" => {},
@@ -156,6 +159,11 @@ eligible_records.each do |record|
   {
     "outcomes" => record["outcome"],
     "interpretationReasons" => record["interpretationReason"],
+    "dictationInsertionMethods" => record.dig("dictationInsertionEvidence", "method"),
+    "dictationInsertionVerifications" => record.dig(
+      "dictationInsertionEvidence", "verification"
+    ),
+    "dictationTargetRoles" => record.dig("dictationInsertionEvidence", "target", "role"),
     "unsupportedReasons" => record["unsupportedReason"],
     "dictationFailureReasons" => record["dictationFailureReason"],
     "captureFailureReasons" => record["captureFailureReason"],

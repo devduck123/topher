@@ -15,6 +15,7 @@ struct FocusedTextRange: Equatable, Sendable {
   let length: Int
 
   var endLocation: Int { location + length }
+  var nsRange: NSRange { NSRange(location: location, length: length) }
 
   init(location: Int, length: Int) {
     self.location = location
@@ -40,13 +41,53 @@ enum FocusedTextPreparationOutcome: Equatable, Sendable {
 }
 
 enum FocusedTextInsertionOutcome: Equatable, Sendable {
-  case inserted(text: String, canUndo: Bool)
+  case inserted(FocusedTextInsertionResult)
+  case mutationNotObserved(FocusedTextInsertionEvidence)
+  case mutationUnverified(FocusedTextInsertionEvidence)
   case noPreparedTarget
   case focusChanged
   case selectionChanged
   case secureField
   case unsupportedField
   case failed
+}
+
+enum FocusedTextTargetRole: String, Codable, Equatable, Sendable {
+  case textArea
+  case textField
+  case webArea
+  case other
+}
+
+enum FocusedTextInsertionMethod: String, Codable, Equatable, Sendable {
+  case selectedText
+  case wholeValue
+}
+
+enum FocusedTextInsertionVerification: String, Codable, Equatable, Sendable {
+  case contentAndCaret
+  case contentOnly
+  case notObserved
+  case unavailable
+}
+
+struct FocusedTextTargetProfile: Codable, Equatable, Sendable {
+  let role: FocusedTextTargetRole
+  let canSetSelectedText: Bool
+  let canSetSelectedRange: Bool
+  let canSetValue: Bool
+}
+
+struct FocusedTextInsertionEvidence: Codable, Equatable, Sendable {
+  let method: FocusedTextInsertionMethod
+  let verification: FocusedTextInsertionVerification
+  let target: FocusedTextTargetProfile
+}
+
+struct FocusedTextInsertionResult: Equatable, Sendable {
+  let text: String
+  let canUndo: Bool
+  let evidence: FocusedTextInsertionEvidence
 }
 
 enum FocusedTextUndoOutcome: Equatable, Sendable {
@@ -63,14 +104,21 @@ enum FocusedTextUndoOutcome: Equatable, Sendable {
 struct FocusedTextInsertionEnvironment {
   let focusedElement: () -> FocusedTextElementID?
   let sameElement: (FocusedTextElementID, FocusedTextElementID) -> Bool
+  let processIdentifier: (FocusedTextElementID) -> pid_t?
   let isSecure: (FocusedTextElementID) -> Bool
+  let role: (FocusedTextElementID) -> FocusedTextTargetRole
   let selectedText: (FocusedTextElementID) -> String?
   let selectedRange: (FocusedTextElementID) -> FocusedTextRange?
+  let value: (FocusedTextElementID) -> String?
+  let text: (FocusedTextElementID, FocusedTextRange) -> String?
   let textContext: (FocusedTextElementID, FocusedTextRange) -> FocusedTextContext
   let canSetSelectedText: (FocusedTextElementID) -> Bool
   let canSetSelectedRange: (FocusedTextElementID) -> Bool
+  let canSetValue: (FocusedTextElementID) -> Bool
   let setSelectedText: (FocusedTextElementID, String) -> Bool
   let setSelectedRange: (FocusedTextElementID, FocusedTextRange) -> Bool
+  let setValue: (FocusedTextElementID, String) -> Bool
+  let waitForMutation: (Duration) async -> Void
   let release: (FocusedTextElementID) -> Void
 
   static var live: Self {
@@ -78,9 +126,13 @@ struct FocusedTextInsertionEnvironment {
     return Self(
       focusedElement: { registry.focusedElement() },
       sameElement: { registry.sameElement($0, $1) },
+      processIdentifier: { registry.processIdentifier($0) },
       isSecure: { registry.isSecure($0) },
+      role: { registry.role($0) },
       selectedText: { registry.selectedText($0) },
       selectedRange: { registry.selectedRange($0) },
+      value: { registry.value($0) },
+      text: { registry.text($1, on: $0) },
       textContext: { registry.textContext($1, on: $0) },
       canSetSelectedText: {
         registry.isSettable(kAXSelectedTextAttribute as CFString, on: $0)
@@ -88,8 +140,15 @@ struct FocusedTextInsertionEnvironment {
       canSetSelectedRange: {
         registry.isSettable(kAXSelectedTextRangeAttribute as CFString, on: $0)
       },
+      canSetValue: {
+        registry.isSettable(kAXValueAttribute as CFString, on: $0)
+      },
       setSelectedText: { registry.setSelectedText($1, on: $0) },
       setSelectedRange: { registry.setSelectedRange($1, on: $0) },
+      setValue: { registry.setValue($1, on: $0) },
+      waitForMutation: { duration in
+        try? await Task.sleep(for: duration)
+      },
       release: { registry.release($0) }
     )
   }
@@ -109,9 +168,13 @@ final class FocusedTextInsertionCapability {
 
   private struct PreparedTarget {
     let element: FocusedTextElementID
+    let processIdentifier: pid_t
+    let profile: FocusedTextTargetProfile
     let selectedText: String
     let selectedRange: FocusedTextRange
     let textContext: FocusedTextContext
+    let value: String?
+    let permitsWholeValueMutation: Bool
   }
 
   private struct UndoReceipt {
@@ -127,6 +190,9 @@ final class FocusedTextInsertionCapability {
   private var undoReceipt: UndoReceipt?
 
   private static let maximumSelectionUTF16Length = 16_384
+  private static let maximumWholeValueUTF16Length = 16_384
+  private static let verificationRetryCount = 3
+  private static let verificationRetryDelay: Duration = .milliseconds(10)
 
   init(environment: FocusedTextInsertionEnvironment? = nil) {
     self.environment = environment ?? .live
@@ -144,9 +210,21 @@ final class FocusedTextInsertionCapability {
       environment.release(element)
       return .secureField
     }
+    let profile = FocusedTextTargetProfile(
+      role: environment.role(element),
+      canSetSelectedText: environment.canSetSelectedText(element),
+      canSetSelectedRange: environment.canSetSelectedRange(element),
+      canSetValue: environment.canSetValue(element)
+    )
     guard
-      environment.canSetSelectedText(element),
-      environment.canSetSelectedRange(element),
+      profile.canSetSelectedRange,
+      profile.canSetSelectedText || profile.canSetValue
+    else {
+      environment.release(element)
+      return .unsupportedField
+    }
+    guard
+      let processIdentifier = environment.processIdentifier(element),
       let selectedRange = environment.selectedRange(element),
       selectedRange.location >= 0,
       selectedRange.length >= 0,
@@ -160,11 +238,30 @@ final class FocusedTextInsertionCapability {
       return .unsupportedField
     }
 
+    let value = Self.validatedWholeValue(
+      environment.value(element),
+      selectedRange: selectedRange,
+      selectedText: selectedText
+    )
+    let permitsWholeValueMutation = Self.permitsWholeValueMutation(
+      profile: profile,
+      value: value,
+      selectedRange: selectedRange
+    )
+    guard profile.canSetSelectedText || permitsWholeValueMutation else {
+      environment.release(element)
+      return .unsupportedField
+    }
+
     preparedTarget = PreparedTarget(
       element: element,
+      processIdentifier: processIdentifier,
+      profile: profile,
       selectedText: selectedText,
       selectedRange: selectedRange,
-      textContext: environment.textContext(element, selectedRange)
+      textContext: environment.textContext(element, selectedRange),
+      value: value,
+      permitsWholeValueMutation: permitsWholeValueMutation
     )
     return .ready
   }
@@ -185,7 +282,7 @@ final class FocusedTextInsertionCapability {
     return mayRetain
   }
 
-  func insert(_ text: DictationText) -> FocusedTextInsertionOutcome {
+  func insert(_ text: DictationText) async -> FocusedTextInsertionOutcome {
     guard let preparedTarget else { return .noPreparedTarget }
     self.preparedTarget = nil
 
@@ -193,7 +290,9 @@ final class FocusedTextInsertionCapability {
       environment.release(preparedTarget.element)
       return .focusChanged
     }
-    let focusMatches = environment.sameElement(preparedTarget.element, focusedElement)
+    let focusMatches =
+      environment.sameElement(preparedTarget.element, focusedElement)
+      && environment.processIdentifier(focusedElement) == preparedTarget.processIdentifier
     environment.release(focusedElement)
     guard focusMatches else {
       environment.release(preparedTarget.element)
@@ -212,10 +311,7 @@ final class FocusedTextInsertionCapability {
       environment.release(preparedTarget.element)
       return .selectionChanged
     }
-    guard
-      environment.canSetSelectedText(preparedTarget.element),
-      environment.canSetSelectedRange(preparedTarget.element)
-    else {
+    guard environment.canSetSelectedRange(preparedTarget.element) else {
       environment.release(preparedTarget.element)
       return .unsupportedField
     }
@@ -226,31 +322,256 @@ final class FocusedTextInsertionCapability {
       environment.release(preparedTarget.element)
       return .failed
     }
-    guard environment.setSelectedText(preparedTarget.element, insertionText) else {
-      environment.release(preparedTarget.element)
-      return .failed
-    }
-
     let insertedRange = FocusedTextRange(
       location: preparedTarget.selectedRange.location,
       length: insertionLength
     )
     let expectedCaret = FocusedTextRange(location: insertedRange.endLocation, length: 0)
-    let movedCaret = environment.setSelectedRange(preparedTarget.element, expectedCaret)
+    let expectedValue = preparedTarget.value.flatMap {
+      Self.replacingSelection(
+        in: $0,
+        range: preparedTarget.selectedRange,
+        with: insertionText
+      )
+    }
 
     discardUndoReceipt()
-    guard movedCaret else {
-      environment.release(preparedTarget.element)
-      return .inserted(text: insertionText, canUndo: false)
+
+    if let expectedValue, preparedTarget.permitsWholeValueMutation {
+      return await insertWholeValue(
+        expectedValue,
+        preparedTarget: preparedTarget,
+        insertionText: insertionText,
+        insertedRange: insertedRange,
+        expectedCaret: expectedCaret
+      )
     }
-    undoReceipt = UndoReceipt(
-      element: preparedTarget.element,
-      replacedText: preparedTarget.selectedText,
+
+    if preparedTarget.profile.canSetSelectedText,
+      environment.canSetSelectedText(preparedTarget.element),
+      environment.setSelectedText(preparedTarget.element, insertionText)
+    {
+      _ = environment.setSelectedRange(preparedTarget.element, expectedCaret)
+      let verification = await verifyMutation(
+        preparedTarget,
+        insertedText: insertionText,
+        insertedRange: insertedRange,
+        expectedCaret: expectedCaret,
+        expectedValue: expectedValue
+      )
+      let evidence = FocusedTextInsertionEvidence(
+        method: .selectedText,
+        verification: verification.publicValue,
+        target: preparedTarget.profile
+      )
+
+      switch verification {
+      case .verified(let level):
+        let canUndo = level == .contentAndCaret
+        if canUndo {
+          undoReceipt = UndoReceipt(
+            element: preparedTarget.element,
+            replacedText: preparedTarget.selectedText,
+            insertedText: insertionText,
+            insertedRange: insertedRange,
+            expectedCaret: expectedCaret
+          )
+        } else {
+          environment.release(preparedTarget.element)
+        }
+        return .inserted(
+          FocusedTextInsertionResult(
+            text: insertionText,
+            canUndo: canUndo,
+            evidence: evidence
+          )
+        )
+      case .notObserved:
+        environment.release(preparedTarget.element)
+        return .mutationNotObserved(evidence)
+      case .unavailable:
+        environment.release(preparedTarget.element)
+        return .mutationUnverified(evidence)
+      case .secureField:
+        environment.release(preparedTarget.element)
+        return .secureField
+      }
+    }
+
+    environment.release(preparedTarget.element)
+    return .failed
+  }
+
+  private enum MutationVerificationResult: Equatable {
+    case verified(FocusedTextInsertionVerification)
+    case notObserved
+    case unavailable
+    case secureField
+
+    var publicValue: FocusedTextInsertionVerification {
+      switch self {
+      case .verified(let level):
+        level
+      case .notObserved:
+        .notObserved
+      case .unavailable, .secureField:
+        .unavailable
+      }
+    }
+  }
+
+  private func insertWholeValue(
+    _ expectedValue: String,
+    preparedTarget: PreparedTarget,
+    insertionText: String,
+    insertedRange: FocusedTextRange,
+    expectedCaret: FocusedTextRange
+  ) async -> FocusedTextInsertionOutcome {
+    let evidence: (FocusedTextInsertionVerification) -> FocusedTextInsertionEvidence = {
+      verification in
+      FocusedTextInsertionEvidence(
+        method: .wholeValue,
+        verification: verification,
+        target: preparedTarget.profile
+      )
+    }
+
+    guard !environment.isSecure(preparedTarget.element) else {
+      environment.release(preparedTarget.element)
+      return .secureField
+    }
+    guard let focusedElement = environment.focusedElement() else {
+      environment.release(preparedTarget.element)
+      return .focusChanged
+    }
+    let focusMatches =
+      environment.sameElement(preparedTarget.element, focusedElement)
+      && environment.processIdentifier(focusedElement) == preparedTarget.processIdentifier
+    environment.release(focusedElement)
+    guard focusMatches else {
+      environment.release(preparedTarget.element)
+      return .focusChanged
+    }
+    guard
+      environment.canSetValue(preparedTarget.element),
+      environment.value(preparedTarget.element) == preparedTarget.value,
+      (expectedValue as NSString).length <= Self.maximumWholeValueUTF16Length
+    else {
+      environment.release(preparedTarget.element)
+      return .selectionChanged
+    }
+    guard environment.setValue(preparedTarget.element, expectedValue) else {
+      environment.release(preparedTarget.element)
+      return .failed
+    }
+
+    _ = environment.setSelectedRange(preparedTarget.element, expectedCaret)
+    let verification = await verifyMutation(
+      preparedTarget,
       insertedText: insertionText,
       insertedRange: insertedRange,
-      expectedCaret: expectedCaret
+      expectedCaret: expectedCaret,
+      expectedValue: expectedValue
     )
-    return .inserted(text: insertionText, canUndo: true)
+    environment.release(preparedTarget.element)
+
+    switch verification {
+    case .verified(let level):
+      return .inserted(
+        FocusedTextInsertionResult(
+          text: insertionText,
+          canUndo: false,
+          evidence: evidence(level)
+        )
+      )
+    case .notObserved:
+      return .mutationNotObserved(evidence(.notObserved))
+    case .unavailable:
+      return .mutationUnverified(evidence(.unavailable))
+    case .secureField:
+      return .secureField
+    }
+  }
+
+  private func verifyMutation(
+    _ preparedTarget: PreparedTarget,
+    insertedText: String,
+    insertedRange: FocusedTextRange,
+    expectedCaret: FocusedTextRange,
+    expectedValue: String?
+  ) async -> MutationVerificationResult {
+    var readMutationState = false
+
+    for attempt in 0...Self.verificationRetryCount {
+      guard !Task.isCancelled else { return .unavailable }
+      if attempt > 0 {
+        await environment.waitForMutation(Self.verificationRetryDelay)
+      }
+      guard !environment.isSecure(preparedTarget.element) else {
+        return .secureField
+      }
+      guard let focusedElement = environment.focusedElement() else { continue }
+      let focusMatches =
+        environment.sameElement(preparedTarget.element, focusedElement)
+        && environment.processIdentifier(focusedElement) == preparedTarget.processIdentifier
+      environment.release(focusedElement)
+      guard focusMatches else { return .unavailable }
+
+      let insertedRangeText = environment.text(preparedTarget.element, insertedRange)
+      let currentValue = expectedValue.map { _ in environment.value(preparedTarget.element) }
+      readMutationState = readMutationState || insertedRangeText != nil || currentValue != nil
+      let contentMatches =
+        insertedRangeText == insertedText
+        || (expectedValue != nil && currentValue == expectedValue)
+      guard contentMatches else { continue }
+
+      return .verified(
+        environment.selectedRange(preparedTarget.element) == expectedCaret
+          ? .contentAndCaret
+          : .contentOnly
+      )
+    }
+
+    return readMutationState ? .notObserved : .unavailable
+  }
+
+  private static func validatedWholeValue(
+    _ value: String?,
+    selectedRange: FocusedTextRange,
+    selectedText: String
+  ) -> String? {
+    guard let value else { return nil }
+    let nsValue = value as NSString
+    guard
+      nsValue.length <= maximumWholeValueUTF16Length,
+      selectedRange.endLocation <= nsValue.length,
+      nsValue.substring(with: selectedRange.nsRange) == selectedText
+    else { return nil }
+    return value
+  }
+
+  private static func permitsWholeValueMutation(
+    profile: FocusedTextTargetProfile,
+    value: String?,
+    selectedRange: FocusedTextRange
+  ) -> Bool {
+    guard profile.canSetValue, let value else { return false }
+    guard profile.role == .textField || profile.role == .textArea else { return false }
+    let length = (value as NSString).length
+    return profile.role == .textField
+      || length == 0
+      || (selectedRange.location == 0 && selectedRange.length == length)
+  }
+
+  private static func replacingSelection(
+    in value: String,
+    range: FocusedTextRange,
+    with text: String
+  ) -> String? {
+    let nsValue = value as NSString
+    guard range.endLocation <= nsValue.length else { return nil }
+    let result = nsValue.replacingCharacters(in: range.nsRange, with: text)
+    return (result as NSString).length <= maximumWholeValueUTF16Length ? result : nil
   }
 
   func undoLastInsertion() -> FocusedTextUndoOutcome {
@@ -353,6 +674,28 @@ private final class AccessibilityElementRegistry {
     return CFEqual(lhs, rhs)
   }
 
+  func processIdentifier(_ id: FocusedTextElementID) -> pid_t? {
+    guard let element = elements[id] else { return nil }
+    var processIdentifier = pid_t()
+    guard AXUIElementGetPid(element, &processIdentifier) == .success else { return nil }
+    return processIdentifier
+  }
+
+  func role(_ id: FocusedTextElementID) -> FocusedTextTargetRole {
+    guard let element = elements[id] else { return .other }
+    let role = copyStringAttribute(kAXRoleAttribute as CFString, from: element)
+    if role == kAXTextFieldRole {
+      return .textField
+    }
+    if role == kAXTextAreaRole {
+      return .textArea
+    }
+    if role == "AXWebArea" {
+      return .webArea
+    }
+    return .other
+  }
+
   func isSecure(_ id: FocusedTextElementID) -> Bool {
     guard let element = elements[id] else { return true }
 
@@ -397,6 +740,16 @@ private final class AccessibilityElementRegistry {
     return FocusedTextRange(location: range.location, length: range.length)
   }
 
+  func value(_ id: FocusedTextElementID) -> String? {
+    guard let element = elements[id] else { return nil }
+    return copyStringAttribute(kAXValueAttribute as CFString, from: element)
+  }
+
+  func text(_ range: FocusedTextRange, on id: FocusedTextElementID) -> String? {
+    guard let element = elements[id] else { return nil }
+    return string(for: range, in: element)
+  }
+
   func textContext(
     _ range: FocusedTextRange,
     on id: FocusedTextElementID
@@ -409,11 +762,15 @@ private final class AccessibilityElementRegistry {
       string(
         for: FocusedTextRange(location: precedingStart, length: precedingLength),
         in: element
-      ) ?? ""
+      ) ?? stringFromValue(range: .init(location: precedingStart, length: precedingLength), id: id)
+      ?? ""
     let followingText =
       string(
         for: FocusedTextRange(location: range.endLocation, length: 2),
         in: element
+      ) ?? stringFromValue(
+        range: .init(location: range.endLocation, length: 2),
+        id: id
       ) ?? ""
     return FocusedTextContext(
       precedingText: precedingText,
@@ -451,6 +808,15 @@ private final class AccessibilityElementRegistry {
     ) == .success
   }
 
+  func setValue(_ value: String, on id: FocusedTextElementID) -> Bool {
+    guard let element = elements[id] else { return false }
+    return AXUIElementSetAttributeValue(
+      element,
+      kAXValueAttribute as CFString,
+      value as CFString
+    ) == .success
+  }
+
   func release(_ id: FocusedTextElementID) {
     elements[id] = nil
   }
@@ -483,5 +849,15 @@ private final class AccessibilityElementRegistry {
       ) == .success
     else { return nil }
     return value as? String
+  }
+
+  private func stringFromValue(
+    range: FocusedTextRange,
+    id: FocusedTextElementID
+  ) -> String? {
+    guard let value = value(id) else { return nil }
+    let nsValue = value as NSString
+    guard range.endLocation <= nsValue.length else { return nil }
+    return nsValue.substring(with: range.nsRange)
   }
 }

@@ -78,6 +78,11 @@ default.
   Prefer native or browser-structured data before Accessibility, OCR, or pixels.
 - Keep assistant commands and focused-field dictation as separate request kinds.
   Never make dictation submit, send, or press Return implicitly.
+- Treat an Accessibility setter result as an attempted mutation, not proof of
+  insertion. Report success only after bounded readback verifies the text. A
+  whole-value adapter must remain limited to small plain text fields, empty
+  text areas, or full-value text-area replacement; never flatten a partially
+  edited rich or ambiguous surface.
 - Request permissions only for an implemented feature after explicit user
   activation. New entitlements, TCC permissions, networking, credentials,
   persistence, or externally visible effects require denial/recovery behavior,

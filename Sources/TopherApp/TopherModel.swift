@@ -126,6 +126,7 @@ final class TopherModel: ObservableObject {
   private var assistantShortcutEventsTask: Task<Void, Never>?
   private var dictationShortcutEventsTask: Task<Void, Never>?
   private var commandExecutionTask: Task<Void, Never>?
+  private var dictationInsertionTask: Task<Void, Never>?
   private var voiceFeedbackDismissalTask: Task<Void, Never>?
   private var voiceFeedbackGeneration: UInt64 = 0
   private var activePermissionFailure: MicrophonePermissionState?
@@ -228,6 +229,7 @@ final class TopherModel: ObservableObject {
     assistantShortcutEventsTask?.cancel()
     dictationShortcutEventsTask?.cancel()
     commandExecutionTask?.cancel()
+    dictationInsertionTask?.cancel()
     voiceFeedbackDismissalTask?.cancel()
   }
 
@@ -416,6 +418,7 @@ final class TopherModel: ObservableObject {
 
   private var canStartNewInteraction: Bool {
     !phase.isBusy && !captureController.isBusy && commandExecutionTask == nil
+      && dictationInsertionTask == nil
   }
 
   func handleShortcutDown(_ owner: ShortcutOwner) {
@@ -733,6 +736,30 @@ final class TopherModel: ObservableObject {
     captureMetrics: VoiceCaptureMetrics? = nil,
     presentsGlobally: Bool
   ) {
+    guard dictationInsertionTask == nil else {
+      focusedTextInsertion.discardPreparedTarget()
+      return
+    }
+    dictationInsertionTask = Task { [weak self] in
+      guard let self else { return }
+      await processDictation(
+        transcript,
+        preparation: preparation,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        presentsGlobally: presentsGlobally
+      )
+      dictationInsertionTask = nil
+    }
+  }
+
+  private func processDictation(
+    _ transcript: String,
+    preparation: FocusedTextPreparationOutcome?,
+    confidence: Double? = nil,
+    captureMetrics: VoiceCaptureMetrics? = nil,
+    presentsGlobally: Bool
+  ) async {
     let clock = ContinuousClock()
     let startedAt = clock.now
     phase = .executing
@@ -786,15 +813,16 @@ final class TopherModel: ObservableObject {
       return
     }
 
-    switch focusedTextInsertion.insert(dictationText) {
-    case .inserted(let insertedText, let canUndo):
-      canUndoDictation = canUndo
+    let insertionOutcome = await focusedTextInsertion.insert(dictationText)
+    canUndoDictation = focusedTextInsertion.canUndo
+    switch insertionOutcome {
+    case .inserted(let result):
       let message = "Inserted dictation."
       phase = .success(message)
       if presentsGlobally { presentVoiceResult(.success(message)) }
       recordDictationIfEnabled(
         transcript: transcript,
-        interpretedTranscript: insertedText == transcript ? nil : insertedText,
+        interpretedTranscript: result.text == transcript ? nil : result.text,
         interpretationReason: dictationText.removedRepeatedSpeech
           ? .dictationDisfluencyCleanup
           : nil,
@@ -802,7 +830,31 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         outcome: .dictationInserted,
         capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
+        insertionEvidence: result.evidence,
         processingDuration: startedAt.duration(to: clock.now)
+      )
+
+    case .mutationNotObserved(let evidence):
+      presentDictationFallback(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        failureReason: .mutationNotObserved,
+        insertionEvidence: evidence,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
+      )
+
+    case .mutationUnverified(let evidence):
+      presentUnverifiedDictation(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        insertionEvidence: evidence,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
       )
 
     case .secureField:
@@ -872,6 +924,7 @@ final class TopherModel: ObservableObject {
     confidence: Double?,
     captureMetrics: VoiceCaptureMetrics?,
     failureReason: DictationFailureReason,
+    insertionEvidence: FocusedTextInsertionEvidence? = nil,
     processingDuration: Duration,
     presentsGlobally: Bool
   ) {
@@ -890,6 +943,37 @@ final class TopherModel: ObservableObject {
       outcome: .dictationFallback,
       capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
       failureReason: failureReason,
+      insertionEvidence: insertionEvidence,
+      processingDuration: processingDuration
+    )
+  }
+
+  private func presentUnverifiedDictation(
+    _ dictationText: DictationText,
+    transcript: String,
+    confidence: Double?,
+    captureMetrics: VoiceCaptureMetrics?,
+    insertionEvidence: FocusedTextInsertionEvidence,
+    processingDuration: Duration,
+    presentsGlobally: Bool
+  ) {
+    pendingDictationText = dictationText.value
+    let message =
+      "Topher couldn’t verify whether that text appeared. Check the target before copying the pending dictation."
+    phase = .failure(message)
+    if presentsGlobally { presentVoiceResult(.failure(message)) }
+    recordDictationIfEnabled(
+      transcript: transcript,
+      interpretedTranscript: dictationText.value == transcript ? nil : dictationText.value,
+      interpretationReason: dictationText.removedRepeatedSpeech
+        ? .dictationDisfluencyCleanup
+        : nil,
+      confidence: confidence,
+      captureMetrics: captureMetrics,
+      outcome: .dictationFallback,
+      capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
+      failureReason: .mutationUnverified,
+      insertionEvidence: insertionEvidence,
       processingDuration: processingDuration
     )
   }
@@ -903,6 +987,7 @@ final class TopherModel: ObservableObject {
     outcome: AssistantCommandTraceOutcome,
     capabilityIdentifier: String?,
     failureReason: DictationFailureReason? = nil,
+    insertionEvidence: FocusedTextInsertionEvidence? = nil,
     processingDuration: Duration
   ) {
     guard let developerDiagnostics else { return }
@@ -920,7 +1005,8 @@ final class TopherModel: ObservableObject {
           outcome: outcome,
           commandKind: nil,
           capabilityIdentifier: capabilityIdentifier,
-          dictationFailureReason: failureReason
+          dictationFailureReason: failureReason,
+          dictationInsertionEvidence: insertionEvidence
         ),
         processingDurationMilliseconds: durationMilliseconds,
         using: token

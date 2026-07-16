@@ -260,13 +260,21 @@ not parallel implementation projects. The canonical contracts are
   stale Accessibility consent, provide an explicit Topher-only reset during
   checked installation, and show removal/relaunch guidance when the Settings
   row looks enabled but macOS still denies the current binary.
+- Complete in build 13: stop treating an Accessibility setter result as proof
+  of insertion; capture a fixed target role/capability profile, choose exactly
+  one bounded insertion method, revalidate process identity, verify content and
+  caret with at most 30 ms of retry, and retain typed uncertain results for
+  review. Add a 16,384-UTF-16-unit whole-value adapter only for plain text
+  fields, empty text areas, and full-value text-area replacement.
 - Pending: benchmark a separately optional smart-formatting tier using the full
   finalized utterance and typed destination-app identity. Precommit a deadline,
   fall back to the fast tier on timeout or uncertainty, retain raw text and
   typed changes, and do not acquire screen content solely for prose formatting.
-- Pending: run the app compatibility matrix across native AppKit fields, Chrome
-  form controls/contenteditable, editors, chat apps, multiline fields, selected
-  replacement, and unsupported/secure surfaces.
+- Pending live gate: run the app compatibility matrix across native AppKit
+  fields, Chrome form controls/contenteditable, ChatGPT/Codex, Notion, editors,
+  multiline fields, selected replacement, and unsupported/secure surfaces.
+  Check fixed method/verification/role diagnostics whenever visible insertion
+  differs from Topher's outcome.
 - Pending: benchmark punctuation, endpointing, proper nouns, developer terms,
   insertion latency, undo, and repeated sessions using the speech corpus.
 

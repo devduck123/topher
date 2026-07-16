@@ -11,9 +11,9 @@ request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 223 Swift tests. The
-latest complete local run passed all 223 tests; Thread Sanitizer and final
-app-bundle checks are rerun at each checkpoint. Direct Apple
+Status: the 0.4.0 development tree currently defines 231 Swift tests. Build 13
+passes all 231 normally and under Thread Sanitizer; Xcode Debug, universal
+Release, static analysis, and strict installed-bundle checks also pass. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
 were verified for the strictly checked Release bundle. A live Core Audio
@@ -41,6 +41,11 @@ The comparative speech benchmark is still open.
   secure/protected fields before capture, revalidates focus, selection, nearby
   text, and secure state before insertion, never presses Return, and never
   submits or sends.
+- Verified cross-app insertion: Topher treats an Accessibility setter as an
+  attempt, not proof, and reports success only after bounded text readback. It
+  uses the standard value attribute only for a small plain text field, an empty
+  text area, or full-value text-area replacement; rich and ambiguous surfaces
+  fall back without a second mutation attempt.
 - Context-aware word spacing at the insertion boundary, one guarded undo for
   the latest insertion, and a local review/copy fallback for editors Topher
   cannot safely mutate. Clipboard writes happen only after pressing **Copy**.
@@ -125,10 +130,14 @@ Topher's two global shortcuts work while another application is focused; the
 menu does not need to be open. The **assistant command** hold sends finalized
 speech through the typed resolver and policy. The **dictation** hold sends it
 through conservative formatting and a narrow Accessibility capability that
-replaces the captured selection without submitting.
+replaces the captured selection without submitting. A setter result alone is
+never reported as success; Topher verifies the resulting text and exposes an
+explicit pending review when the host app cannot be observed reliably.
 
-This is the first safe global-dictation foundation, not yet a claim of broad
-Wispr-style editor compatibility or benchmarked transcription quality. Filler
+This is a safer cross-app dictation foundation, not yet a claim of broad
+Wispr-style editor compatibility or benchmarked transcription quality. Live
+acceptance in ChatGPT/Codex, Notion, Chrome, and rich editors remains pending.
+Filler
 removal, grammar/tone rewriting, context-aware punctuation, spoken punctuation
 commands, multi-paragraph editing,
 always-on wake listening, remote chat, conversational follow-ups, browser-page
@@ -225,9 +234,11 @@ For an interactive smoke test:
 8. Record a different hold-to-dictate shortcut, explicitly allow Topher under
    **Privacy & Security → Accessibility**, focus a normal editable field in
    another app, hold the dictation shortcut, say a sentence, and release.
-   Confirm text is inserted once without Return being pressed. Repeat with a
-   selection, with the caret next to an existing word, and with a password
-   field. Use **Undo Dictation** before moving the caret. If an editor is not
+   Confirm text is inserted once without Return being pressed. Repeat in an
+   empty ChatGPT/Codex composer, an empty Notion block, a Chrome search field,
+   and Notes; then repeat with a selection, with the caret next to an existing
+   word, and with a password field. Use **Undo Dictation** before moving the
+   caret only when Topher offers it. If an editor is not
    supported, review the pending text in Topher and press **Copy** explicitly.
    If Settings shows Topher enabled while the app still reports denial, quit
    Topher, select its stale row and click **−**, relaunch, and allow it again.
@@ -248,7 +259,10 @@ contains only the `com.apple.security.device.audio-input` entitlement needed
 for capture. The direct `SpeechAnalyzer` path does not request legacy
 `SFSpeechRecognizer` authorization. Topher does not request Automation/Apple
 Events or Screen Recording access. Accessibility is used only for the focused
-text element, selection, immediate text boundary, insertion, and guarded undo.
+text element, selection, immediate text boundary, a bounded plain value when
+its role permits the safe adapter, insertion, verification, and guarded undo.
+A plain value is limited to 16,384 UTF-16 units, exists transiently in memory,
+and is never separately logged or persisted.
 
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
 not written to disk. Partial transcripts exist transiently in process memory
@@ -307,7 +321,9 @@ record contains the exact finalized voice/manual command or non-secure
 dictation, the interpreted or inserted text when Topher used different text,
 an available confidence summary, its source, an ephemeral launch-session ID, a
 fixed typed outcome, fixed command/capability metadata, typed unsupported,
-dictation-fallback, capture-failure, and conservative-cleanup reasons, whether
+dictation-fallback, capture-failure, and conservative-cleanup reasons, the
+fixed dictation insertion method, verification result, and content-free target
+role/capability profile, whether
 the maximum duration auto-finalized the request, optional local
 transcript/action ratings and fixed action-issue tags, capture-stage and
 processing durations, and app version/build. It never contains raw audio,
@@ -382,11 +398,13 @@ mental model.
 - [Build 10 dictation-resilience and dogfood-corpus verification](docs/evidence/2026-07-16-build-10-dictation-resilience-and-dogfood-corpus.md)
 - [Build 11 fast dictation-polish verification](docs/evidence/2026-07-16-build-11-fast-dictation-polish.md)
 - [Build 12 Accessibility-identity recovery verification](docs/evidence/2026-07-16-build-12-accessibility-identity-recovery.md)
+- [Build 13 verified cross-app dictation verification](docs/evidence/2026-07-16-build-13-verified-cross-app-dictation.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)
 - [Bounded dictation recovery and dogfood-corpus decision](docs/decisions/0014-bounded-dictation-recovery-and-dogfood-corpora.md)
 - [Latency-budgeted dictation-polish decision](docs/decisions/0015-layer-dictation-polish-under-a-latency-budget.md)
+- [Verified Accessibility mutation decision](docs/decisions/0016-verify-accessibility-dictation-mutations.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

@@ -41,6 +41,12 @@ development build. There is not yet a notarized public binary release.
   selection, immediate surrounding text, and secure-field state are revalidated
   before insertion; a mismatch fails to a local preview instead of mutating a
   guessed target.
+- Accessibility mutation success is verified by bounded text readback instead
+  of trusting the framework setter result. The plain-value adapter may
+  transiently read at most 16,384 UTF-16 units and is restricted to writable
+  text fields, empty text areas, or full-value text-area replacement. It is not
+  used for web areas, partially selected nonempty text areas, or protected
+  content, and the captured value is never logged or persisted separately.
 - Dictation never synthesizes Return, submits, sends, or mutates the clipboard
   automatically. Copy is a separate explicit action, and guarded undo refuses
   to run after the focus, caret, or inserted content changes.

@@ -159,8 +159,28 @@
       "utterance": "Chrome text field compatibility check.",
       "setup": "Focus a non-secure Chrome text input and use the dictation shortcut.",
       "expectedStatus": "supported",
-      "expectedResult": "Insert into the focused field or retain a reviewable fallback with a typed reason.",
-      "checks": ["No automatic clipboard write", "No Return key", "Failure reason is visible"]
+      "expectedResult": "Insert once into the focused Chrome field and report verified insertion.",
+      "checks": ["Correct field", "One insertion", "No automatic clipboard write", "No Return key"]
+    },
+    {
+      "id": "dictation-codex-composer",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Cross app dictation should work in this composer.",
+      "setup": "Focus an empty non-secure Codex or ChatGPT composer and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert once into the focused composer and report verified insertion without sending.",
+      "checks": ["Correct composer", "One insertion", "No submission", "Diagnostics include fixed insertion evidence"]
+    },
+    {
+      "id": "dictation-notion-block",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Topher can dictate into this Notion block.",
+      "setup": "Focus an empty non-secure Notion text block and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert once into the focused Notion block and report verified insertion without changing another block.",
+      "checks": ["Correct block", "One insertion", "No submission", "Diagnostics include fixed insertion evidence"]
     },
     {
       "id": "dictation-secure-field",

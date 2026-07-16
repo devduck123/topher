@@ -104,6 +104,9 @@ For every clip capture:
   context-aware tier and include timeout/fallback counts.
 - Focused-field insertion success by AppKit field, Chrome form control and
   contenteditable surface, code editor, chat composer, and multiline editor.
+- Visible insertion success versus Topher's typed outcome, split by fixed
+  insertion method, verification level, and target role. False-positive success
+  acceptance is zero; report unverifiable and not-observed results separately.
 - Selection replacement, guarded undo, focus-change fallback, secure-field
   refusal, and proof that no path synthesizes Return or writes the clipboard
   without the explicit Copy action.

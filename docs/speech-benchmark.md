@@ -15,6 +15,10 @@ rating, and retain raw versus formatted/inserted text when those differ. A good
 insertion rating is not an accuracy claim: the controlled corpus must evaluate
 recognition, formatting, and focused-field behavior separately.
 
+Measure recognition and polish independently. Score recognition against the
+raw final transcript; score polish against the inserted text and the recorded
+typed reason. Otherwise a cleanup improvement can hide an ASR regression.
+
 ## Corpus
 
 The checked-in [`dogfood/manual-corpus.json`](../dogfood/manual-corpus.json) is
@@ -46,6 +50,11 @@ domains, selected-text replacement, text adjacent to an existing word, two
 short paragraphs, and an utterance that should not receive terminal
 punctuation. Test the exact same audio independently from assistant commands so
 intent correction cannot hide recognition errors.
+
+Include clear one- to three-word restarts, repeated stutters, terminal repeated
+words, rhetorical repetition, repeated acronyms/numbers, punctuation and
+newline boundaries, and real user stutters. Preserve the user's actual intended
+repetition even when the raw transcript contains duplicate words.
 
 Expand this into 40–60 phrases covering supported navigation/search, developer
 terms, personal sites/apps, ambiguous negatives that must not execute, and
@@ -90,6 +99,9 @@ For every clip capture:
 - Partial-result revisions and early truncation.
 - Raw-to-formatted dictation diff, invented punctuation/capitalization count,
   missing/extra boundary spaces, and semantic text changes (acceptance: zero).
+- Disfluency-removal precision and recall, intentional-repetition preservation,
+  and polish-only CPU latency. Report the fast tier separately from any future
+  context-aware tier and include timeout/fallback counts.
 - Focused-field insertion success by AppKit field, Chrome form control and
   contenteditable surface, code editor, chat composer, and multiline editor.
 - Selection replacement, guarded undo, focus-change fallback, secure-field
@@ -117,6 +129,11 @@ with a written reason recorded before comparing candidates.
 - Warm speech-onset-to-first-partial latency: p50 at most 300 ms and p95 at most
   600 ms.
 - Warm key-up-to-final latency: p50 at most 350 ms and p95 at most 800 ms.
+- Fast deterministic polish latency: p95 at most 10 ms for a maximum-length
+  accepted utterance on the target Mac, with no asynchronous or network wait.
+- Polish safety: 100% preservation of intentional/ambiguous repetition and zero
+  semantic rewrites in the frozen corpus. Report recall rather than widening
+  rules to chase every stutter.
 - Cold start to first usable partial: p95 at most 2 seconds.
 - Reliability: 100 consecutive sessions complete or fail visibly, with zero
   wedged sessions; sleep/wake and microphone changes recover within one retry.

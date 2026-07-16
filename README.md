@@ -11,8 +11,8 @@ request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 217 Swift tests. The
-latest complete local run passed all 217 tests; Thread Sanitizer and final
+Status: the 0.4.0 development tree currently defines 223 Swift tests. The
+latest complete local run passed all 223 tests; Thread Sanitizer and final
 app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -33,6 +33,10 @@ The comparative speech benchmark is still open.
 - A distinct user-recorded global dictation shortcut that works while another
   app is focused. Dictation bypasses the command resolver, conservatively
   formats the transcript, and replaces only the selection captured at key-down.
+- Default-on, persisted, local repeated-speech cleanup for clear adjacent
+  restarts such as “I I think.” This bounded synchronous pass adds no network
+  or model wait, preserves ambiguous and intentional repetition, and can be
+  disabled with **Clean repeated speech** for presentation-only transcription.
 - An explicit Accessibility permission boundary for dictation. Topher rejects
   secure/protected fields before capture, revalidates focus, selection, nearby
   text, and secure state before insertion, never presses Return, and never
@@ -124,8 +128,9 @@ through conservative formatting and a narrow Accessibility capability that
 replaces the captured selection without submitting.
 
 This is the first safe global-dictation foundation, not yet a claim of broad
-Wispr-style editor compatibility or benchmarked transcription quality. Rich
-dictation formatting, spoken punctuation commands, multi-paragraph editing,
+Wispr-style editor compatibility or benchmarked transcription quality. Filler
+removal, grammar/tone rewriting, context-aware punctuation, spoken punctuation
+commands, multi-paragraph editing,
 always-on wake listening, remote chat, conversational follow-ups, browser-page
 reading, broader Accessibility context, and visual screen understanding remain
 separate future work.
@@ -286,12 +291,13 @@ icon while enabled. Re-enabling after an opt-out requires confirmation. Each
 record contains the exact finalized voice/manual command or non-secure
 dictation, the interpreted or inserted text when Topher used different text,
 an available confidence summary, its source, an ephemeral launch-session ID, a
-  fixed typed outcome, fixed command/capability metadata, typed unsupported,
-  dictation-fallback, and capture-failure reasons, whether the maximum duration
-  auto-finalized the request, optional local transcript/action ratings and fixed
-  action-issue tags, capture-stage and processing
-durations, and app version/build. It never contains raw audio, partials, or content Topher
-separately captures from a page, screen, message, or document. Topher does not
+fixed typed outcome, fixed command/capability metadata, typed unsupported,
+dictation-fallback, capture-failure, and conservative-cleanup reasons, whether
+the maximum duration auto-finalized the request, optional local
+transcript/action ratings and fixed action-issue tags, capture-stage and
+processing durations, and app version/build. It never contains raw audio,
+partials, or content Topher separately captures from a page, screen, message,
+or document. Topher does not
 append constructed destination URLs, Keychain/config values, or detailed
 framework errors. Secure-field dictation is deliberately excluded, but other
 user-authored text can itself contain a query, URL, pasted content, or secret.
@@ -359,10 +365,12 @@ mental model.
 - [Build 8 application-awareness verification](docs/evidence/2026-07-15-build-8-application-awareness.md)
 - [Build 9 global-dictation verification](docs/evidence/2026-07-15-build-9-global-dictation-foundation.md)
 - [Build 10 dictation-resilience and dogfood-corpus verification](docs/evidence/2026-07-16-build-10-dictation-resilience-and-dogfood-corpus.md)
+- [Build 11 fast dictation-polish verification](docs/evidence/2026-07-16-build-11-fast-dictation-polish.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)
 - [Bounded dictation recovery and dogfood-corpus decision](docs/decisions/0014-bounded-dictation-recovery-and-dogfood-corpora.md)
+- [Latency-budgeted dictation-polish decision](docs/decisions/0015-layer-dictation-polish-under-a-latency-budget.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

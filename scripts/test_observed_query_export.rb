@@ -48,6 +48,7 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
         "transcript" => "Go to eBay",
         "recordedAt" => "2026-07-16T00:00:00Z",
         "outcome" => "capabilitySucceeded",
+        "interpretationReason" => "dictationDisfluencyCleanup",
         "commandKind" => "openWebsite",
         "actionWasCorrect" => false,
         "actionIssueReason" => "wrongDestination",
@@ -77,6 +78,10 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
   assert(document.fetch("queries").length == 1, "only the command should be exported")
   command = document.fetch("queries").first
   assert(command["observationCount"] == 1, "command observation count")
+  assert(
+    command.dig("interpretationReasons", "dictationDisfluencyCleanup") == 1,
+    "fixed polish metadata"
+  )
   assert(command.dig("actionIssueReasons", "wrongDestination") == 1, "fixed issue metadata")
   assert(command["automaticFinalizationCount"] == 1, "automatic finalization metadata")
   assert(File.stat(output).mode & 0o777 == 0o600, "output file mode")

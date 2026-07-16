@@ -112,6 +112,7 @@ final class TopherModel: ObservableObject {
   @Published private(set) var accessibilityPermissionState: AccessibilityPermissionState
   @Published private(set) var pendingDictationText: String?
   @Published private(set) var canUndoDictation = false
+  @Published private(set) var isDictationPolishEnabled: Bool
 
   private let commandProcessor: AssistantCommandProcessor
   private let captureController: PushToTalkCaptureController
@@ -143,6 +144,7 @@ final class TopherModel: ObservableObject {
     voiceTranscription: VoiceTranscriptionClient? = nil,
     listeningTimeout: Duration = .seconds(30),
     dictationListeningTimeout: Duration = .seconds(120),
+    dictationPolishEnabled: Bool = true,
     finalizationTimeout: Duration = .seconds(8),
     voiceFeedbackResultDuration: Duration = .seconds(3),
     developerDiagnostics: DeveloperDiagnosticsController? = nil,
@@ -174,6 +176,7 @@ final class TopherModel: ObservableObject {
     self.developerDiagnostics = developerDiagnostics
     self.voiceFeedbackResultDuration = voiceFeedbackResultDuration
     self.dictationListeningTimeout = dictationListeningTimeout
+    self.isDictationPolishEnabled = dictationPolishEnabled
     let accessibilityPermission = accessibilityPermission ?? AccessibilityPermissionClient()
     self.accessibilityPermission = accessibilityPermission
     self.focusedTextInsertion = focusedTextInsertion ?? FocusedTextInsertionCapability()
@@ -345,7 +348,13 @@ final class TopherModel: ObservableObject {
   }
 
   func copyPendingDictation() {
-    guard let pendingDictationText, let text = try? DictationText(pendingDictationText) else {
+    guard
+      let pendingDictationText,
+      let text = try? DictationText(
+        pendingDictationText,
+        polishPolicy: .presentationOnly
+      )
+    else {
       return
     }
     if dictationClipboard.copy(text) {
@@ -357,6 +366,10 @@ final class TopherModel: ObservableObject {
 
   func clearPendingDictation() {
     pendingDictationText = nil
+  }
+
+  func setDictationPolishEnabled(_ enabled: Bool) {
+    isDictationPolishEnabled = enabled
   }
 
   func undoLastDictation() {
@@ -661,7 +674,12 @@ final class TopherModel: ObservableObject {
         let mayRetain =
           dictationPreparation != .ready
           || focusedTextInsertion.discardPreparedTargetForRecovery()
-        if mayRetain, let recoveredText = try? DictationText(recoverableTranscript) {
+        if mayRetain,
+          let recoveredText = try? DictationText(
+            recoverableTranscript,
+            polishPolicy: .presentationOnly
+          )
+        {
           pendingDictationText = recoveredText.value
           recoveredMessage =
             "Transcription stopped before finalizing. Open Topher to review or copy the recovered text."
@@ -724,7 +742,10 @@ final class TopherModel: ObservableObject {
 
     let dictationText: DictationText
     do {
-      dictationText = try DictationText(transcript)
+      dictationText = try DictationText(
+        transcript,
+        polishPolicy: isDictationPolishEnabled ? .conservative : .presentationOnly
+      )
     } catch DictationTextError.tooLong {
       focusedTextInsertion.discardPreparedTarget()
       let message = "That dictation is too long to insert safely. Try a shorter hold."
@@ -774,6 +795,9 @@ final class TopherModel: ObservableObject {
       recordDictationIfEnabled(
         transcript: transcript,
         interpretedTranscript: insertedText == transcript ? nil : insertedText,
+        interpretationReason: dictationText.removedRepeatedSpeech
+          ? .dictationDisfluencyCleanup
+          : nil,
         confidence: confidence,
         captureMetrics: captureMetrics,
         outcome: .dictationInserted,
@@ -858,6 +882,9 @@ final class TopherModel: ObservableObject {
     recordDictationIfEnabled(
       transcript: transcript,
       interpretedTranscript: dictationText.value == transcript ? nil : dictationText.value,
+      interpretationReason: dictationText.removedRepeatedSpeech
+        ? .dictationDisfluencyCleanup
+        : nil,
       confidence: confidence,
       captureMetrics: captureMetrics,
       outcome: .dictationFallback,
@@ -870,6 +897,7 @@ final class TopherModel: ObservableObject {
   private func recordDictationIfEnabled(
     transcript: String,
     interpretedTranscript: String?,
+    interpretationReason: TranscriptInterpretationReason? = nil,
     confidence: Double?,
     captureMetrics: VoiceCaptureMetrics?,
     outcome: AssistantCommandTraceOutcome,
@@ -884,6 +912,7 @@ final class TopherModel: ObservableObject {
       await developerDiagnostics.record(
         transcript: transcript,
         interpretedTranscript: interpretedTranscript,
+        interpretationReason: interpretationReason,
         transcriptionConfidence: confidence,
         captureMetrics: captureMetrics,
         source: .dictation,

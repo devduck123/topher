@@ -8,6 +8,8 @@ struct MenuContentView: View {
   @ObservedObject var vocabulary: SpeechVocabularyController
   @State private var isDictationShortcutConfigured =
     KeyboardShortcuts.getShortcut(for: .dictation) != nil
+  @AppStorage(DictationPolishSettings.preferenceKey) private var isDictationPolishEnabled =
+    DictationPolishSettings.defaultEnabled
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -50,6 +52,19 @@ struct MenuContentView: View {
         .foregroundStyle(.orange)
         .fixedSize(horizontal: false, vertical: true)
       }
+
+      Toggle("Clean repeated speech", isOn: $isDictationPolishEnabled)
+        .font(.caption)
+        .onChange(of: isDictationPolishEnabled) { _, enabled in
+          model.setDictationPolishEnabled(enabled)
+        }
+
+      Text(
+        "Fast local cleanup for clear stutters. Turn it off for presentation-only transcription; punctuation and grammar are not rewritten."
+      )
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
 
       HStack(spacing: 8) {
         Image(
@@ -179,6 +194,7 @@ struct MenuContentView: View {
     .frame(width: 390)
     .onAppear {
       isDictationShortcutConfigured = KeyboardShortcuts.getShortcut(for: .dictation) != nil
+      model.setDictationPolishEnabled(isDictationPolishEnabled)
       model.refreshVoiceReadiness()
       model.refreshAccessibilityPermission()
     }

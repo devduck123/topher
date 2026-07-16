@@ -44,6 +44,10 @@ development build. There is not yet a notarized public binary release.
 - Dictation never synthesizes Return, submits, sends, or mutates the clipboard
   automatically. Copy is a separate explicit action, and guarded undo refuses
   to run after the focus, caret, or inserted content changes.
+- Current dictation polish is an in-process bounded transform of finalized
+  user-authored text. It acquires no screen/app content, uses no network or
+  model, preserves the raw diagnostic form when recording is enabled, and has
+  a persisted presentation-only switch. Recovered partials are never polished.
 - Raw audio and screen captures are not persisted beyond the active request by
   default.
 - Sensitive content is excluded from ordinary logs.

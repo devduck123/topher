@@ -81,6 +81,7 @@ enum DeveloperActionIssueReason: String, CaseIterable, Codable, Equatable, Senda
   case missingText
   case other
   case spacingOrPunctuation
+  case unremovedDisfluency
   case wrongDestination
   case wrongField
   case wrongPosition

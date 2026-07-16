@@ -53,6 +53,7 @@ global dictation shortcut
      dictation maximum
   -> TopherModel request-kind routing
   -> DictationText bounded presentation normalization
+     plus optional fast conservative adjacent-restart cleanup
   -> focus + selection + nearby-text + secure-state revalidation
   -> FocusedTextInsertionCapability replaces only the selection
   -> inserted result with guarded one-step undo
@@ -75,7 +76,9 @@ finalization fails after a usable partial, `TopherModel` may expose it for local
 review only: assistant text returns to the manual field and dictation text to
 the pending preview. It never resolves, executes, or inserts that partial. A
 secure or newly secure dictation target discards it. Diagnostics record only a
-fixed content-free failure reason for this path.
+fixed content-free failure reason for this path. Because a partial is incomplete
+and may still be revised, recovery applies presentation normalization only and
+never disfluency cleanup.
 
 `AssistantCommandProcessor` owns the deterministic resolver-to-policy-to-
 capability transaction. Unsupported input is a `CommandResolution`, not an
@@ -389,14 +392,16 @@ contain a query, URL, pasted content, or secret and must be treated accordingly.
    not build a general broker for one provider.
 3. Complete in build 9: add focused-field dictation as a separate request kind,
    Accessibility boundary, and narrowly revalidated mutation capability.
-4. Add a second structured provider, then introduce shared context request,
+4. Complete in build 11: add a bounded synchronous restart-cleanup tier with a
+   persisted raw/presentation-only switch and raw-versus-polished diagnostics.
+5. Add a second structured provider, then introduce shared context request,
    freshness, and cancellation behavior if duplication is real.
-5. Add a Chrome adapter that returns typed tab/DOM data without arbitrary
+6. Add a Chrome adapter that returns typed tab/DOM data without arbitrary
    JavaScript.
-6. Add capability-specific confirmation before any message send or remote
+7. Add capability-specific confirmation before any message send or remote
    mutation.
-7. Normalize one read-only chat adapter into the shared request envelope.
-8. Evaluate wake-phrase activation after reliability and idle-energy gates.
+8. Normalize one read-only chat adapter into the shared request envelope.
+9. Evaluate wake-phrase activation after reliability and idle-energy gates.
 
 See [Interaction modes](../product/interaction-modes.md) for the user-facing
 contracts and delivery order.

@@ -34,8 +34,9 @@ ruby scripts/export_observed_queries.rb
 The exporter excludes free-form dictation by default, merges duplicate phrases,
 deduplicates imported trace records, keeps at most 500 entries and 1 MiB,
 applies owner-only permissions, and rejects symlinked storage. Along with
-outcomes and ratings, it aggregates fixed unsupported, insertion, capture, and
-incorrect-action reasons plus automatic-finalization counts. Use
+outcomes and ratings, it aggregates fixed unsupported, insertion, capture,
+interpretation/polish, and incorrect-action reasons plus automatic-finalization
+counts. Use
 `--include-dictation` only when retaining dictated prose is intentional. Delete
 `.topher-local/dogfood/observed-queries.json` to clear the durable local dataset;
 clearing it does not affect Topher's rolling diagnostics.

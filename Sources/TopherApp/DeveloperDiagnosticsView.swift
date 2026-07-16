@@ -344,6 +344,8 @@ struct DeveloperDiagnosticsView: View {
 extension TranscriptInterpretationReason {
   fileprivate var displayName: String {
     switch self {
+    case .dictationDisfluencyCleanup:
+      "Repeated speech removed"
     case .speechAlternative:
       "Speech alternative"
     case .vocabularyCorrection:
@@ -413,6 +415,8 @@ extension DeveloperActionIssueReason {
       "Other"
     case .spacingOrPunctuation:
       "Spacing or punctuation"
+    case .unremovedDisfluency:
+      "Stutter or filler not cleaned"
     case .wrongDestination:
       "Wrong destination"
     case .wrongField:

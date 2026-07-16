@@ -84,6 +84,11 @@ def print_summary(title, records)
 
   interpreted = records.count { |record| record["interpretedTranscript"] }
   puts "Interpreted/formatted text changes: #{interpreted}/#{records.length}"
+  interpretation_records = records.select { |record| record["interpretationReason"] }
+  print_counts(
+    "Interpretation/polish reasons:",
+    counts(interpretation_records, "interpretationReason")
+  )
 
   timings = {
     "hold to listening" => "holdToListeningMilliseconds",

@@ -112,6 +112,31 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.voiceFeedback, .success("Inserted dictation."))
   }
 
+  func testDisabledDictationPolishPreservesRepeatedSpeech() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      dictationPolishEnabled: false,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("I I think this should stay raw"))
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(field.content, "I I think this should stay raw")
+    XCTAssertFalse(model.isDictationPolishEnabled)
+  }
+
   func testDictationPermissionPromptIsExplicitAndStopsBeforeMicrophoneCapture() async {
     var promptCount = 0
     let accessibility = AccessibilityPermissionClient(
@@ -238,12 +263,14 @@ final class TopherModelSpeechTests: XCTestCase {
 
     model.beginDictation()
     await waitUntil { model.phase == .listening("") }
-    voice.yield(.partial("recover this unfinished dictation"))
-    await waitUntil { model.phase == .listening("recover this unfinished dictation") }
+    voice.yield(.partial("I I need to recover this unfinished dictation"))
+    await waitUntil {
+      model.phase == .listening("I I need to recover this unfinished dictation")
+    }
     voice.fail(StreamFailure())
 
     await waitUntil {
-      model.pendingDictationText == "recover this unfinished dictation"
+      model.pendingDictationText == "I I need to recover this unfinished dictation"
     }
     XCTAssertEqual(field.content, "Before")
     XCTAssertEqual(
@@ -329,14 +356,16 @@ final class TopherModelSpeechTests: XCTestCase {
 
     model.beginDictation()
     await waitUntil { model.phase == .listening("") }
-    voice.yield(.final("GraphQL   URLSession"))
+    voice.yield(.final("I I use GraphQL   URLSession"))
     model.endDictation()
 
     await waitUntil { diagnostics.records.count == 1 }
     let record = try XCTUnwrap(diagnostics.records.first)
     XCTAssertEqual(record.source, .dictation)
-    XCTAssertEqual(record.transcript, "GraphQL   URLSession")
-    XCTAssertEqual(record.interpretedTranscript, "GraphQL URLSession")
+    XCTAssertEqual(record.transcript, "I I use GraphQL   URLSession")
+    XCTAssertEqual(record.interpretedTranscript, "I use GraphQL URLSession")
+    XCTAssertEqual(record.interpretationReason, .dictationDisfluencyCleanup)
+    XCTAssertEqual(field.content, "I use GraphQL URLSession")
     XCTAssertEqual(record.outcome, .dictationInserted)
     XCTAssertEqual(
       record.capabilityIdentifier,
@@ -1178,6 +1207,7 @@ final class TopherModelSpeechTests: XCTestCase {
     webOpener: WebOpenCapability? = nil,
     listeningTimeout: Duration = .seconds(1),
     dictationListeningTimeout: Duration? = nil,
+    dictationPolishEnabled: Bool = true,
     finalizationTimeout: Duration = .seconds(1),
     voiceFeedbackResultDuration: Duration = .seconds(1),
     developerDiagnostics: DeveloperDiagnosticsController? = nil,
@@ -1193,6 +1223,7 @@ final class TopherModelSpeechTests: XCTestCase {
       voiceTranscription: voice.client,
       listeningTimeout: listeningTimeout,
       dictationListeningTimeout: dictationListeningTimeout ?? listeningTimeout,
+      dictationPolishEnabled: dictationPolishEnabled,
       finalizationTimeout: finalizationTimeout,
       voiceFeedbackResultDuration: voiceFeedbackResultDuration,
       developerDiagnostics: developerDiagnostics,

@@ -123,6 +123,26 @@
       "checks": ["Correct field", "Correct caret position", "No submission"]
     },
     {
+      "id": "dictation-spoken-stutter-cleanup",
+      "mode": "dictation",
+      "category": "dictation-polish",
+      "utterance": "I I think we should ship this today.",
+      "setup": "Focus an empty Notes text field and naturally repeat the first word while using the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert 'I think we should ship this today.' without the adjacent spoken restart.",
+      "checks": ["Only the repeated restart is removed", "Raw and polished diagnostics differ", "Insertion remains immediate"]
+    },
+    {
+      "id": "dictation-intentional-repetition",
+      "mode": "dictation",
+      "category": "dictation-polish",
+      "utterance": "I had had enough, but this is very very important.",
+      "setup": "Focus an empty Notes text field and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Preserve both intentional repetitions exactly as recognized.",
+      "checks": ["'had had' remains", "'very very' remains", "No semantic rewrite"]
+    },
+    {
       "id": "dictation-selection-replacement",
       "mode": "dictation",
       "category": "focused-insertion",

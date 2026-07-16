@@ -92,6 +92,8 @@ Each record contains only:
   typed/spoken by the user.
 - The bounded interpreted, formatted, or inserted text only when it differs, a
   fixed correction reason when applicable, and an available confidence summary.
+  Dictation repeated-speech cleanup therefore preserves both raw and polished
+  forms with the fixed `dictationDisfluencyCleanup` reason.
 - Whether the request came from assistant voice, dictation, or the manual
   development field.
 - A fixed outcome: unsupported, policy denied, capability succeeded,
@@ -107,7 +109,7 @@ Each record contains only:
   transcription can still lead to the wrong intent, and vice versa.
 - An optional fixed issue tag after a user marks an action or insertion wrong,
   such as wrong destination, wrong field, wrong position, missing text,
-  duplicated text, or spacing/punctuation.
+  duplicated text, an unremoved stutter/filler, or spacing/punctuation.
 - Voice-stage durations when available: hold-to-listening,
   listening-to-first-transcript, and key-up-to-final. These are monotonic local
   durations and do not imply a detected acoustic speech-onset time.
@@ -146,7 +148,7 @@ record contains an empty transcript and a fixed capture-failure reason. It is
 never silently executed or inserted. If a prepared dictation target becomes
 secure, even that preview is discarded and no content-bearing record is made.
 
-Summarize retained outcomes, feedback rates, interpretation changes, and timing
+Summarize retained outcomes, feedback rates, interpretation/polish reasons, and timing
 percentiles without printing command text:
 
 ```sh

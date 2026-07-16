@@ -134,6 +134,7 @@ eligible_records.each do |record|
     "lastObservedAt" => observed_at,
     "observationCount" => 0,
     "outcomes" => {},
+    "interpretationReasons" => {},
     "unsupportedReasons" => {},
     "dictationFailureReasons" => {},
     "captureFailureReasons" => {},
@@ -154,6 +155,7 @@ eligible_records.each do |record|
   entry["observationCount"] = entry["observationCount"].to_i + 1
   {
     "outcomes" => record["outcome"],
+    "interpretationReasons" => record["interpretationReason"],
     "unsupportedReasons" => record["unsupportedReason"],
     "dictationFailureReasons" => record["dictationFailureReason"],
     "captureFailureReasons" => record["captureFailureReason"],

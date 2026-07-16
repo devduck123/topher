@@ -72,10 +72,15 @@ become a Topher action.
 The implemented foundation contract is:
 
 - Capture and transcribe locally using the same replaceable speech boundary.
-- Transform only bounded presentation details: trim outer whitespace, normalize
-  horizontal spacing and line endings, remove spaces before closing
+- Always normalize bounded presentation details: trim outer whitespace,
+  normalize horizontal spacing and line endings, remove spaces before closing
   punctuation, and add a boundary space only when insertion would weld words.
-  Topher does not invent terminal punctuation, capitalization, or meaning.
+- By default, synchronously remove only a clear adjacent spoken restart of up
+  to three words when another word follows. Punctuation/newline boundaries,
+  terminal repetition, acronyms, numbers, and common intentional repetition
+  fail closed. **Clean repeated speech** persists an explicit off switch.
+- Do not invent terminal punctuation or capitalization, remove filler words,
+  or rewrite grammar, tone, vocabulary, or meaning in the current fast tier.
 - Identify and revalidate the focused editable element before insertion.
 - Insert text without pressing Return, submitting a form, or sending a message.
 - Refuse secure/password fields and other excluded surfaces.
@@ -89,7 +94,8 @@ The implemented foundation contract is:
 - Automatically finalize at the 120-second dictation maximum instead of
   discarding the whole utterance. A late physical key-up cannot insert twice.
 - Preserve a usable partial after a non-secure capture failure only in the
-  review/copy preview; never insert or persist that partial automatically.
+  review/copy preview; never insert, persist, or disfluency-polish that partial
+  automatically.
 
 The foundation uses Accessibility selected-text and selected-range attributes.
 Editors that do not expose a safely settable selection are intentionally routed
@@ -100,6 +106,27 @@ work rather than implied guarantees.
 Dictation quality is a system-level result. The benchmark must cover recognition
 accuracy, partial stability, endpoint latency, punctuation, application-specific
 insertion, undo behavior, and recovery—not only word error rate.
+
+### Speed and polish strategy
+
+Topher separates dictation quality into two measurable tiers:
+
+1. The implemented fast tier is deterministic, local, synchronous, bounded by
+   utterance length and restart size, and has a presentation-only escape hatch.
+   It sees the finalized utterance but no app or screen context.
+2. A future smart tier may use full-utterance context and the destination app's
+   typed identity for punctuation, filler, correction, and formatting. It must
+   be optional, preserve raw text, meet an explicit deadline with fast-tier
+   fallback, expose its typed changes in diagnostics, and never acquire screen
+   content merely to format prose.
+
+This mirrors the useful product shape of modern dictation tools without copying
+their authority boundary. [Wispr documents](https://docs.wisprflow.ai/articles/5373093536-how-do-i-use-smart-formatting-and-backtrack)
+full-dictation smart formatting, a raw-mode switch, and conservative
+self-correction removal. [Willow publicly describes](https://willowvoice.com/blog/automatic-punctuation-dictation)
+app-aware formatting and roughly 200 ms latency, but that timing is a vendor
+claim, not Topher evidence. Topher will benchmark its own end-to-end and
+polish-only latency before selecting a smarter engine or processing layer.
 
 ## Local wake phrase and ambient operation
 

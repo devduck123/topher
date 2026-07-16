@@ -46,6 +46,8 @@ merely to describe an implementation detail.
 `docs/decisions/` records consequential choices, rejected alternatives, and the
 evidence available at decision time. Add a new ADR or explicitly supersede an
 older one when a decision changes. Do not silently rewrite accepted history.
+The current dictation-polish contract is decision
+[`0015`](decisions/0015-layer-dictation-polish-under-a-latency-budget.md).
 
 ### Evidence
 

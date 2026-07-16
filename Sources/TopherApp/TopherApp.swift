@@ -56,6 +56,7 @@ struct TopherApp: App {
             defaults: TranscriptVocabulary.developerDefaults.contextualStrings
           )
         }),
+        dictationPolishEnabled: DictationPolishSettings.currentValue(),
         developerDiagnostics: diagnostics,
         vocabularyProvider: { vocabulary.vocabulary },
         listenForShortcutEvents: TopherRuntime.instanceLock.isPrimary

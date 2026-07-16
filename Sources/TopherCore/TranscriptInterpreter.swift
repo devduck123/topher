@@ -113,6 +113,7 @@ public struct TranscriptVocabulary: Equatable, Sendable {
 }
 
 public enum TranscriptInterpretationReason: String, Codable, Equatable, Sendable {
+  case dictationDisfluencyCleanup
   case speechAlternative
   case vocabularyCorrection
 }

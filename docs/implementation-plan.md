@@ -252,6 +252,14 @@ not parallel implementation projects. The canonical contracts are
   finalization failure into the local preview without insertion. Discard it if
   the target became secure, and persist only a fixed content-free failure
   reason.
+- Complete in build 11: remove only high-confidence adjacent spoken restarts in
+  a bounded synchronous local pass. Preserve ambiguous/intentional repetition,
+  keep recovered partials unpolished, retain raw versus polished diagnostics,
+  and provide a persisted presentation-only switch.
+- Pending: benchmark a separately optional smart-formatting tier using the full
+  finalized utterance and typed destination-app identity. Precommit a deadline,
+  fall back to the fast tier on timeout or uncertainty, retain raw text and
+  typed changes, and do not acquire screen content solely for prose formatting.
 - Pending: run the app compatibility matrix across native AppKit fields, Chrome
   form controls/contenteditable, editors, chat apps, multiline fields, selected
   replacement, and unsupported/secure surfaces.

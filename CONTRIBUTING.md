@@ -5,6 +5,10 @@ repository favors small vertical slices, explicit privacy boundaries, and code
 that one maintainer can understand. A change is not complete merely because it
 compiles in Xcode.
 
+Repository-wide guidance for coding agents lives in [`AGENTS.md`](AGENTS.md).
+The [documentation map](docs/README.md) identifies the canonical source for
+current behavior, product contracts, plans, decisions, risks, and evidence.
+
 ## Prerequisites
 
 - macOS 26.
@@ -137,6 +141,9 @@ object installing them is `@MainActor`.
 - Update `README.md` for user-visible current behavior and limitations.
 - Record consequential choices and rejected alternatives under `docs/decisions`.
 - Keep measured results separate from hypotheses under `docs/evidence`.
+- Supersede accepted decisions explicitly rather than silently rewriting them.
+- Add new dated evidence for new verification; do not make an older checkpoint
+  claim tests or acceptance that it never recorded.
 - Update `docs/risks.md` when a change adds a permission, network boundary,
   persistent data, new external effect, or new failure mode.
 - Do not mark interactive acceptance complete based solely on unit tests.

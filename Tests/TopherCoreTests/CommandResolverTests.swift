@@ -13,11 +13,21 @@ final class CommandResolverTests: XCTestCase {
       ("open vscode", .visualStudioCode),
       ("Open Notion", .notion),
       ("launch Notion desktop", .notion),
+      ("Open ChatGPT", .chatGPT),
+      ("open chat gpt", .chatGPT),
+      ("Open Codex", .chatGPT),
+      ("Launch Xcode", .xcode),
+      ("open x code", .xcode),
     ]
 
     for (transcript, expected) in cases {
       XCTAssertEqual(resolver.resolve(transcript), .resolved(.openApplication(expected)))
     }
+  }
+
+  func testUsesValidatedDeveloperApplicationIdentities() {
+    XCTAssertEqual(ApplicationTarget.chatGPT.bundleIdentifier, "com.openai.codex")
+    XCTAssertEqual(ApplicationTarget.xcode.bundleIdentifier, "com.apple.dt.Xcode")
   }
 
   func testUsesTheValidatedNotionApplicationIdentity() {

@@ -11,11 +11,9 @@ can reuse capture without inheriting command authority.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development tree defines 110 Swift tests. The latest complete
-local runs passed all 109 tests that existed at that point both normally and
-under Thread Sanitizer; the final storage-reload regression was then
-type-checked and exercised by a focused executable smoke. A full 110-test CI
-rerun and final app-bundle check remain publish gates. Direct Apple
+Status: the 0.3.0 development tree currently defines 133 Swift tests. The
+latest complete local run passed all 133 tests; Thread Sanitizer and final
+app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
 were verified for the strictly checked Release bundle. A live Core Audio
@@ -45,15 +43,17 @@ The comparative speech benchmark is still open.
   without deciding what it means.
 - A dedicated assistant-command processor that resolves, checks policy, and
   awaits exactly one registered capability.
-- Typed, allowlisted commands for Chrome, Notion, Safari, and Visual Studio
-  Code, including bounded phrasing such as “Navigate Chrome,” “Switch to
-  Chrome,” and “Pull up YouTube.”
+- Typed, allowlisted commands for ChatGPT/Codex, Chrome, Notion, Safari, Visual
+  Studio Code, and Xcode, including bounded phrasing such as “Navigate Chrome,”
+  “Switch to Chrome,” and “Open Codex.”
 - Typed, allowlisted navigation to Crunchyroll, GitHub, Google, and YouTube.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
   known site, provider searches retain their provider, and unknown bare
   searches use Google in the default browser (Chrome in dogfood use).
-- A bounded local personal-vocabulary editor for developer and product terms;
-  corrections can only select an already allowlisted typed command.
+- A bounded local personal-vocabulary editor for developer and product terms.
+  Canonical terms may bias on-device recognition; known mis-transcriptions stay
+  in Topher's deterministic correction layer, which can only select an already
+  allowlisted typed command.
 - Native launch through `NSWorkspace`.
 - A separate policy decision before execution.
 - Safe rejection of unknown text and applications.
@@ -196,8 +196,9 @@ phase, preserves an explicit opt-out, and adds an orange dot to the menu-bar
 icon while enabled. Re-enabling after an opt-out requires confirmation. Each
 record contains the exact finalized voice or manual command, the interpreted
 command and correction reason when Topher safely selected a different reading,
-an available confidence summary, its source, a fixed typed outcome, fixed
-command/capability metadata, processing duration, and app version/build. It
+  an available confidence summary, its source, a fixed typed outcome, fixed
+  command/capability metadata, capture-stage and processing durations, and app
+  version/build. It
 never contains raw audio,
 partials, or content Topher separately captures from a page, screen, message, or
 document. Topher does not append constructed destination URLs, Keychain/config

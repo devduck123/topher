@@ -1,4 +1,5 @@
 import AVFoundation
+import Dispatch
 import Foundation
 import XCTest
 
@@ -195,6 +196,65 @@ final class PushToTalkCaptureControllerTests: XCTestCase {
     controller.endHold()
 
     await waitUntil { recorder.events.contains(.completed(whitespace)) }
+  }
+
+  func testCompletionCarriesMeasuredCaptureStageTimings() async throws {
+    let voice = CaptureVoiceHarness(
+      prepareBehavior: .suspend,
+      finishBehavior: .keepStreamOpen
+    )
+    let recorder = CaptureEventRecorder()
+    let uptime = UptimeBox(0)
+    let controller = makeController(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      recorder: recorder,
+      uptimeNanoseconds: { uptime.value }
+    )
+
+    XCTAssertTrue(controller.beginHold())
+    await waitUntil { voice.isPrepareSuspended }
+    uptime.value = 10_000_000
+    voice.resumePrepare()
+    await waitUntil { recorder.events.contains(.stateChanged(.listening(""))) }
+
+    uptime.value = 60_000_000
+    voice.yield(.partial("Open Codex"))
+    await waitUntil { recorder.events.contains(.stateChanged(.listening("Open Codex"))) }
+
+    uptime.value = 100_000_000
+    controller.endHold()
+    await waitUntil { recorder.events.contains(.stateChanged(.finalizing("Open Codex"))) }
+
+    uptime.value = 140_000_000
+    voice.yield(
+      .finalWithEvidence(
+        FinalTranscription(text: "Open Codex", confidence: 0.8)
+      )
+    )
+    voice.completeStream()
+
+    await waitUntil {
+      recorder.events.contains { event in
+        guard case .completedWithEvidence = event else { return false }
+        return true
+      }
+    }
+    let completion = try XCTUnwrap(
+      recorder.events.compactMap { event -> FinalTranscription? in
+        guard case .completedWithEvidence(let transcription) = event else { return nil }
+        return transcription
+      }.last
+    )
+    XCTAssertEqual(
+      completion.captureMetrics,
+      VoiceCaptureMetrics(
+        holdToListeningMilliseconds: 10,
+        listeningToFirstTranscriptMilliseconds: 50,
+        keyUpToFinalMilliseconds: 40
+      )
+    )
   }
 
   func testNormalResultStreamEndWhileListeningFailsAndCancels() async {
@@ -502,14 +562,18 @@ final class PushToTalkCaptureControllerTests: XCTestCase {
     voice: CaptureVoiceHarness,
     recorder: CaptureEventRecorder,
     listeningTimeout: Duration = .seconds(1),
-    finalizationTimeout: Duration = .seconds(1)
+    finalizationTimeout: Duration = .seconds(1),
+    uptimeNanoseconds: @escaping @MainActor () -> UInt64 = {
+      DispatchTime.now().uptimeNanoseconds
+    }
   ) -> PushToTalkCaptureController {
     let controller = PushToTalkCaptureController(
       microphonePermission: microphonePermission,
       speechAssets: speechAssets,
       transcription: voice.client,
       listeningTimeout: listeningTimeout,
-      finalizationTimeout: finalizationTimeout
+      finalizationTimeout: finalizationTimeout,
+      uptimeNanoseconds: uptimeNanoseconds
     )
     controller.onEvent = { [weak recorder] event in
       recorder?.events.append(event)
@@ -564,6 +628,15 @@ final class PushToTalkCaptureControllerTests: XCTestCase {
 @MainActor
 private final class CaptureEventRecorder {
   var events: [PushToTalkCaptureEvent] = []
+}
+
+@MainActor
+private final class UptimeBox {
+  var value: UInt64
+
+  init(_ value: UInt64) {
+    self.value = value
+  }
 }
 
 @MainActor

@@ -299,7 +299,7 @@ final class TopherModel: ObservableObject {
         in: .whitespacesAndNewlines
       )
       guard !transcript.isEmpty else {
-        recordNoUsableSpeechIfEnabled()
+        recordNoUsableSpeechIfEnabled(captureMetrics: transcription.captureMetrics)
         let message = "I didn’t hear a command. Hold the shortcut and try again."
         phase = .failure(message)
         if presentsGlobally {
@@ -312,7 +312,8 @@ final class TopherModel: ObservableObject {
         transcript,
         source: .voice,
         alternatives: transcription.alternatives,
-        confidence: transcription.primary.confidence
+        confidence: transcription.primary.confidence,
+        captureMetrics: transcription.captureMetrics
       )
 
     case .failed(let failure):
@@ -320,13 +321,14 @@ final class TopherModel: ObservableObject {
     }
   }
 
-  private func recordNoUsableSpeechIfEnabled() {
+  private func recordNoUsableSpeechIfEnabled(captureMetrics: VoiceCaptureMetrics? = nil) {
     guard let developerDiagnostics else { return }
 
     Task {
       guard let token = await developerDiagnostics.beginTrace() else { return }
       await developerDiagnostics.record(
         transcript: "",
+        captureMetrics: captureMetrics,
         source: .voice,
         trace: AssistantCommandTrace(
           outcome: .noUsableSpeech,
@@ -420,6 +422,7 @@ final class TopherModel: ObservableObject {
     source: DeveloperTranscriptSource,
     alternatives: [TranscriptHypothesis] = [],
     confidence: Double? = nil,
+    captureMetrics: VoiceCaptureMetrics? = nil,
     yieldBeforeProcessing: Bool = false
   ) {
     precondition(commandExecutionTask == nil)
@@ -463,6 +466,7 @@ final class TopherModel: ObservableObject {
               : nil,
             interpretationReason: result.interpretation.reason,
             transcriptionConfidence: result.interpretation.confidence,
+            captureMetrics: captureMetrics,
             source: source,
             trace: result.trace,
             processingDurationMilliseconds: durationMilliseconds,

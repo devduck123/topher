@@ -23,6 +23,13 @@ a curated developer vocabulary, and capped again at 100 active contextual
 strings. Do not silently mine repositories, browser history, messages,
 clipboard contents, or screen context. Persist only accepted vocabulary.
 
+Supply only canonical desired terms to `AnalysisContext`. Known ASR mistakes
+and user-entered correction aliases stay in Topher's deterministic interpreter;
+they are not fed back as desired recognizer output. Valid target aliases such
+as “Chrome,” “chat gpt,” and “crunchy roll” belong to the resolver. If a raw
+application or website command already resolves, preserve it without a cosmetic
+correction. Search-query corrections remain explicit and provider-preserving.
+
 Known web destinations own target-specific language rules. Bare “Open
 Crunchyroll,” “Search Crunchyroll,” and “Search for Crunchyroll” navigate to the
 allowlisted Crunchyroll homepage. Query-bearing provider forms continue to use

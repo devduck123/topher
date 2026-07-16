@@ -122,6 +122,9 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
         interpretedTranscript: "Open GitHub.com",
         interpretationReason: .vocabularyCorrection,
         transcriptionConfidence: 0.42,
+        holdToListeningMilliseconds: 12,
+        listeningToFirstTranscriptMilliseconds: 87,
+        keyUpToFinalMilliseconds: 41,
         trace: AssistantCommandTrace(
           outcome: .capabilitySucceeded,
           commandKind: .openWebsite,
@@ -139,11 +142,43 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     XCTAssertEqual(record.interpretedTranscript, "Open GitHub.com")
     XCTAssertEqual(record.interpretationReason, .vocabularyCorrection)
     XCTAssertEqual(record.transcriptionConfidence, 0.42)
+    XCTAssertEqual(record.holdToListeningMilliseconds, 12)
+    XCTAssertEqual(record.listeningToFirstTranscriptMilliseconds, 87)
+    XCTAssertEqual(record.keyUpToFinalMilliseconds, 41)
 
     let reloaded = makeStore(initialEnabled: false)
     let reloadedSnapshot = try await reloaded.snapshot()
     let reloadedRecord = try XCTUnwrap(reloadedSnapshot.records.first)
     XCTAssertEqual(reloadedRecord, record)
+  }
+
+  func testDropsUnreasonableCaptureStageTimings() async throws {
+    let store = makeStore(initialEnabled: true)
+    let token = try await traceToken(for: store)
+    let snapshot = try await store.record(
+      DeveloperTranscriptRecordDraft(
+        recordedAt: Date(timeIntervalSince1970: 499),
+        source: .voice,
+        transcript: "Open Xcode",
+        holdToListeningMilliseconds: UInt64.max,
+        listeningToFirstTranscriptMilliseconds: 42,
+        keyUpToFinalMilliseconds: 600_001,
+        trace: AssistantCommandTrace(
+          outcome: .capabilitySucceeded,
+          commandKind: .openApplication,
+          capabilityIdentifier: "openApplication"
+        ),
+        processingDurationMilliseconds: 20,
+        appVersion: "test",
+        appBuild: "4"
+      ),
+      using: token
+    )
+
+    let record = try XCTUnwrap(snapshot.records.first)
+    XCTAssertNil(record.holdToListeningMilliseconds)
+    XCTAssertEqual(record.listeningToFirstTranscriptMilliseconds, 42)
+    XCTAssertNil(record.keyUpToFinalMilliseconds)
   }
 
   func testDisableStopsStaleTraceWithoutDeletingExistingRecords() async throws {

@@ -416,7 +416,11 @@ final class TopherModelSpeechTests: XCTestCase {
     voice.yield(.partial("Summarize this"))
     await waitUntil { model.phase == .listening("Summarize this") }
     model.endPushToTalk()
-    voice.yield(.final("Summarize this page"))
+    voice.yield(
+      .finalWithEvidence(
+        FinalTranscription(text: "Summarize this page", confidence: 0.73)
+      )
+    )
 
     await waitUntil {
       diagnostics.records.count == 1
@@ -432,6 +436,10 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(record.source, .voice)
     XCTAssertEqual(record.outcome, .unsupported)
     XCTAssertNil(record.commandKind)
+    XCTAssertEqual(record.transcriptionConfidence, 0.73)
+    XCTAssertNotNil(record.holdToListeningMilliseconds)
+    XCTAssertNotNil(record.listeningToFirstTranscriptMilliseconds)
+    XCTAssertNotNil(record.keyUpToFinalMilliseconds)
 
     model.endPushToTalk()
     await Task.yield()

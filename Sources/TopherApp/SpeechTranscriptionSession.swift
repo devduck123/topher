@@ -1,20 +1,39 @@
 import AVFAudio
+import Dispatch
 import Foundation
 import OSLog
 import Speech
 import TopherCore
 
+struct VoiceCaptureMetrics: Equatable, Sendable {
+  let holdToListeningMilliseconds: UInt64?
+  let listeningToFirstTranscriptMilliseconds: UInt64?
+  let keyUpToFinalMilliseconds: UInt64?
+}
+
 struct FinalTranscription: Equatable, Sendable {
   let primary: TranscriptHypothesis
   let alternatives: [TranscriptHypothesis]
+  let captureMetrics: VoiceCaptureMetrics?
 
   init(
     text: String,
     alternatives: [TranscriptHypothesis] = [],
-    confidence: Double? = nil
+    confidence: Double? = nil,
+    captureMetrics: VoiceCaptureMetrics? = nil
   ) {
     primary = TranscriptHypothesis(text: text, confidence: confidence)
     self.alternatives = alternatives
+    self.captureMetrics = captureMetrics
+  }
+
+  func addingCaptureMetrics(_ metrics: VoiceCaptureMetrics) -> Self {
+    Self(
+      text: primary.text,
+      alternatives: alternatives,
+      confidence: primary.confidence,
+      captureMetrics: metrics
+    )
   }
 }
 

@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 import OSLog
 
@@ -119,6 +120,13 @@ final class PushToTalkCaptureController {
     case timedOut
   }
 
+  private struct TimingAccumulator {
+    let holdStartedAt: UInt64
+    var listeningStartedAt: UInt64?
+    var firstTranscriptAt: UInt64?
+    var releasedAt: UInt64?
+  }
+
   var onEvent: EventHandler = { _ in }
 
   private(set) var readiness: VoiceCaptureReadiness
@@ -137,6 +145,7 @@ final class PushToTalkCaptureController {
   private let transcription: VoiceTranscriptionClient
   private let listeningTimeout: Duration
   private let finalizationTimeout: Duration
+  private let uptimeNanoseconds: @MainActor () -> UInt64
   private let logger = Logger(subsystem: "dev.topher.app", category: "voice-capture")
   private let signposter = OSSignposter(subsystem: "dev.topher.app", category: "voice-capture")
 
@@ -150,6 +159,7 @@ final class PushToTalkCaptureController {
   private var readinessGeneration: UInt64 = 0
   private var finalTranscript = ""
   private var finalTranscriptionEvidence: FinalTranscription?
+  private var timing: TimingAccumulator?
   private var isShutDown = false
   private var preparationInterval: OSSignpostIntervalState?
   private var captureInterval: OSSignpostIntervalState?
@@ -160,13 +170,17 @@ final class PushToTalkCaptureController {
     speechAssets: SpeechAssetPreparationClient = .init(),
     transcription: VoiceTranscriptionClient = .live(),
     listeningTimeout: Duration = .seconds(30),
-    finalizationTimeout: Duration = .seconds(8)
+    finalizationTimeout: Duration = .seconds(8),
+    uptimeNanoseconds: @escaping @MainActor () -> UInt64 = {
+      DispatchTime.now().uptimeNanoseconds
+    }
   ) {
     self.microphonePermission = microphonePermission
     self.speechAssets = speechAssets
     self.transcription = transcription
     self.listeningTimeout = listeningTimeout
     self.finalizationTimeout = finalizationTimeout
+    self.uptimeNanoseconds = uptimeNanoseconds
     readiness = Self.permissionReadiness(microphonePermission.currentState)
   }
 
@@ -234,6 +248,7 @@ final class PushToTalkCaptureController {
     listeningTimeoutTask = nil
     endCaptureInterval()
     beginFinalizationInterval()
+    timing?.releasedAt = uptimeNanoseconds()
     phase = .finalizing(visibleTranscript)
     onEvent(.stateChanged(.finalizing(visibleTranscript)))
     logger.info("Push-to-talk ended")
@@ -250,10 +265,14 @@ final class PushToTalkCaptureController {
       case .completed:
         let transcript = finalTranscript
         let evidence = finalTranscriptionEvidence
+        let metrics = captureMetrics(completedAt: uptimeNanoseconds())
         clearTranscriptionResult()
+        timing = nil
         endFinalizationInterval()
         phase = .idle
-        if let evidence {
+        if let evidence, let metrics {
+          onEvent(.completedWithEvidence(evidence.addingCaptureMetrics(metrics)))
+        } else if let evidence {
           onEvent(.completedWithEvidence(evidence))
         } else {
           onEvent(.completed(transcript))
@@ -293,6 +312,7 @@ final class PushToTalkCaptureController {
     endOpenIntervals()
     finalTranscript = ""
     finalTranscriptionEvidence = nil
+    timing = nil
 
     let transcription = transcription
     Task { @MainActor in
@@ -307,6 +327,7 @@ final class PushToTalkCaptureController {
     clearTranscriptionResult()
     endOpenIntervals()
     beginPreparationInterval()
+    timing = startWhenReady ? TimingAccumulator(holdStartedAt: uptimeNanoseconds()) : nil
     phase = .preparing
     onEvent(.stateChanged(.preparing(.microphonePermission)))
     generation &+= 1
@@ -422,6 +443,7 @@ final class PushToTalkCaptureController {
 
       endPreparationInterval()
       beginCaptureInterval()
+      timing?.listeningStartedAt = uptimeNanoseconds()
       phase = .listening("")
       onEvent(.stateChanged(.listening("")))
       logger.info("Push-to-talk started")
@@ -449,11 +471,13 @@ final class PushToTalkCaptureController {
 
           switch event {
           case .partial(let transcript):
+            recordFirstTranscriptIfNeeded(transcript)
             if case .listening = phase {
               phase = .listening(transcript)
               onEvent(.stateChanged(.listening(transcript)))
             }
           case .final(let transcript):
+            recordFirstTranscriptIfNeeded(transcript)
             finalTranscript = transcript
             switch phase {
             case .finalizing:
@@ -466,6 +490,7 @@ final class PushToTalkCaptureController {
               break
             }
           case .finalWithEvidence(let transcription):
+            recordFirstTranscriptIfNeeded(transcription.primary.text)
             finalTranscript = transcription.primary.text
             finalTranscriptionEvidence = transcription
             switch phase {
@@ -557,6 +582,7 @@ final class PushToTalkCaptureController {
     onEvent(.failed(failure))
     endOpenIntervals()
     clearTranscriptionResult()
+    timing = nil
     log(failure)
 
     await transcription.cancel()
@@ -569,6 +595,7 @@ final class PushToTalkCaptureController {
   ) {
     guard generation == token else { return }
     endPreparationInterval()
+    timing = nil
     phase = .idle
     onEvent(event)
   }
@@ -586,6 +613,37 @@ final class PushToTalkCaptureController {
     transcriptionEventsTask = nil
     finalTranscript = ""
     finalTranscriptionEvidence = nil
+  }
+
+  private func recordFirstTranscriptIfNeeded(_ transcript: String) {
+    guard
+      !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      timing?.firstTranscriptAt == nil
+    else { return }
+    timing?.firstTranscriptAt = uptimeNanoseconds()
+  }
+
+  private func captureMetrics(completedAt: UInt64) -> VoiceCaptureMetrics? {
+    guard let timing else { return nil }
+    return VoiceCaptureMetrics(
+      holdToListeningMilliseconds: Self.elapsedMilliseconds(
+        from: timing.holdStartedAt,
+        to: timing.listeningStartedAt
+      ),
+      listeningToFirstTranscriptMilliseconds: Self.elapsedMilliseconds(
+        from: timing.listeningStartedAt,
+        to: timing.firstTranscriptAt
+      ),
+      keyUpToFinalMilliseconds: Self.elapsedMilliseconds(
+        from: timing.releasedAt,
+        to: completedAt
+      )
+    )
+  }
+
+  private static func elapsedMilliseconds(from start: UInt64?, to end: UInt64?) -> UInt64? {
+    guard let start, let end, end >= start else { return nil }
+    return (end - start) / 1_000_000
   }
 
   private func invalidateReadinessRefresh() {

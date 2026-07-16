@@ -5,13 +5,17 @@ import Foundation
 /// Keeping this list application-owned prevents transcript or future model output
 /// from becoming an unchecked bundle identifier.
 public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
+  case chatGPT
   case chrome
   case notion
   case safari
   case visualStudioCode
+  case xcode
 
   public var displayName: String {
     switch self {
+    case .chatGPT:
+      "ChatGPT"
     case .chrome:
       "Google Chrome"
     case .notion:
@@ -20,11 +24,15 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
       "Safari"
     case .visualStudioCode:
       "Visual Studio Code"
+    case .xcode:
+      "Xcode"
     }
   }
 
   public var bundleIdentifier: String {
     switch self {
+    case .chatGPT:
+      "com.openai.codex"
     case .chrome:
       "com.google.Chrome"
     case .notion:
@@ -33,11 +41,15 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
       "com.apple.Safari"
     case .visualStudioCode:
       "com.microsoft.VSCode"
+    case .xcode:
+      "com.apple.dt.Xcode"
     }
   }
 
   var aliases: Set<String> {
     switch self {
+    case .chatGPT:
+      ["chatgpt", "chat gpt", "chat g p t", "codex", "chatgpt app", "codex app"]
     case .chrome:
       ["chrome", "google chrome"]
     case .notion:
@@ -46,6 +58,8 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
       ["safari"]
     case .visualStudioCode:
       ["visual studio code", "vs code", "vscode"]
+    case .xcode:
+      ["xcode", "x code"]
     }
   }
 

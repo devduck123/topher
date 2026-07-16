@@ -24,7 +24,9 @@ final class SpeechVocabularyControllerTests: XCTestCase {
       controller.vocabulary.entries.first { $0.canonicalTerm == "GitHub" }
     )
     XCTAssertTrue(gitHub.spokenForms.contains("get hub"))
-    XCTAssertTrue(controller.contextualStrings.contains("get hub"))
+    XCTAssertTrue(controller.contextualStrings.contains("GitHub"))
+    XCTAssertFalse(controller.contextualStrings.contains("gidhub"))
+    XCTAssertFalse(controller.contextualStrings.contains("get hub"))
 
     let reloaded = SpeechVocabularyController(userDefaults: defaults)
     XCTAssertEqual(reloaded.entries, controller.entries)

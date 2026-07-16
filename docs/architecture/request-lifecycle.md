@@ -108,6 +108,11 @@ is preserved, ambiguous alternatives remain unsupported, and a correction is
 accepted only when it resolves to one existing allowlisted command. Personal
 vocabulary is explicit, local, bounded, and user-editable; Topher does not mine
 browser history, repositories, messages, or clipboard content for terms.
+Only canonical desired terms are supplied to Apple's contextual recognition.
+Known ASR mistakes are interpreter-only correction aliases; valid application
+and website synonyms belong to the deterministic target resolver. An already
+resolved application or website target is not rewritten merely to canonicalize
+its transcript.
 
 Web destinations define their own bounded verb semantics. A bare “Search
 Crunchyroll” can mean navigate to the known Crunchyroll destination, while

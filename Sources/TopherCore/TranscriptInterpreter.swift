@@ -25,11 +25,11 @@ public struct TranscriptVocabulary: Equatable, Sendable {
 
   public static let developerDefaults = TranscriptVocabulary(
     entries: [
-      .init(canonicalTerm: "Crunchyroll", spokenForms: ["crunchy roll"]),
+      .init(canonicalTerm: "Crunchyroll", spokenForms: ["crunchy role"]),
       .init(canonicalTerm: "GitHub", spokenForms: ["git hub", "gidhub"]),
       .init(canonicalTerm: "YouTube", spokenForms: ["you tube"]),
       .init(canonicalTerm: "Notion"),
-      .init(canonicalTerm: "Google Chrome", spokenForms: ["Chrome"]),
+      .init(canonicalTerm: "Google Chrome"),
       .init(canonicalTerm: "Visual Studio Code", spokenForms: ["VS Code", "vscode"]),
       .init(canonicalTerm: "TypeScript"),
       .init(canonicalTerm: "JavaScript"),
@@ -89,7 +89,10 @@ public struct TranscriptVocabulary: Equatable, Sendable {
     var seen = Set<String>()
     return
       entries
-      .flatMap { [$0.canonicalTerm] + $0.spokenForms }
+      // AnalysisContext expects the desired words or phrases. Known ASR
+      // mistakes belong only to the deterministic correction layer; feeding
+      // them back to Speech would teach the recognizer the wrong spelling.
+      .map(\.canonicalTerm)
       .filter { seen.insert(Self.normalized($0)).inserted }
       .prefix(Self.maximumContextualStringCount)
       .map { $0 }
@@ -138,6 +141,13 @@ public struct TranscriptInterpreter: Sendable {
   ) -> TranscriptInterpretation {
     let raw = primary.text.trimmingCharacters(in: .whitespacesAndNewlines)
     let rawCommand = command(for: raw)
+
+    // Resolver aliases already understand valid target wording such as
+    // "crunchy roll" and "chat g p t". Preserve that raw transcript instead
+    // of reporting a correction that cannot change the selected target.
+    if let rawCommand, !rawCommand.isWebSearch {
+      return unchanged(raw, confidence: primary.confidence)
+    }
 
     if let correction = vocabularyCorrection(
       raw,
@@ -279,5 +289,12 @@ public struct TranscriptInterpreter: Sendable {
     }
     let character = text[adjacentIndex]
     return !character.isLetter && !character.isNumber
+  }
+}
+
+extension TopherCommand {
+  fileprivate var isWebSearch: Bool {
+    if case .searchWeb = self { return true }
+    return false
   }
 }

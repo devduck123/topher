@@ -122,7 +122,7 @@ struct SpeechVocabularyView: View {
     DisclosureGroup(isExpanded: $isExpanded) {
       VStack(alignment: .leading, spacing: 8) {
         Text(
-          "Topher supplies its built-in developer vocabulary plus your local terms to on-device speech. Spoken variants are used only when the corrected command maps to an allowlisted capability."
+          "Topher supplies canonical developer and personal terms to on-device speech. Known mis-transcriptions stay local to Topher and are used only when the corrected command maps to an allowlisted capability."
         )
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -130,7 +130,7 @@ struct SpeechVocabularyView: View {
 
         TextField("Canonical term, e.g. GitLab", text: $canonicalTerm)
           .textFieldStyle(.roundedBorder)
-        TextField("Spoken variants, comma-separated", text: $spokenForms)
+        TextField("Known mis-transcriptions, comma-separated", text: $spokenForms)
           .textFieldStyle(.roundedBorder)
 
         HStack {

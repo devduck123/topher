@@ -124,6 +124,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
     interpretedTranscript: String? = nil,
     interpretationReason: TranscriptInterpretationReason? = nil,
     transcriptionConfidence: Double? = nil,
+    captureMetrics: VoiceCaptureMetrics? = nil,
     source: DeveloperTranscriptSource,
     trace: AssistantCommandTrace,
     processingDurationMilliseconds: UInt64,
@@ -140,6 +141,10 @@ final class DeveloperDiagnosticsController: ObservableObject {
       transcriptionConfidence: transcriptionConfidence.flatMap {
         $0.isFinite ? min(max($0, 0), 1) : nil
       },
+      holdToListeningMilliseconds: captureMetrics?.holdToListeningMilliseconds,
+      listeningToFirstTranscriptMilliseconds: captureMetrics?
+        .listeningToFirstTranscriptMilliseconds,
+      keyUpToFinalMilliseconds: captureMetrics?.keyUpToFinalMilliseconds,
       trace: trace,
       processingDurationMilliseconds: processingDurationMilliseconds,
       appVersion: appVersion,

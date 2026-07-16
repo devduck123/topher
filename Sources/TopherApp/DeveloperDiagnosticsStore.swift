@@ -64,6 +64,9 @@ struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
   let interpretedTranscript: String?
   let interpretationReason: TranscriptInterpretationReason?
   let transcriptionConfidence: Double?
+  let holdToListeningMilliseconds: UInt64?
+  let listeningToFirstTranscriptMilliseconds: UInt64?
+  let keyUpToFinalMilliseconds: UInt64?
   let outcome: AssistantCommandTraceOutcome
   let commandKind: AssistantCommandKind?
   let capabilityIdentifier: String?
@@ -79,6 +82,9 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
   let interpretedTranscript: String?
   let interpretationReason: TranscriptInterpretationReason?
   let transcriptionConfidence: Double?
+  let holdToListeningMilliseconds: UInt64?
+  let listeningToFirstTranscriptMilliseconds: UInt64?
+  let keyUpToFinalMilliseconds: UInt64?
   let trace: AssistantCommandTrace
   let processingDurationMilliseconds: UInt64
   let appVersion: String
@@ -91,6 +97,9 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
     interpretedTranscript: String? = nil,
     interpretationReason: TranscriptInterpretationReason? = nil,
     transcriptionConfidence: Double? = nil,
+    holdToListeningMilliseconds: UInt64? = nil,
+    listeningToFirstTranscriptMilliseconds: UInt64? = nil,
+    keyUpToFinalMilliseconds: UInt64? = nil,
     trace: AssistantCommandTrace,
     processingDurationMilliseconds: UInt64,
     appVersion: String,
@@ -102,6 +111,9 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
     self.interpretedTranscript = interpretedTranscript
     self.interpretationReason = interpretationReason
     self.transcriptionConfidence = transcriptionConfidence
+    self.holdToListeningMilliseconds = holdToListeningMilliseconds
+    self.listeningToFirstTranscriptMilliseconds = listeningToFirstTranscriptMilliseconds
+    self.keyUpToFinalMilliseconds = keyUpToFinalMilliseconds
     self.trace = trace
     self.processingDurationMilliseconds = processingDurationMilliseconds
     self.appVersion = appVersion
@@ -143,6 +155,7 @@ actor DeveloperDiagnosticsStore {
   nonisolated let storageFileURL: URL
 
   private static let documentSchemaVersion = 1
+  private static let maximumStageTimingMilliseconds: UInt64 = 10 * 60 * 1_000
 
   private let fileManager = FileManager.default
   private let retention: DeveloperDiagnosticsRetentionPolicy
@@ -263,6 +276,11 @@ actor DeveloperDiagnosticsStore {
       interpretedTranscript: boundedInterpretation?.value,
       interpretationReason: draft.interpretationReason,
       transcriptionConfidence: draft.transcriptionConfidence,
+      holdToListeningMilliseconds: Self.validatedTiming(draft.holdToListeningMilliseconds),
+      listeningToFirstTranscriptMilliseconds: Self.validatedTiming(
+        draft.listeningToFirstTranscriptMilliseconds
+      ),
+      keyUpToFinalMilliseconds: Self.validatedTiming(draft.keyUpToFinalMilliseconds),
       outcome: draft.trace.outcome,
       commandKind: draft.trace.commandKind,
       capabilityIdentifier: draft.trace.capabilityIdentifier,
@@ -402,7 +420,18 @@ actor DeveloperDiagnosticsStore {
     }
     let contentWasTruncated =
       boundedTranscript.wasTruncated || boundedInterpretation?.wasTruncated == true
-    guard contentWasTruncated else { return record }
+    let holdToListeningMilliseconds = Self.validatedTiming(
+      record.holdToListeningMilliseconds
+    )
+    let listeningToFirstTranscriptMilliseconds = Self.validatedTiming(
+      record.listeningToFirstTranscriptMilliseconds
+    )
+    let keyUpToFinalMilliseconds = Self.validatedTiming(record.keyUpToFinalMilliseconds)
+    let timingWasInvalid =
+      holdToListeningMilliseconds != record.holdToListeningMilliseconds
+      || listeningToFirstTranscriptMilliseconds != record.listeningToFirstTranscriptMilliseconds
+      || keyUpToFinalMilliseconds != record.keyUpToFinalMilliseconds
+    guard contentWasTruncated || timingWasInvalid else { return record }
 
     return DeveloperTranscriptRecord(
       schemaVersion: record.schemaVersion,
@@ -414,6 +443,9 @@ actor DeveloperDiagnosticsStore {
       interpretedTranscript: boundedInterpretation?.value,
       interpretationReason: record.interpretationReason,
       transcriptionConfidence: record.transcriptionConfidence,
+      holdToListeningMilliseconds: holdToListeningMilliseconds,
+      listeningToFirstTranscriptMilliseconds: listeningToFirstTranscriptMilliseconds,
+      keyUpToFinalMilliseconds: keyUpToFinalMilliseconds,
       outcome: record.outcome,
       commandKind: record.commandKind,
       capabilityIdentifier: record.capabilityIdentifier,
@@ -421,6 +453,11 @@ actor DeveloperDiagnosticsStore {
       appVersion: record.appVersion,
       appBuild: record.appBuild
     )
+  }
+
+  private static func validatedTiming(_ value: UInt64?) -> UInt64? {
+    guard let value, value <= maximumStageTimingMilliseconds else { return nil }
+    return value
   }
 
   private func persistCurrentRecords() throws {

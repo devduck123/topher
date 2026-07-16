@@ -141,13 +141,34 @@ struct DeveloperDiagnosticsView: View {
       }
 
       Text(
-        "\(record.recordedAt.formatted(date: .omitted, time: .standard)) · \(record.source.displayName) · \(record.outcome.displayName) · \(record.processingDurationMilliseconds) ms"
+        "\(record.recordedAt.formatted(date: .omitted, time: .standard)) · \(record.source.displayName) · \(record.outcome.displayName) · v\(record.appVersion) (\(record.appBuild)) · \(record.processingDurationMilliseconds) ms"
       )
       .font(.caption2)
       .foregroundStyle(.secondary)
       .lineLimit(1)
+
+      if let timingSummary = timingSummary(record) {
+        Text(timingSummary)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
     }
     .accessibilityElement(children: .combine)
+  }
+
+  private func timingSummary(_ record: DeveloperTranscriptRecord) -> String? {
+    var parts: [String] = []
+    if let duration = record.holdToListeningMilliseconds {
+      parts.append("Hold→listen \(duration) ms")
+    }
+    if let duration = record.listeningToFirstTranscriptMilliseconds {
+      parts.append("Listen→text \(duration) ms")
+    }
+    if let duration = record.keyUpToFinalMilliseconds {
+      parts.append("Key-up→final \(duration) ms")
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 
   private func interpretationSummary(

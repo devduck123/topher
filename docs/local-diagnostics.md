@@ -94,7 +94,12 @@ Each record contains only:
   capability failed, or no usable speech.
 - The fixed command kind and registered capability identifier when resolution
   produced one.
-- Processing duration, record time, and app version/build.
+- Voice-stage durations when available: hold-to-listening,
+  listening-to-first-transcript, and key-up-to-final. These are monotonic local
+  durations and do not imply a detected acoustic speech-onset time.
+- Command processing duration, record time, and app version/build. Command
+  processing begins after final transcription, so it must not be reported as
+  speech latency.
 
 Topher does not separately capture or append raw audio, partial transcripts,
 the complete speech-alternative list, microphone buffers, retrieved

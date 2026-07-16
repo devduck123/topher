@@ -111,6 +111,10 @@ dependency, and installed-app denial/error recovery is verified.
 - Complete in the personalization slice: add a local, bounded personal
   vocabulary and conservative transcript interpreter. A correction executes
   only when it selects one uniquely allowlisted typed command.
+- Complete in the dogfood follow-up: separate canonical Apple recognition
+  context from known ASR correction aliases; preserve already-resolved target
+  wording; add installed ChatGPT/Codex (`com.openai.codex`) and Xcode
+  (`com.apple.dt.Xcode`) targets.
 - Add validated explicit HTTPS URL opening only if a later use case needs it.
 - Add application discovery plus explicit aliases without accepting arbitrary
   model-provided bundle IDs.
@@ -148,6 +152,10 @@ it does not, remove the model path.
 - Complete: when interpretation changes a command, retain the bounded raw and
   interpreted text, fixed reason, and confidence summary without retaining the
   complete alternative list.
+- Complete: retain bounded monotonic hold-to-listening,
+  listening-to-first-transcript, and key-up-to-final durations for evidence
+  carrying voice requests. Keep these distinct from final-to-action command
+  processing duration.
 - Add richer metadata-only lifecycle events only when a measured reliability
   question requires them.
 - Test shortcut conflicts and launch-at-login only if daily use warrants it.

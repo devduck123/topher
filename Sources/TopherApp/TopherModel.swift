@@ -117,6 +117,7 @@ final class TopherModel: ObservableObject {
   private let captureController: PushToTalkCaptureController
   private let developerDiagnostics: DeveloperDiagnosticsController?
   private let voiceFeedbackResultDuration: Duration
+  private let dictationListeningTimeout: Duration
   private let accessibilityPermission: AccessibilityPermissionClient
   private let focusedTextInsertion: FocusedTextInsertionCapability
   private let dictationClipboard: DictationClipboardCapability
@@ -141,6 +142,7 @@ final class TopherModel: ObservableObject {
     speechAssets: SpeechAssetPreparationClient? = nil,
     voiceTranscription: VoiceTranscriptionClient? = nil,
     listeningTimeout: Duration = .seconds(30),
+    dictationListeningTimeout: Duration = .seconds(120),
     finalizationTimeout: Duration = .seconds(8),
     voiceFeedbackResultDuration: Duration = .seconds(3),
     developerDiagnostics: DeveloperDiagnosticsController? = nil,
@@ -171,6 +173,7 @@ final class TopherModel: ObservableObject {
     self.captureController = captureController
     self.developerDiagnostics = developerDiagnostics
     self.voiceFeedbackResultDuration = voiceFeedbackResultDuration
+    self.dictationListeningTimeout = dictationListeningTimeout
     let accessibilityPermission = accessibilityPermission ?? AccessibilityPermissionClient()
     self.accessibilityPermission = accessibilityPermission
     self.focusedTextInsertion = focusedTextInsertion ?? FocusedTextInsertionCapability()
@@ -327,7 +330,7 @@ final class TopherModel: ObservableObject {
     activeVoicePresentation = .globalShortcut
     activeVoiceMode = .dictation
     activeDictationPreparation = preparation
-    guard captureController.beginHold() else {
+    guard captureController.beginHold(maximumDuration: dictationListeningTimeout) else {
       activeVoicePresentation = nil
       activeVoiceMode = nil
       activeDictationPreparation = nil
@@ -454,6 +457,16 @@ final class TopherModel: ObservableObject {
         presentVoiceResult(.failure(message))
       }
 
+    case .maximumDurationReached:
+      phase = .finalizingVoice
+      guard activeVoicePresentation == .globalShortcut else { return }
+      let message = "Maximum length reached—finishing automatically."
+      presentVoiceFeedback(
+        activeVoiceMode == .dictation
+          ? .dictationFinalizing(message)
+          : .finalizing(message)
+      )
+
     case .completed(let rawTranscript):
       let presentsGlobally = activeVoicePresentation == .globalShortcut
       let mode = activeVoiceMode ?? .assistantCommand
@@ -525,6 +538,9 @@ final class TopherModel: ObservableObject {
 
     case .failed(let failure):
       applyCaptureFailure(failure)
+
+    case .failedWithRecovery(let failure, let transcript):
+      applyCaptureFailure(failure, recoverableTranscript: transcript)
     }
   }
 
@@ -591,7 +607,10 @@ final class TopherModel: ObservableObject {
     }
   }
 
-  private func applyCaptureFailure(_ failure: PushToTalkCaptureFailure) {
+  private func applyCaptureFailure(
+    _ failure: PushToTalkCaptureFailure,
+    recoverableTranscript: String? = nil
+  ) {
     let message: String
     switch failure {
     case .microphonePermissionRequired:
@@ -618,19 +637,74 @@ final class TopherModel: ObservableObject {
     case .resultStreamFailed, .finalizationFailed:
       activePermissionFailure = nil
       message = "Voice transcription failed. Try the shortcut again."
-    case .listeningTimedOut:
-      activePermissionFailure = nil
-      message = "Listening timed out. Try the shortcut again."
     case .finalizationTimedOut:
       activePermissionFailure = nil
       message = "Voice finalization timed out. Try the shortcut again."
     }
 
     let presentsGlobally = activeVoicePresentation == .globalShortcut
-    resetActiveVoiceInteraction()
-    phase = .failure(message)
+    let mode = activeVoiceMode ?? .assistantCommand
+    let dictationPreparation = activeDictationPreparation
+    var recoveredMessage: String?
+    var mayRecordFailure = true
+
+    if let recoverableTranscript,
+      !recoverableTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    {
+      switch mode {
+      case .assistantCommand:
+        manualTranscript = recoverableTranscript
+        recoveredMessage =
+          "Transcription stopped before finalizing. Open Topher to review the recovered text; it was not executed."
+        focusedTextInsertion.discardPreparedTarget()
+      case .dictation:
+        let mayRetain =
+          dictationPreparation != .ready
+          || focusedTextInsertion.discardPreparedTargetForRecovery()
+        if mayRetain, let recoveredText = try? DictationText(recoverableTranscript) {
+          pendingDictationText = recoveredText.value
+          recoveredMessage =
+            "Transcription stopped before finalizing. Open Topher to review or copy the recovered text."
+        } else if !mayRetain {
+          recoveredMessage =
+            "The target became secure, so Topher discarded the unfinished dictation."
+          mayRecordFailure = false
+        }
+      }
+    } else {
+      focusedTextInsertion.discardPreparedTarget()
+    }
+
+    clearActiveVoiceStateWithoutDiscardingTarget()
+    if mayRecordFailure, failure.shouldRecordInDeveloperDiagnostics {
+      recordCaptureFailureIfEnabled(failure, source: mode.diagnosticSource)
+    }
+    let finalMessage = recoveredMessage ?? message
+    phase = .failure(finalMessage)
     if presentsGlobally {
-      presentVoiceResult(.failure(message))
+      presentVoiceResult(.failure(finalMessage))
+    }
+  }
+
+  private func recordCaptureFailureIfEnabled(
+    _ failure: PushToTalkCaptureFailure,
+    source: DeveloperTranscriptSource
+  ) {
+    guard let developerDiagnostics else { return }
+    Task {
+      guard let token = await developerDiagnostics.beginTrace() else { return }
+      await developerDiagnostics.record(
+        transcript: "",
+        source: source,
+        captureFailureReason: failure,
+        trace: AssistantCommandTrace(
+          outcome: .captureFailed,
+          commandKind: nil,
+          capabilityIdentifier: nil
+        ),
+        processingDurationMilliseconds: 0,
+        using: token
+      )
     }
   }
 
@@ -663,6 +737,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         outcome: .dictationFailed,
         capabilityIdentifier: nil,
+        failureReason: .tooLong,
         processingDuration: startedAt.duration(to: clock.now)
       )
       return
@@ -681,6 +756,9 @@ final class TopherModel: ObservableObject {
         transcript: transcript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        failureReason: preparation == .noFocusedElement
+          ? .noFocusedElement
+          : .unsupportedField,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -711,13 +789,53 @@ final class TopherModel: ObservableObject {
       phase = .failure(message)
       if presentsGlobally { presentVoiceResult(.failure(message)) }
 
-    case .focusChanged, .selectionChanged, .unsupportedField, .failed,
-      .noPreparedTarget:
+    case .focusChanged:
       presentDictationFallback(
         dictationText,
         transcript: transcript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        failureReason: .focusChanged,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
+      )
+    case .selectionChanged:
+      presentDictationFallback(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        failureReason: .selectionChanged,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
+      )
+    case .unsupportedField:
+      presentDictationFallback(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        failureReason: .unsupportedField,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
+      )
+    case .failed:
+      presentDictationFallback(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        failureReason: .mutationFailed,
+        processingDuration: startedAt.duration(to: clock.now),
+        presentsGlobally: presentsGlobally
+      )
+    case .noPreparedTarget:
+      presentDictationFallback(
+        dictationText,
+        transcript: transcript,
+        confidence: confidence,
+        captureMetrics: captureMetrics,
+        failureReason: .noPreparedTarget,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -729,6 +847,7 @@ final class TopherModel: ObservableObject {
     transcript: String,
     confidence: Double?,
     captureMetrics: VoiceCaptureMetrics?,
+    failureReason: DictationFailureReason,
     processingDuration: Duration,
     presentsGlobally: Bool
   ) {
@@ -743,6 +862,7 @@ final class TopherModel: ObservableObject {
       captureMetrics: captureMetrics,
       outcome: .dictationFallback,
       capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
+      failureReason: failureReason,
       processingDuration: processingDuration
     )
   }
@@ -754,6 +874,7 @@ final class TopherModel: ObservableObject {
     captureMetrics: VoiceCaptureMetrics?,
     outcome: AssistantCommandTraceOutcome,
     capabilityIdentifier: String?,
+    failureReason: DictationFailureReason? = nil,
     processingDuration: Duration
   ) {
     guard let developerDiagnostics else { return }
@@ -769,7 +890,8 @@ final class TopherModel: ObservableObject {
         trace: AssistantCommandTrace(
           outcome: outcome,
           commandKind: nil,
-          capabilityIdentifier: capabilityIdentifier
+          capabilityIdentifier: capabilityIdentifier,
+          dictationFailureReason: failureReason
         ),
         processingDurationMilliseconds: durationMilliseconds,
         using: token
@@ -870,6 +992,8 @@ final class TopherModel: ObservableObject {
       "I can perform one action at a time. Try each request separately."
     case .contextRequired:
       "That request needs app, browser, or screen context that Topher does not have yet."
+    case .dictationModeRequired:
+      "Use the hold-to-dictate shortcut to insert text into the focused field."
     case .emptyInput, .missingValue:
       "That command is missing a target or search value."
     case .uncertainDomain:
@@ -997,6 +1121,19 @@ private enum VoiceMode: Equatable, Sendable {
       "I didn’t hear a command. Hold the shortcut and try again."
     case .dictation:
       "I didn’t hear any dictation. Hold the shortcut and try again."
+    }
+  }
+}
+
+extension PushToTalkCaptureFailure {
+  fileprivate var shouldRecordInDeveloperDiagnostics: Bool {
+    switch self {
+    case .startFailed, .resultStreamEnded, .resultStreamFailed, .finalizationFailed,
+      .finalizationTimedOut:
+      true
+    case .microphonePermissionRequired, .microphoneDenied, .microphoneRestricted,
+      .speechModelNotReady, .speechAssetPreparationFailed:
+      false
     }
   }
 }

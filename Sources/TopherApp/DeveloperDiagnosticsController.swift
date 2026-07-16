@@ -145,6 +145,31 @@ final class DeveloperDiagnosticsController: ObservableObject {
     }
   }
 
+  func setActionIssueReason(
+    for record: DeveloperTranscriptRecord,
+    reason: DeveloperActionIssueReason?
+  ) {
+    guard !isUpdating else { return }
+    isUpdating = true
+    errorMessage = nil
+
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        let snapshot = try await store.setActionIssueReason(
+          recordID: record.id,
+          reason: reason
+        )
+        apply(snapshot)
+      } catch {
+        errorMessage = "Couldn’t save the diagnostic issue reason."
+        hasPendingStorageMaintenance = true
+        logger.error("Developer diagnostics issue-reason write failed")
+      }
+      isUpdating = false
+    }
+  }
+
   func beginTrace() async -> DeveloperDiagnosticsTraceToken? {
     await store.beginTrace()
   }
@@ -156,6 +181,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
     transcriptionConfidence: Double? = nil,
     captureMetrics: VoiceCaptureMetrics? = nil,
     source: DeveloperTranscriptSource,
+    captureFailureReason: PushToTalkCaptureFailure? = nil,
     trace: AssistantCommandTrace,
     processingDurationMilliseconds: UInt64,
     using token: DeveloperDiagnosticsTraceToken
@@ -176,6 +202,8 @@ final class DeveloperDiagnosticsController: ObservableObject {
       listeningToFirstTranscriptMilliseconds: captureMetrics?
         .listeningToFirstTranscriptMilliseconds,
       keyUpToFinalMilliseconds: captureMetrics?.keyUpToFinalMilliseconds,
+      maximumDurationReached: captureMetrics?.maximumDurationReached == true ? true : nil,
+      captureFailureReason: captureFailureReason,
       trace: trace,
       processingDurationMilliseconds: processingDurationMilliseconds,
       appVersion: appVersion,

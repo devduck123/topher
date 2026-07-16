@@ -17,6 +17,7 @@ that answers the question instead of reading every file.
 | What are the security and privacy invariants? | [`SECURITY.md`](../SECURITY.md) |
 | How should contributors build and validate changes? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | How do local logs and retained dogfood diagnostics work? | [Local diagnostics](local-diagnostics.md) |
+| What should I say during manual testing? | [Dogfood query corpus](../dogfood/README.md) |
 | How will speech quality be selected? | [Speech benchmark](speech-benchmark.md) |
 
 ## Document classes
@@ -60,6 +61,8 @@ edit an older record to claim a test that was not run then.
   sources before using them for a new decision.
 - `docs/local-diagnostics.md` and `docs/speech-benchmark.md` define repeatable
   operational procedures and acceptance measurements.
+- `dogfood/manual-corpus.json` is the sanitized human acceptance checklist;
+  `.topher-local` observed-query data is private and never committed.
 
 ## Common reading routes
 

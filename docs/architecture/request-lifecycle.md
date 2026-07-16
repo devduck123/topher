@@ -49,7 +49,8 @@ global dictation shortcut
   -> explicit Accessibility trust check
   -> secure focused-field refusal before capture
   -> PushToTalkCaptureController
-  -> raw finalized local transcript
+  -> raw finalized local transcript, including automatic finalization at the
+     dictation maximum
   -> TopherModel request-kind routing
   -> DictationText bounded presentation normalization
   -> focus + selection + nearby-text + secure-state revalidation
@@ -65,6 +66,16 @@ raw finalized result and has no command resolver, dictation formatter,
 capability, or user-facing outcome policy. `TopherModel` records which shortcut
 owns the hold and routes the result to either assistant processing or dictation
 processing. A key-up from the other shortcut cannot finalize the active hold.
+
+Maximum duration is a finalization boundary, not a destructive timeout. The
+assistant maximum remains 30 seconds and dictation uses 120 seconds. Automatic
+finalization preserves the physical-key ownership gate until key-up, preventing
+a held shortcut from starting a second request. If the result stream or
+finalization fails after a usable partial, `TopherModel` may expose it for local
+review only: assistant text returns to the manual field and dictation text to
+the pending preview. It never resolves, executes, or inserts that partial. A
+secure or newly secure dictation target discards it. Diagnostics record only a
+fixed content-free failure reason for this path.
 
 `AssistantCommandProcessor` owns the deterministic resolver-to-policy-to-
 capability transaction. Unsupported input is a `CommandResolution`, not an

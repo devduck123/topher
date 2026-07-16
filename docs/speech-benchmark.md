@@ -17,6 +17,13 @@ recognition, formatting, and focused-field behavior separately.
 
 ## Corpus
 
+The checked-in [`dogfood/manual-corpus.json`](../dogfood/manual-corpus.json) is
+the human acceptance menu for current commands, negative cases, dictation, and
+future context requests. The private gitignored observed-query corpus records
+what the user actually tried and is an input for expanding that checklist. It
+does not replace this controlled audio benchmark: sanitize and choose expected
+behavior before promoting any observed phrase.
+
 Use five natural takes of each phrase in a quiet room and five with typical room
 noise. Do not coach identical cadence between takes.
 
@@ -90,8 +97,11 @@ For every clip capture:
   without the explicit Copy action.
 - Failure and recovery after 100 sessions, sleep/wake, and microphone changes.
 
-Key-up is the end-of-utterance signal for push-to-talk. VAD may skip silence but
-must not delay or override explicit finalization.
+Key-up is the normal end-of-utterance signal for push-to-talk. VAD may skip
+silence but must not delay or override explicit finalization. The mode-specific
+maximum is a second bounded finalization signal—30 seconds for assistant
+commands and 120 seconds for dictation—and must preserve rather than discard
+the best transcript exactly once.
 
 ## Precommitted acceptance thresholds
 

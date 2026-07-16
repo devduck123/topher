@@ -40,6 +40,10 @@ public struct CommandResolver: Sendable {
       return .resolved(.identifyFrontmostApplication)
     }
 
+    if requiresDictationMode(request) {
+      return .unsupported(reason: .dictationModeRequired)
+    }
+
     if requiresContext(request) {
       return .unsupported(reason: .contextRequired)
     }
@@ -225,6 +229,12 @@ public struct CommandResolver: Sendable {
     ].contains(request)
   }
 
+  private func requiresDictationMode(_ request: String) -> Bool {
+    ["dictate", "input", "insert", "type", "write"].contains { prefix in
+      request == prefix || request.hasPrefix(prefix + " ")
+    }
+  }
+
   private func resolveBareWebsiteSearch(_ transcript: String) -> WebsiteTarget? {
     let request = normalizedRequest(transcript)
     guard
@@ -295,7 +305,17 @@ public struct CommandResolver: Sendable {
     for target in WebsiteTarget.allCases {
       guard let provider = target.queryProvider else { continue }
       for alias in target.aliases.sorted(by: { $0.count > $1.count }) {
-        let prefixes = verbs.map { "\($0) \(alias) for" }
+        let prefixes = verbs.flatMap { verb in
+          [
+            "\(verb) \(alias) for",
+            "\(verb) \(alias) look for",
+            "\(verb) \(alias), look for",
+            "\(verb) \(alias) and look for",
+            "\(verb) \(alias) search for",
+            "\(verb) \(alias), search for",
+            "\(verb) \(alias) and search for",
+          ]
+        }
         guard let queryText = removingRawPrefix(from: request, candidates: prefixes) else {
           continue
         }
@@ -327,6 +347,13 @@ public struct CommandResolver: Sendable {
           guard let query = commandSearchQuery(queryText) else {
             return .unsupported(reason: .missingValue)
           }
+          return .resolved(.searchWeb(provider: provider, query: query))
+        }
+
+        if let queryText = removingRawPrefix(from: request, candidates: [alias]),
+          !queryText.isEmpty,
+          let query = commandSearchQuery(queryText)
+        {
           return .resolved(.searchWeb(provider: provider, query: query))
         }
       }

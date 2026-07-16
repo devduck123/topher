@@ -6,6 +6,7 @@ Topher has two deliberately separate diagnostic paths:
 |---|---|---:|---|
 | macOS Unified Logging | Lifecycle troubleshooting and signpost timing | No | macOS |
 | Bounded developer trace | Recent local dogfood requests and typed outcomes | Yes; defaults on during dogfooding with an explicit off switch | Topher, with hard bounds |
+| Private observed-query corpus | Durable local list of phrases for later manual testing | Yes; commands by default, dictation only by explicit flag | Developer, by explicit export and deletion |
 
 There is no remote telemetry backend. Enabling the developer trace does not
 send its records anywhere.
@@ -47,7 +48,7 @@ Console.app can stream them too; filter on subsystem `dev.topher.app`.
 
 Fixed events emitted across the three Unified Logging categories include:
 
-- Push-to-talk started, ended, or timed out.
+- Push-to-talk started, ended, or reached its mode-specific maximum duration.
 - Microphone permission denied or restricted.
 - Local speech asset preparation failed.
 - Voice capture failed to start, its result stream stopped/failed, or
@@ -95,13 +96,18 @@ Each record contains only:
   development field.
 - A fixed outcome: unsupported, policy denied, capability succeeded,
   capability failed, no usable speech, dictation inserted, dictation fallback,
-  or dictation failed.
+  dictation failed, or capture failed.
 - The fixed command kind and registered capability identifier when resolution
   produced one.
 - A fixed unsupported reason when resolution rejects the command.
+- Fixed dictation-fallback and content-free capture-failure reasons when those
+  paths occur, plus whether the maximum duration caused automatic finalization.
 - Optional user-set judgments for whether the transcript text was accurate and
   whether Topher's action was correct. These are independent because correct
   transcription can still lead to the wrong intent, and vice versa.
+- An optional fixed issue tag after a user marks an action or insertion wrong,
+  such as wrong destination, wrong field, wrong position, missing text,
+  duplicated text, or spacing/punctuation.
 - Voice-stage durations when available: hold-to-listening,
   listening-to-first-transcript, and key-up-to-final. These are monotonic local
   durations and do not imply a detected acoustic speech-onset time.
@@ -133,6 +139,12 @@ separate **Transcript** rating. Selecting an already-selected rating clears
 that judgment.
 Ratings use the same local file, permissions, retention, and **Clear Now**
 semantics as the corresponding request.
+
+When capture fails after producing a usable partial, the partial remains only
+in the in-process manual field or dictation preview. The persisted failure
+record contains an empty transcript and a fixed capture-failure reason. It is
+never silently executed or inserted. If a prepared dictation target becomes
+secure, even that preview is discarded and no content-bearing record is made.
 
 Summarize retained outcomes, feedback rates, interpretation changes, and timing
 percentiles without printing command text:
@@ -198,6 +210,46 @@ than partially trusted.
 
 These semantics intentionally separate “stop collecting now” from “delete what
 was already collected.”
+
+## Dogfood query datasets
+
+Topher keeps two intentionally different corpora:
+
+- `dogfood/manual-corpus.json` is checked in. It contains sanitized, deliberate
+  assistant, dictation, negative, and future-context cases with setup and
+  expected-result notes. It is the shared human test menu and must not contain
+  private observed speech.
+- `.topher-local/dogfood/observed-queries.json` is gitignored local plaintext.
+  It records bounded phrases the developer actually tried, aggregate outcome
+  and rating metadata, and the builds in which they occurred. It is useful for
+  deciding what the product should understand, not as a claim that a phrase is
+  supported.
+
+Validate and inspect the public corpus:
+
+```sh
+ruby scripts/check_dogfood_corpus.rb
+ruby scripts/check_dogfood_corpus.rb --list
+ruby scripts/check_dogfood_corpus.rb --list --mode dictation
+```
+
+Create or incrementally update the private corpus from the rolling trace:
+
+```sh
+ruby scripts/export_observed_queries.rb
+```
+
+The export is a deliberate developer action, not an app background task. It is
+idempotent for already imported trace record IDs, merges duplicate phrases,
+keeps at most 500 entries and 1 MiB, limits a phrase to 4 KiB, rejects unsafe
+storage paths, and uses `0700` directories plus a `0600` file. It excludes
+dictation by default because prose is more likely to contain private content;
+`--include-dictation` is an explicit higher-sensitivity choice.
+
+This second file is not covered by the trace's 24-hour rolling deletion.
+Delete it deliberately when it is no longer useful. Never commit, publish, or
+attach it without reviewing every phrase. Promote only sanitized, generally
+useful cases into the checked-in manual corpus.
 
 ## Other places request text can exist
 

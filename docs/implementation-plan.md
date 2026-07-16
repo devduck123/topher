@@ -10,7 +10,7 @@ own measured safety and reliability gates.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The tree defines 209 Swift tests. Normal, Thread Sanitizer, Xcode Debug and
+2. The tree defines 217 Swift tests. Normal, Thread Sanitizer, Xcode Debug and
    Release, static analysis, signature, entitlement, installation, and process
    checks are rerun at each dogfood checkpoint.
 3. The conventional Xcode macOS application target uses fixed bundle ID
@@ -71,9 +71,11 @@ pretending the permanent engine decision has been made.
 - Complete: hotkey down starts capture and key-up explicitly finalizes it. A
   voice-only cross-app HUD covers preparation, listening, finalization,
   execution, and transient outcomes; finalized text replaces stale partials.
-- Complete: 30-second listening and 8-second finalization watchdogs, immediate
-  stream failure recovery, stale-generation rejection, and regression tests for
-  key-up/cancellation races.
+- Complete: 30-second assistant maximum duration, 8-second finalization
+  watchdog, immediate stream-failure recovery, stale-generation rejection, and
+  regression tests for key-up/cancellation races. Reaching the assistant
+  maximum finalizes rather than discards; a recoverable partial returns to the
+  manual field without execution.
 - Complete: capture lifecycle is isolated in `PushToTalkCaptureController` and
   returns raw final text without selecting command versus dictation behavior.
 - Complete: payload-free signpost intervals measure voice preparation, capture,
@@ -196,6 +198,14 @@ it does not, remove the model path.
   install-and-launch script that asserts exactly one Topher process.
 - Complete in build 8: make the metadata-only dogfood summary show the latest
   launch session separately before retained cross-build history.
+- Complete in build 10: retain typed dictation-fallback, capture-failure, and
+  user-selected action-issue reasons; identify maximum-duration automatic
+  finalization; keep capture-failure records content-free even when a partial is
+  available for in-process review.
+- Complete in build 10: add a sanitized checked-in manual request corpus and an
+  explicit private, gitignored observed-query exporter. Exclude dictation by
+  default, enforce file/count/content bounds and owner-only paths, and never run
+  the durable export automatically from Topher.
 - Test shortcut conflicts and launch-at-login only if daily use warrants it.
 
 Exit: the core loop recovers without restarting Topher and meets the measured
@@ -234,6 +244,14 @@ not parallel implementation projects. The canonical contracts are
 - Complete: record raw versus formatted/inserted dictation as a distinct bounded
   diagnostic source/outcome, but discard late-secure-field text without a
   preview or diagnostic record.
+- Complete in build 10: extend dictation's maximum to 120 seconds and
+  automatically finalize its best transcript rather than losing the utterance.
+  Preserve physical-key ownership until release so automatic finalization and a
+  late key-up cannot insert twice.
+- Complete in build 10: recover a usable partial after a non-secure stream or
+  finalization failure into the local preview without insertion. Discard it if
+  the target became secure, and persist only a fixed content-free failure
+  reason.
 - Pending: run the app compatibility matrix across native AppKit fields, Chrome
   form controls/contenteditable, editors, chat apps, multiline fields, selected
   replacement, and unsupported/secure surfaces.

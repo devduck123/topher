@@ -5,6 +5,7 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
   case amazon
   case ballislife
   case crunchyroll
+  case ebay
   case gmail
   case github
   case google
@@ -20,6 +21,8 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
       "Ballislife"
     case .crunchyroll:
       "Crunchyroll"
+    case .ebay:
+      "eBay"
     case .gmail:
       "Gmail"
     case .github:
@@ -45,6 +48,8 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
       "ballislife.com"
     case .crunchyroll:
       "www.crunchyroll.com"
+    case .ebay:
+      "www.ebay.com"
     case .gmail:
       "mail.google.com"
     case .github:
@@ -68,6 +73,8 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
       ["ballislife", "ball is life", "ballislife com", "ball is life com"]
     case .crunchyroll:
       ["crunchyroll", "crunchy roll", "crunchyroll com"]
+    case .ebay:
+      ["ebay", "e bay", "ebay com", "e bay com"]
     case .gmail:
       ["gmail", "gmail com", "my gmail", "gmail inbox", "my gmail inbox"]
     case .github:
@@ -98,7 +105,7 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
       .google
     case .youtube:
       .youtube
-    case .amazon, .ballislife, .crunchyroll, .gmail, .github, .hulu, .netflix:
+    case .amazon, .ballislife, .crunchyroll, .ebay, .gmail, .github, .hulu, .netflix:
       nil
     }
   }

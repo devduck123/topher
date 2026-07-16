@@ -299,8 +299,8 @@ final class PushToTalkCaptureControllerTests: XCTestCase {
     XCTAssertFalse(controller.isBusy)
   }
 
-  func testListeningTimeoutPublishesFailureBeforeSuspendedCleanupAndBlocksNewHold() async {
-    let voice = CaptureVoiceHarness(suspendCancel: true)
+  func testMaximumDurationFinalizesExactlyOnceAndRequiresPhysicalRelease() async {
+    let voice = CaptureVoiceHarness()
     let recorder = CaptureEventRecorder()
     let controller = makeController(
       microphonePermission: permission(.authorized),
@@ -312,17 +312,24 @@ final class PushToTalkCaptureControllerTests: XCTestCase {
 
     XCTAssertTrue(controller.beginHold())
     await waitUntil { recorder.events.contains(.stateChanged(.listening(""))) }
+    voice.yield(
+      .finalWithEvidence(
+        FinalTranscription(text: "Preserve this dictation.", confidence: 0.9)
+      )
+    )
     await waitUntil {
-      recorder.events.contains(.failed(.listeningTimedOut)) && voice.cancelCount == 1
+      recorder.events.contains(.maximumDurationReached("Preserve this dictation."))
+        && recorder.events.contains { event in
+          guard case .completedWithEvidence(let transcription) = event else { return false }
+          return transcription.primary.text == "Preserve this dictation."
+            && transcription.captureMetrics?.maximumDurationReached == true
+        }
     }
 
-    XCTAssertTrue(controller.isBusy, "Cleanup remains busy until engine cancellation returns")
-    XCTAssertFalse(controller.beginHold())
+    XCTAssertEqual(voice.finishCount, 1)
+    XCTAssertEqual(voice.cancelCount, 0)
+    XCTAssertFalse(controller.beginHold(), "The physical key must still be released")
     controller.endHold()
-    XCTAssertEqual(voice.finishCount, 0)
-
-    voice.resumeCancel()
-    await waitUntil { !controller.isBusy }
     XCTAssertTrue(controller.beginHold())
   }
 
@@ -382,10 +389,16 @@ final class PushToTalkCaptureControllerTests: XCTestCase {
 
     XCTAssertTrue(controller.beginHold())
     await waitUntil { recorder.events.contains(.stateChanged(.listening(""))) }
+    voice.yield(.partial("Recover this partial"))
+    await waitUntil {
+      recorder.events.contains(.stateChanged(.listening("Recover this partial")))
+    }
     controller.endHold()
 
     await waitUntil {
-      recorder.events.contains(.failed(.finalizationFailed)) && voice.cancelCount == 1
+      recorder.events.contains(
+        .failedWithRecovery(.finalizationFailed, transcript: "Recover this partial")
+      ) && voice.cancelCount == 1
     }
     XCTAssertFalse(recorder.events.contains(.failed(.finalizationTimedOut)))
   }

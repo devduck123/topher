@@ -35,6 +35,20 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
     XCTAssertEqual(harness.writeCount, 0)
   }
 
+  func testRecoveryDiscardRefusesRetentionWhenPreparedFieldBecomesSecure() throws {
+    let harness = FocusedTextHarness(content: "draft", selection: .init(location: 5, length: 0))
+    let capability = FocusedTextInsertionCapability(environment: harness.environment)
+    XCTAssertEqual(capability.prepareTarget(), .ready)
+    let selectedTextReadCount = harness.selectedTextReadCount
+
+    harness.isSecure = true
+
+    XCTAssertFalse(capability.discardPreparedTargetForRecovery())
+    XCTAssertEqual(harness.selectedTextReadCount, selectedTextReadCount)
+    XCTAssertEqual(harness.writeCount, 0)
+    XCTAssertEqual(capability.insert(try DictationText("secret")), .noPreparedTarget)
+  }
+
   func testUnsupportedFieldFallsBackWithoutMutation() {
     let harness = FocusedTextHarness(content: "hello", selection: .init(location: 5, length: 0))
     harness.canSetSelectedText = false

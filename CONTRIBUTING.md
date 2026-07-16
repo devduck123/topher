@@ -49,6 +49,8 @@ Run before every pull request:
 
 ```sh
 ruby scripts/check_dependency_parity.rb
+ruby scripts/check_dogfood_corpus.rb
+ruby scripts/test_observed_query_export.rb
 xcrun swift-format lint --strict -r Package.swift Sources Tests
 swift test
 xcodebuild -project Topher.xcodeproj -scheme TopherApp \
@@ -115,15 +117,23 @@ macOS permissions are capability boundaries, not setup chores:
 
 Keep raw audio, transcripts, search terms, messages, URLs, page contents,
 accessibility text, screenshots, and detailed framework errors out of ordinary
-logs. The sole current transcript-retention exception is the explicitly enabled,
-bounded local developer trace documented in
-[Local diagnostics](docs/local-diagnostics.md). Never add another content-bearing
-diagnostic sink implicitly. Credentials belong in Keychain and must never be
+logs. The app's sole automatic transcript-retention exception is the explicitly
+enabled, bounded local developer trace documented in
+[Local diagnostics](docs/local-diagnostics.md). The developer may explicitly
+export recent observed commands to the gitignored `.topher-local` dataset for
+manual dogfooding; this is a separate, durable plaintext copy, excludes
+dictation by default, and must never run automatically. Never add another
+content-bearing sink implicitly. Credentials belong in Keychain and must never be
 committed, printed, or stored in plist/user-default values or transcript
 diagnostics by Topher. The trace includes non-secure dictation but deliberately
 excludes dictation targeting a secure field. Because any other retained
 user-authored request can itself contain a pasted or spoken credential, treat
 every trace as sensitive.
+
+Keep reusable public cases sanitized in `dogfood/manual-corpus.json`; keep raw
+observed queries only in `.topher-local/dogfood/observed-queries.json`. Never
+copy private observations into fixtures, evidence, issues, or pull requests
+without deliberate review and redaction.
 
 ## Swift concurrency and native callbacks
 

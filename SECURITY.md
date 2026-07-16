@@ -57,6 +57,13 @@ development build. There is not yet a notarized public binary release.
   refused before capture; if the target becomes secure during the hold, Topher
   discards the final text without a preview or developer record. Revisit the
   default before distribution.
+- A developer may explicitly copy recent trace records into the bounded,
+  gitignored `.topher-local/dogfood/observed-queries.json` corpus. Topher never
+  creates this second sink automatically, the exporter excludes dictation
+  unless explicitly requested, and owner-only modes reduce accidental local
+  exposure. It remains durable plaintext until deliberately deleted; never
+  commit or publish it. Public regression cases belong in the sanitized
+  `dogfood/manual-corpus.json` corpus.
 - Credentials belong in macOS Keychain and never in source control.
 - Every effect requires capability-specific policy. An explicit, present-user
   request may itself confirm a capability-defined, bounded deterministic local

@@ -9,10 +9,10 @@ maintainability take priority over broad automation.
 
 The current application is a native Swift/SwiftUI menu-bar app with global
 push-to-talk commands, on-device transcription, deterministic typed resolution,
-policy validation, bounded application and web capabilities, and local
-developer diagnostics. Do not describe planned dictation, browser understanding,
-screen context, remote chat, wake-word activation, or LLM interpretation as
-implemented.
+policy validation, bounded application and web capabilities, global
+focused-field dictation, and local developer diagnostics. Do not describe broad
+editor compatibility, browser understanding, screen context, remote chat,
+wake-word activation, or LLM interpretation as implemented.
 
 ## Start here
 
@@ -41,6 +41,8 @@ default.
   strings, package reference, and shared `TopherApp` scheme.
 - `docs/decisions/`: consequential architecture decisions and their tradeoffs.
 - `docs/evidence/`: dated verification records for specific checkpoints.
+- `dogfood/`: sanitized, reviewable manual request cases. Private observed
+  requests belong only under the gitignored `.topher-local/` tree.
 - `scripts/`: checked local build, dependency-parity, and diagnostics helpers.
 
 ## Working agreements
@@ -99,6 +101,8 @@ Run before every pull request:
 
 ```sh
 ruby scripts/check_dependency_parity.rb
+ruby scripts/check_dogfood_corpus.rb
+ruby scripts/test_observed_query_export.rb
 xcrun swift-format lint --strict -r Package.swift Sources Tests
 swift test
 xcodebuild -project Topher.xcodeproj -scheme TopherApp -configuration Debug build

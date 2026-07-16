@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "description": "Sanitized phrases for repeatable human acceptance testing. Exact private observations stay in .topher-local and are never committed.",
+  "cases": [
+    {
+      "id": "assistant-open-chrome",
+      "mode": "assistant",
+      "category": "application-navigation",
+      "utterance": "Go to Chrome.",
+      "setup": "Chrome is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open Chrome exactly once without creating an unrelated tab.",
+      "checks": ["Transcript is accurate", "One capability executes", "Chrome becomes available"]
+    },
+    {
+      "id": "assistant-open-notes",
+      "mode": "assistant",
+      "category": "application-navigation",
+      "utterance": "Open Notes.",
+      "setup": "Notes is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open Notes exactly once.",
+      "checks": ["Transcript is accurate", "Notes opens"]
+    },
+    {
+      "id": "assistant-open-vscode-terse",
+      "mode": "assistant",
+      "category": "application-navigation",
+      "utterance": "VS Code.",
+      "setup": "Visual Studio Code is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open Visual Studio Code exactly once.",
+      "checks": ["Developer vocabulary is accurate", "Visual Studio Code opens"]
+    },
+    {
+      "id": "assistant-search-google",
+      "mode": "assistant",
+      "category": "web-search",
+      "utterance": "Search for NBA standings.",
+      "setup": "Chrome is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open one Google search for the complete query.",
+      "checks": ["Query words are preserved", "One result tab opens"]
+    },
+    {
+      "id": "assistant-search-youtube-natural",
+      "mode": "assistant",
+      "category": "web-search",
+      "utterance": "YouTube dining with Derek.",
+      "setup": "Chrome is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open one YouTube search for dining with Derek.",
+      "checks": ["No spoken comma is required", "One result tab opens"]
+    },
+    {
+      "id": "assistant-search-youtube-look-for",
+      "mode": "assistant",
+      "category": "web-search",
+      "utterance": "Go to YouTube, look for dining with Derek.",
+      "setup": "Chrome is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Treat the phrase as one YouTube search, not a compound request.",
+      "checks": ["One capability executes", "The complete query is preserved"]
+    },
+    {
+      "id": "assistant-open-ebay-brand",
+      "mode": "assistant",
+      "category": "website-navigation",
+      "utterance": "Go to eBay.",
+      "setup": "Chrome is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open the canonical eBay homepage instead of a Google fallback.",
+      "checks": ["One eBay tab opens", "No guessed arbitrary domain is used"]
+    },
+    {
+      "id": "assistant-open-ebay-domain",
+      "mode": "assistant",
+      "category": "website-navigation",
+      "utterance": "eBay.com.",
+      "setup": "Chrome is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open the canonical eBay homepage.",
+      "checks": ["Bare known destination resolves", "One eBay tab opens"]
+    },
+    {
+      "id": "assistant-type-recovery",
+      "mode": "assistant",
+      "category": "mode-recovery",
+      "utterance": "Type LeBron James.",
+      "setup": "Any app is focused.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Explain that the hold-to-dictate shortcut inserts text; execute nothing.",
+      "checks": ["No app or website opens", "The recovery message names dictation"]
+    },
+    {
+      "id": "assistant-bare-prose",
+      "mode": "assistant",
+      "category": "negative",
+      "utterance": "LeBron James.",
+      "setup": "Any app is focused.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Reject ambiguous bare prose without searching, opening, or typing.",
+      "checks": ["No capability executes"]
+    },
+    {
+      "id": "assistant-context-youtube-feed",
+      "mode": "assistant",
+      "category": "future-context",
+      "utterance": "What's on my YouTube feed?",
+      "setup": "Chrome may be open to YouTube.",
+      "expectedStatus": "contextRequired",
+      "expectedResult": "Explain that structured browser context is not implemented yet.",
+      "checks": ["No screen or page data is captured", "No capability executes"]
+    },
+    {
+      "id": "dictation-notes-short",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Topher helps me drive my Mac.",
+      "setup": "Focus an empty Notes text field and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert the sentence at the caret without pressing Return.",
+      "checks": ["Correct field", "Correct caret position", "No submission"]
+    },
+    {
+      "id": "dictation-selection-replacement",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "replacement text",
+      "setup": "Select one non-secure word in Notes and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Replace only the selected word and offer guarded Undo.",
+      "checks": ["Surrounding text is unchanged", "Undo restores the selection"]
+    },
+    {
+      "id": "dictation-chrome-field",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Chrome text field compatibility check.",
+      "setup": "Focus a non-secure Chrome text input and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert into the focused field or retain a reviewable fallback with a typed reason.",
+      "checks": ["No automatic clipboard write", "No Return key", "Failure reason is visible"]
+    },
+    {
+      "id": "dictation-secure-field",
+      "mode": "dictation",
+      "category": "security",
+      "utterance": "This must not be retained.",
+      "setup": "Focus a password field and use the dictation shortcut.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Refuse before capture and retain no transcript or preview.",
+      "checks": ["Microphone does not start", "No diagnostic content is saved"]
+    },
+    {
+      "id": "dictation-maximum-duration",
+      "mode": "dictation",
+      "category": "reliability",
+      "utterance": "Read a natural paragraph continuously until Topher reaches its maximum dictation duration.",
+      "setup": "Focus a long-form Notes field and keep holding the dictation shortcut beyond two minutes.",
+      "expectedStatus": "supported",
+      "expectedResult": "Automatically finalize and insert exactly once instead of discarding the transcript.",
+      "checks": ["Maximum-duration HUD appears", "Text is preserved", "Late key-up does not duplicate"]
+    }
+  ]
+}

@@ -146,6 +146,24 @@ struct DeveloperDiagnosticsView: View {
           .foregroundStyle(.secondary)
       }
 
+      if let reason = record.dictationFailureReason {
+        Text("Insertion fallback: \(reason.displayName)")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+
+      if let reason = record.captureFailureReason {
+        Text("Capture failure: \(reason.displayName)")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+
+      if record.maximumDurationReached == true {
+        Text("Automatically finalized at the maximum duration")
+          .font(.caption2)
+          .foregroundStyle(.orange)
+      }
+
       Text(
         "\(record.recordedAt.formatted(date: .omitted, time: .standard)) · \(record.source.displayName) · \(record.outcome.displayName) · v\(record.appVersion) (\(record.appBuild)) · \(record.processingDurationMilliseconds) ms"
       )
@@ -175,10 +193,43 @@ struct DeveloperDiagnosticsView: View {
           record: record,
           dimension: .actionCorrectness
         )
+
+        if record.actionWasCorrect == false {
+          actionIssueMenu(record)
+        }
       }
       .padding(.top, 2)
     }
     .accessibilityElement(children: .contain)
+  }
+
+  private func actionIssueMenu(_ record: DeveloperTranscriptRecord) -> some View {
+    Menu {
+      ForEach(DeveloperActionIssueReason.allCases, id: \.self) { reason in
+        Button {
+          diagnostics.setActionIssueReason(for: record, reason: reason)
+        } label: {
+          if record.actionIssueReason == reason {
+            Label(reason.displayName, systemImage: "checkmark")
+          } else {
+            Text(reason.displayName)
+          }
+        }
+      }
+
+      if record.actionIssueReason != nil {
+        Divider()
+        Button("Clear reason") {
+          diagnostics.setActionIssueReason(for: record, reason: nil)
+        }
+      }
+    } label: {
+      Label(record.actionIssueReason?.displayName ?? "Why?", systemImage: "tag")
+        .font(.caption2)
+    }
+    .menuStyle(.borderlessButton)
+    .disabled(diagnostics.isUpdating)
+    .accessibilityLabel("Incorrect action reason")
   }
 
   @ViewBuilder
@@ -312,6 +363,8 @@ extension UnsupportedCommandReason {
       "Compound request"
     case .contextRequired:
       "Context required"
+    case .dictationModeRequired:
+      "Dictation shortcut required"
     case .emptyInput:
       "Empty input"
     case .missingValue:
@@ -324,6 +377,75 @@ extension UnsupportedCommandReason {
       "Unsupported target action"
     case .unsupportedPhrasing:
       "Unsupported phrasing"
+    }
+  }
+}
+
+extension DictationFailureReason {
+  fileprivate var displayName: String {
+    switch self {
+    case .focusChanged:
+      "Focus changed"
+    case .mutationFailed:
+      "Text mutation failed"
+    case .noFocusedElement:
+      "No focused field"
+    case .noPreparedTarget:
+      "Prepared field unavailable"
+    case .selectionChanged:
+      "Selection changed"
+    case .tooLong:
+      "Text exceeded insertion bound"
+    case .unsupportedField:
+      "Unsupported field"
+    }
+  }
+}
+
+extension DeveloperActionIssueReason {
+  fileprivate var displayName: String {
+    switch self {
+    case .duplicatedText:
+      "Duplicated text"
+    case .missingText:
+      "Missing text"
+    case .other:
+      "Other"
+    case .spacingOrPunctuation:
+      "Spacing or punctuation"
+    case .wrongDestination:
+      "Wrong destination"
+    case .wrongField:
+      "Wrong field"
+    case .wrongPosition:
+      "Wrong position"
+    }
+  }
+}
+
+extension PushToTalkCaptureFailure {
+  fileprivate var displayName: String {
+    switch self {
+    case .microphonePermissionRequired:
+      "Microphone permission required"
+    case .microphoneDenied:
+      "Microphone denied"
+    case .microphoneRestricted:
+      "Microphone restricted"
+    case .speechModelNotReady:
+      "Speech model unavailable"
+    case .speechAssetPreparationFailed:
+      "Speech asset preparation failed"
+    case .startFailed:
+      "Capture start failed"
+    case .resultStreamEnded:
+      "Result stream ended"
+    case .resultStreamFailed:
+      "Result stream failed"
+    case .finalizationFailed:
+      "Finalization failed"
+    case .finalizationTimedOut:
+      "Finalization timed out"
     }
   }
 }

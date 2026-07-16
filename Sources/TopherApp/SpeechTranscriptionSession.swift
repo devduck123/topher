@@ -9,6 +9,19 @@ struct VoiceCaptureMetrics: Equatable, Sendable {
   let holdToListeningMilliseconds: UInt64?
   let listeningToFirstTranscriptMilliseconds: UInt64?
   let keyUpToFinalMilliseconds: UInt64?
+  let maximumDurationReached: Bool
+
+  init(
+    holdToListeningMilliseconds: UInt64?,
+    listeningToFirstTranscriptMilliseconds: UInt64?,
+    keyUpToFinalMilliseconds: UInt64?,
+    maximumDurationReached: Bool = false
+  ) {
+    self.holdToListeningMilliseconds = holdToListeningMilliseconds
+    self.listeningToFirstTranscriptMilliseconds = listeningToFirstTranscriptMilliseconds
+    self.keyUpToFinalMilliseconds = keyUpToFinalMilliseconds
+    self.maximumDurationReached = maximumDurationReached
+  }
 }
 
 struct FinalTranscription: Equatable, Sendable {

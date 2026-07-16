@@ -11,8 +11,8 @@ request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 209 Swift tests. The
-latest complete local run passed all 209 tests; Thread Sanitizer and final
+Status: the 0.4.0 development tree currently defines 217 Swift tests. The
+latest complete local run passed all 217 tests; Thread Sanitizer and final
 app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -42,8 +42,13 @@ The comparative speech benchmark is still open.
   cannot safely mutate. Clipboard writes happen only after pressing **Copy**.
 - Live partial text in Topher and a transient, non-activating cross-app voice
   HUD for preparation, listening, finalization, execution, and outcomes.
-- A 30-second listening watchdog, an 8-second finalization watchdog, immediate
-  stream-error recovery, and generation guards against late results.
+- Mode-aware maximum holds: 30 seconds for assistant commands and 120 seconds
+  for dictation. Reaching the limit finalizes the best transcript instead of
+  discarding it; the 8-second finalization watchdog and physical-key release
+  gate still prevent wedged or duplicate requests.
+- Recoverable partial assistant speech returns to the manual command field
+  without executing. Recoverable partial dictation stays in the local review
+  preview without insertion; secure targets still discard it.
 - Direct Apple on-device transcription for fixed `en_US`, with on-demand asset
   preparation, alternative hypotheses, confidence evidence, contextual
   vocabulary, and no raw-audio file writes.
@@ -60,8 +65,8 @@ The comparative speech benchmark is still open.
   Discovered names resolve to typed bundle identities; execution asks macOS to
   resolve the bundle identifier again and never turns speech into a path,
   process argument, or arbitrary identifier.
-- Typed, allowlisted navigation to Crunchyroll, Gmail, GitHub, Google, YouTube,
-  Amazon, Ballislife, Hulu, Netflix, and the browser-owned Chrome Extensions
+- Typed, allowlisted navigation to Crunchyroll, eBay, Gmail, GitHub, Google,
+  YouTube, Amazon, Ballislife, Hulu, Netflix, and the browser-owned Chrome Extensions
   route. Internal Chrome routes are
   delivered as URLs to Chrome even when it is already running.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
@@ -73,8 +78,9 @@ The comparative speech benchmark is still open.
   app match or visibly falls back to a Google search; Topher does not guess
   `x.com`.
 - Exact known targets can be terse commands such as “Notes,” “VS Code,” and
-  “YouTube.” Target-first query phrasing such as “YouTube for dining with
-  Derek” is supported, and likely sentence-ending punctuation is removed only
+  “YouTube.” Target-first query phrasing such as “YouTube dining with Derek”
+  and “Go to YouTube, look for dining with Derek” is supported, and likely
+  sentence-ending punctuation is removed only
   from the extracted command value while the raw transcript remains intact.
 - Explicit navigation to validated public domains such as “Go to tnc.com” uses
   HTTPS only. Paths, credentials, ports, IP addresses, custom schemes, and
@@ -100,7 +106,12 @@ The comparative speech benchmark is still open.
   transcripts and typed outcomes. Local dogfood builds start with it on; an
   explicit off switch and **Clear Now** remain available at any time. Each
   retained request can be rated independently for transcript accuracy and
-  action correctness.
+  action correctness. Failed action ratings can also carry a fixed issue tag,
+  and insertion/capture failures carry typed reasons without framework errors.
+- A checked-in sanitized manual dogfood corpus plus an explicit private export
+  for recent observed commands. The private dataset is gitignored, bounded,
+  owner-readable, excludes dictation by default, and is never written by the
+  app automatically.
 - XCTest coverage for parsing, policy, native capabilities, audio conversion,
   permission/assets, transcription, cancellation, and push-to-talk races.
 
@@ -187,7 +198,8 @@ For an interactive smoke test:
    finalizing before Safari opens exactly once.
 5. Try “Notion,” “Open Figma” (or another installed app), “Open Netflix,”
    “Open Netflix app,” “What app am I using?”, “Open Chrome extensions,”
-   “YouTube for dining with Derek,” “Go to tnc.com,” and “Search Crunchyroll.”
+   “YouTube dining with Derek,” “Go to YouTube, look for dining with Derek,”
+   “Go to eBay,” “eBay.com,” “Go to tnc.com,” and “Search Crunchyroll.”
 6. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
    fallback. Say a malformed address or an explicitly missing app and confirm
    it fails closed.
@@ -199,6 +211,10 @@ For an interactive smoke test:
    selection, with the caret next to an existing word, and with a password
    field. Use **Undo Dictation** before moving the caret. If an editor is not
    supported, review the pending text in Topher and press **Copy** explicitly.
+9. For a bounded-duration recovery check, keep holding dictation past its
+   configured maximum. Confirm Topher finalizes and inserts or previews the
+   best available text once, then does not start another request until the
+   physical shortcut is released.
 
 No default shortcut is claimed. This avoids silently overriding an existing
 system or application shortcut.
@@ -216,7 +232,9 @@ text element, selection, immediate text boundary, insertion, and guarded undo.
 
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
 not written to disk. Partial transcripts exist transiently in process memory
-and UI so the request can complete. Ordinary logging never includes transcript
+and UI so the request can complete. A recoverable partial may remain in the
+in-process manual field or dictation preview, but is never written to the
+developer trace as transcript content. Ordinary logging never includes transcript
 text. During local dogfooding, **Record final commands and dictation** defaults
 on and retains the bounded final voice/manual command or non-secure dictation
 described below; it can be turned off or cleared at any time. Dictation aimed
@@ -268,8 +286,10 @@ icon while enabled. Re-enabling after an opt-out requires confirmation. Each
 record contains the exact finalized voice/manual command or non-secure
 dictation, the interpreted or inserted text when Topher used different text,
 an available confidence summary, its source, an ephemeral launch-session ID, a
-fixed typed outcome, fixed command/capability metadata, a typed unsupported
-reason, optional local transcript/action ratings, capture-stage and processing
+  fixed typed outcome, fixed command/capability metadata, typed unsupported,
+  dictation-fallback, and capture-failure reasons, whether the maximum duration
+  auto-finalized the request, optional local transcript/action ratings and fixed
+  action-issue tags, capture-stage and processing
 durations, and app version/build. It never contains raw audio, partials, or content Topher
 separately captures from a page, screen, message, or document. Topher does not
 append constructed destination URLs, Keychain/config values, or detailed
@@ -291,6 +311,27 @@ without reviewing and redacting it.
 `scripts/summarize_dogfood_diagnostics.rb` prints metadata-only results for the
 latest launch session first, then the full retained history, so an older build
 does not obscure the current dogfood run.
+
+The sanitized manual corpus lives at `dogfood/manual-corpus.json`. Validate or
+list it without speaking:
+
+```sh
+ruby scripts/check_dogfood_corpus.rb
+ruby scripts/check_dogfood_corpus.rb --list --mode assistant
+```
+
+To build a private local dataset from recent retained commands, run the export
+explicitly:
+
+```sh
+ruby scripts/export_observed_queries.rb
+```
+
+The exporter writes `.topher-local/dogfood/observed-queries.json`, never runs
+inside Topher, excludes dictation unless `--include-dictation` is supplied, and
+keeps the result out of Git. The dataset is plaintext user content: review it
+locally, clear it intentionally when no longer useful, and never attach it to a
+public issue or pull request. See [Dogfood datasets](dogfood/README.md).
 
 Stream new events while testing:
 
@@ -317,9 +358,11 @@ mental model.
 - [Product vision](docs/product/vision.md)
 - [Build 8 application-awareness verification](docs/evidence/2026-07-15-build-8-application-awareness.md)
 - [Build 9 global-dictation verification](docs/evidence/2026-07-15-build-9-global-dictation-foundation.md)
+- [Build 10 dictation-resilience and dogfood-corpus verification](docs/evidence/2026-07-16-build-10-dictation-resilience-and-dogfood-corpus.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)
+- [Bounded dictation recovery and dogfood-corpus decision](docs/decisions/0014-bounded-dictation-recovery-and-dogfood-corpora.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

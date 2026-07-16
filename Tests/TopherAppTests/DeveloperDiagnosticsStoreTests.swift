@@ -191,6 +191,37 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     XCTAssertEqual(cleared.records.first?.actionWasCorrect, true)
   }
 
+  func testIncorrectActionReasonPersistsAndClearsWhenActionBecomesCorrect() async throws {
+    let store = makeStore(initialEnabled: true)
+    let token = try await traceToken(for: store)
+    let recorded = try await store.record(
+      draft(transcript: "YouTube dining with Derek"),
+      using: token
+    )
+    let recordID = try XCTUnwrap(recorded.records.first?.id)
+
+    _ = try await store.setFeedback(
+      recordID: recordID,
+      dimension: .actionCorrectness,
+      value: false
+    )
+    let tagged = try await store.setActionIssueReason(
+      recordID: recordID,
+      reason: .wrongDestination
+    )
+    XCTAssertEqual(tagged.records.first?.actionIssueReason, .wrongDestination)
+
+    let reloaded = try await makeStore(initialEnabled: false).snapshot()
+    XCTAssertEqual(reloaded.records.first?.actionIssueReason, .wrongDestination)
+
+    let corrected = try await store.setFeedback(
+      recordID: recordID,
+      dimension: .actionCorrectness,
+      value: true
+    )
+    XCTAssertNil(corrected.records.first?.actionIssueReason)
+  }
+
   func testDropsUnreasonableCaptureStageTimings() async throws {
     let store = makeStore(initialEnabled: true)
     let token = try await traceToken(for: store)
@@ -218,6 +249,38 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     XCTAssertNil(record.holdToListeningMilliseconds)
     XCTAssertEqual(record.listeningToFirstTranscriptMilliseconds, 42)
     XCTAssertNil(record.keyUpToFinalMilliseconds)
+  }
+
+  func testPersistsTypedAutomaticFinalizationAndFailureMetadata() async throws {
+    let store = makeStore(initialEnabled: true)
+    let token = try await traceToken(for: store)
+    let snapshot = try await store.record(
+      DeveloperTranscriptRecordDraft(
+        recordedAt: Date(timeIntervalSince1970: 499),
+        source: .dictation,
+        transcript: "",
+        maximumDurationReached: true,
+        captureFailureReason: .finalizationTimedOut,
+        trace: AssistantCommandTrace(
+          outcome: .captureFailed,
+          commandKind: nil,
+          capabilityIdentifier: nil,
+          dictationFailureReason: .mutationFailed
+        ),
+        processingDurationMilliseconds: 0,
+        appVersion: "test",
+        appBuild: "10"
+      ),
+      using: token
+    )
+
+    let record = try XCTUnwrap(snapshot.records.first)
+    XCTAssertEqual(record.maximumDurationReached, true)
+    XCTAssertEqual(record.captureFailureReason, .finalizationTimedOut)
+    XCTAssertEqual(record.dictationFailureReason, .mutationFailed)
+
+    let reloaded = try await makeStore(initialEnabled: false).snapshot()
+    XCTAssertEqual(reloaded.records.first, record)
   }
 
   func testDisableStopsStaleTraceWithoutDeletingExistingRecords() async throws {

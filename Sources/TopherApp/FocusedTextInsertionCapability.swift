@@ -175,6 +175,16 @@ final class FocusedTextInsertionCapability {
     self.preparedTarget = nil
   }
 
+  /// Discards the prepared target and reports whether a failed transcription
+  /// may be retained for explicit review. A target that became secure must not
+  /// produce a preview or content-bearing diagnostic.
+  func discardPreparedTargetForRecovery() -> Bool {
+    guard let preparedTarget else { return true }
+    let mayRetain = !environment.isSecure(preparedTarget.element)
+    discardPreparedTarget()
+    return mayRetain
+  }
+
   func insert(_ text: DictationText) -> FocusedTextInsertionOutcome {
     guard let preparedTarget else { return .noPreparedTarget }
     self.preparedTarget = nil

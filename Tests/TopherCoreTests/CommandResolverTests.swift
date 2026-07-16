@@ -409,4 +409,37 @@ final class CommandResolverTests: XCTestCase {
       )
     }
   }
+
+  func testObservedYouTubeQueriesDoNotDependOnSpokenPunctuation() throws {
+    let query = try XCTUnwrap(SearchQuery("dining with Derek"))
+    let expected = CommandResolution.resolved(.searchWeb(provider: .youtube, query: query))
+
+    for transcript in [
+      "YouTube dining with Derek.",
+      "Go to YouTube, look for dining with Derek.",
+      "Go to YouTube and look for dining with Derek.",
+    ] {
+      XCTAssertEqual(resolver.resolve(transcript), expected)
+    }
+  }
+
+  func testEBayIsAKnownCanonicalWebsite() {
+    for transcript in ["eBay", "eBay.com", "Go to eBay", "Go to eBay.com"] {
+      XCTAssertEqual(resolver.resolve(transcript), .resolved(.openWebsite(.ebay)))
+    }
+  }
+
+  func testExplicitTypingPhrasesDirectTheUserToDictationMode() {
+    for transcript in ["Type LeBron James", "Input LeBron James", "Dictate hello"] {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .unsupported(reason: .dictationModeRequired)
+      )
+    }
+
+    XCTAssertEqual(
+      resolver.resolve("LeBron James"),
+      .unsupported(reason: .unsupportedPhrasing)
+    )
+  }
 }

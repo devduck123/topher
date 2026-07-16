@@ -233,8 +233,9 @@ not require `SFSpeechRecognizer` server authorization according to Apple's
 [speech permission guidance](https://developer.apple.com/documentation/speech/asking-permission-to-use-speech-recognition).
 Accordingly, the current target has no `NSSpeechRecognitionUsageDescription`.
 Add it only if a future selected implementation actually invokes
-`SFSpeechRecognizer`. Do not add Accessibility or Screen Recording usage
-descriptions before those capabilities exist.
+`SFSpeechRecognizer`. Focused-field dictation now requests Accessibility from
+an explicit action and revalidates a narrow selected-text boundary. Do not add
+Screen Recording usage descriptions before a corresponding capability exists.
 
 ## Context and browser path
 
@@ -298,8 +299,9 @@ Authored, tested, and built now:
 - Direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine` capture,
   `AVAudioConverter`, runtime asset preparation, and microphone permission
   boundaries.
-- Real push-to-talk start/partial/finalize/cancel behavior with listening and
-  finalization watchdogs, generation guards, and immediate stream recovery.
+- Real push-to-talk start/partial/finalize/cancel behavior with mode-specific
+  maximum-duration finalization, a finalization watchdog, generation guards,
+  and preview-only recovery of usable partials.
 - Payload-free preparation, capture, and finalization signpost intervals for
   local latency investigation.
 - Menu-bar UI, transient non-activating voice HUD, manual transcript fallback,

@@ -53,8 +53,11 @@ The current feature is a global **assistant command** mode:
 6. Unsupported text fails visibly and does not become an executable string.
 
 The menu does not need to be open and Topher does not need to be the focused
-application. The microphone is active only for the hold, subject to the
-30-second safety timeout.
+application. The microphone is active only for the hold. At 30 seconds Topher
+automatically finalizes the best command transcript, but will not execute a
+recoverable partial after a capture failure; that text returns to the manual
+field for review. The physical key must still be released before another
+request can start.
 
 This shortcut remains command-only. Dictated prose uses the distinct global
 dictation shortcut below, so speech cannot accidentally switch between typing
@@ -83,6 +86,10 @@ The implemented foundation contract is:
   transcription and before mutation. A mismatch produces a preview, not a guess.
 - Never mutate the clipboard automatically; copying a fallback is explicit.
 - Exclude secure-field dictation from the content-bearing developer trace.
+- Automatically finalize at the 120-second dictation maximum instead of
+  discarding the whole utterance. A late physical key-up cannot insert twice.
+- Preserve a usable partial after a non-secure capture failure only in the
+  review/copy preview; never insert or persist that partial automatically.
 
 The foundation uses Accessibility selected-text and selected-range attributes.
 Editors that do not expose a safely settable selection are intentionally routed

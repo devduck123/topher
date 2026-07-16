@@ -6,6 +6,8 @@ struct MenuContentView: View {
   @ObservedObject var model: TopherModel
   @ObservedObject var diagnostics: DeveloperDiagnosticsController
   @ObservedObject var vocabulary: SpeechVocabularyController
+  @State private var isDictationShortcutConfigured =
+    KeyboardShortcuts.getShortcut(for: .dictation) != nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -33,8 +35,21 @@ struct MenuContentView: View {
 
       KeyboardShortcuts.Recorder(
         "Hold-to-dictate shortcut:",
-        name: .dictation
+        name: .dictation,
+        onChange: { shortcut in
+          isDictationShortcutConfigured = shortcut != nil
+        }
       )
+
+      if !isDictationShortcutConfigured {
+        Label(
+          "Dictation is not configured. Record a separate shortcut above to type into the focused field.",
+          systemImage: "exclamationmark.triangle.fill"
+        )
+        .font(.caption)
+        .foregroundStyle(.orange)
+        .fixedSize(horizontal: false, vertical: true)
+      }
 
       HStack(spacing: 8) {
         Image(
@@ -163,6 +178,7 @@ struct MenuContentView: View {
     .padding(16)
     .frame(width: 390)
     .onAppear {
+      isDictationShortcutConfigured = KeyboardShortcuts.getShortcut(for: .dictation) != nil
       model.refreshVoiceReadiness()
       model.refreshAccessibilityPermission()
     }

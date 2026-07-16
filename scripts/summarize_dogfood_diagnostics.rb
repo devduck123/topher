@@ -57,6 +57,13 @@ def print_summary(title, records)
   print_counts("Outcomes:", counts(records, "outcome"))
   unsupported_records = records.select { |record| record["unsupportedReason"] }
   print_counts("Unsupported reasons:", counts(unsupported_records, "unsupportedReason"))
+  dictation_failure_records = records.select { |record| record["dictationFailureReason"] }
+  print_counts(
+    "Dictation fallback reasons:",
+    counts(dictation_failure_records, "dictationFailureReason")
+  )
+  capture_failure_records = records.select { |record| record["captureFailureReason"] }
+  print_counts("Capture failure reasons:", counts(capture_failure_records, "captureFailureReason"))
 
   transcript_ratings = records
     .select { |record| !record["transcriptWasAccurate"].nil? }
@@ -69,6 +76,11 @@ def print_summary(title, records)
   action_correctness = percentage(action_ratings.count(true), action_ratings.length)
   puts "  transcript accurate: #{transcript_accuracy}"
   puts "  action/insertion correct: #{action_correctness}"
+  issue_records = records.select { |record| record["actionIssueReason"] }
+  print_counts("Action/insertion issue reasons:", counts(issue_records, "actionIssueReason"))
+
+  automatic_finalizations = records.count { |record| record["maximumDurationReached"] == true }
+  puts "Automatic maximum-duration finalizations: #{automatic_finalizations}"
 
   interpreted = records.count { |record| record["interpretedTranscript"] }
   puts "Interpreted/formatted text changes: #{interpreted}/#{records.length}"
@@ -76,7 +88,7 @@ def print_summary(title, records)
   timings = {
     "hold to listening" => "holdToListeningMilliseconds",
     "listening to first text" => "listeningToFirstTranscriptMilliseconds",
-    "key-up to final" => "keyUpToFinalMilliseconds",
+    "stop to final" => "keyUpToFinalMilliseconds",
     "request processing" => "processingDurationMilliseconds",
   }
   puts "Timing (milliseconds):"

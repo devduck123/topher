@@ -201,6 +201,99 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.phase, .success("Copied dictation. Paste it where you want it."))
   }
 
+  func testDictationStreamFailurePreservesPartialForReviewWithoutInsertion() async throws {
+    struct StreamFailure: Error {}
+
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherDictationRecoveryDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "Before",
+      selection: FocusedTextRange(location: 6, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.partial("recover this unfinished dictation"))
+    await waitUntil { model.phase == .listening("recover this unfinished dictation") }
+    voice.fail(StreamFailure())
+
+    await waitUntil {
+      model.pendingDictationText == "recover this unfinished dictation"
+    }
+    XCTAssertEqual(field.content, "Before")
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Transcription stopped before finalizing. Open Topher to review or copy the recovered text."
+      )
+    )
+    await waitUntil { diagnostics.records.count == 1 }
+    XCTAssertEqual(diagnostics.records[0].transcript, "")
+    XCTAssertEqual(diagnostics.records[0].source, .dictation)
+    XCTAssertEqual(diagnostics.records[0].outcome, .captureFailed)
+    XCTAssertEqual(diagnostics.records[0].captureFailureReason, .resultStreamFailed)
+  }
+
+  func testAssistantStreamFailureReturnsPartialToManualFieldWithoutExecution() async {
+    struct StreamFailure: Error {}
+
+    let voice = VoiceHarness()
+    var applicationOpenCount = 0
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+          openApplication: { _ in applicationOpenCount += 1 }
+        )
+      )
+    )
+
+    model.beginPushToTalk()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.partial("Open Safari"))
+    await waitUntil { model.phase == .listening("Open Safari") }
+    voice.fail(StreamFailure())
+
+    await waitUntil { model.manualTranscript == "Open Safari" }
+    XCTAssertEqual(applicationOpenCount, 0)
+    XCTAssertEqual(voice.finishCount, 0)
+    XCTAssertEqual(voice.cancelCount, 1)
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Transcription stopped before finalizing. Open Topher to review the recovered text; it was not executed."
+      )
+    )
+  }
+
   func testDictationDiagnosticsSeparateRawSpeechFromInsertedText() async throws {
     let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
       "TopherDictationDiagnosticsTests-\(UUID().uuidString)",
@@ -950,25 +1043,37 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.voiceReadiness, .denied)
   }
 
-  func testListeningTimeoutCancelsTranscription() async {
+  func testDictationMaximumDurationFinalizesAndInsertsInsteadOfDiscarding() async {
     let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "Before ",
+      selection: FocusedTextRange(location: 7, length: 0)
+    )
     let model = makeModel(
       microphonePermission: permission(.authorized),
       speechAssets: readySpeechAssets(),
       voice: voice,
-      listeningTimeout: .milliseconds(20)
+      listeningTimeout: .seconds(1),
+      dictationListeningTimeout: .milliseconds(20),
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
     )
 
-    model.beginPushToTalk()
+    model.beginDictation()
     await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("preserved text"))
 
     await waitUntil {
-      model.phase == .failure("Listening timed out. Try the shortcut again.")
+      model.phase == .success("Inserted dictation.")
     }
+    model.endDictation()
+    await Task.yield()
+
+    XCTAssertEqual(field.content, "Before preserved text")
     XCTAssertEqual(voice.prepareCount, 1)
     XCTAssertEqual(voice.startCount, 1)
-    XCTAssertEqual(voice.finishCount, 0)
-    XCTAssertEqual(voice.cancelCount, 1)
+    XCTAssertEqual(voice.finishCount, 1)
+    XCTAssertEqual(voice.cancelCount, 0)
   }
 
   func testResultStreamFailureWhileListeningFailsAndCancelsImmediately() async {
@@ -1033,8 +1138,8 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(voice.finishCount, 1)
   }
 
-  func testKeyUpDuringSuspendedTimeoutCleanupDoesNotFinishOrOverwriteFailure() async {
-    let voice = VoiceHarness(suspendCancel: true)
+  func testLateKeyUpAfterAutomaticFinalizationDoesNotDuplicateCompletion() async {
+    let voice = VoiceHarness()
     let model = makeModel(
       microphonePermission: permission(.authorized),
       speechAssets: readySpeechAssets(),
@@ -1044,21 +1149,25 @@ final class TopherModelSpeechTests: XCTestCase {
 
     model.beginPushToTalk()
     await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("Unsupported recovered phrase"))
     await waitUntil {
-      model.phase == .failure("Listening timed out. Try the shortcut again.")
-        && voice.cancelCount == 1
+      model.phase
+        == .failure(
+          "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
+        )
     }
 
     model.endPushToTalk()
-    model.runManually()
-    model.beginPushToTalk()
     await Task.yield()
 
-    XCTAssertEqual(model.phase, .failure("Listening timed out. Try the shortcut again."))
+    XCTAssertEqual(
+      model.phase,
+      .failure("Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”")
+    )
     XCTAssertEqual(voice.prepareCount, 1)
     XCTAssertEqual(voice.startCount, 1)
-    XCTAssertEqual(voice.finishCount, 0)
-    voice.resumeCancel()
+    XCTAssertEqual(voice.finishCount, 1)
+    XCTAssertEqual(voice.cancelCount, 0)
   }
 
   private func makeModel(
@@ -1068,6 +1177,7 @@ final class TopherModelSpeechTests: XCTestCase {
     applicationOpener: ApplicationOpenCapability? = nil,
     webOpener: WebOpenCapability? = nil,
     listeningTimeout: Duration = .seconds(1),
+    dictationListeningTimeout: Duration? = nil,
     finalizationTimeout: Duration = .seconds(1),
     voiceFeedbackResultDuration: Duration = .seconds(1),
     developerDiagnostics: DeveloperDiagnosticsController? = nil,
@@ -1082,6 +1192,7 @@ final class TopherModelSpeechTests: XCTestCase {
       speechAssets: speechAssets,
       voiceTranscription: voice.client,
       listeningTimeout: listeningTimeout,
+      dictationListeningTimeout: dictationListeningTimeout ?? listeningTimeout,
       finalizationTimeout: finalizationTimeout,
       voiceFeedbackResultDuration: voiceFeedbackResultDuration,
       developerDiagnostics: developerDiagnostics,

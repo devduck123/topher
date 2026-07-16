@@ -5,189 +5,77 @@ import SwiftUI
 struct MenuContentView: View {
   @ObservedObject var model: TopherModel
   @ObservedObject var diagnostics: DeveloperDiagnosticsController
-  @ObservedObject var vocabulary: SpeechVocabularyController
+
+  @State private var isAssistantShortcutConfigured =
+    KeyboardShortcuts.getShortcut(for: .pushToTalk) != nil
   @State private var isDictationShortcutConfigured =
     KeyboardShortcuts.getShortcut(for: .dictation) != nil
-  @AppStorage(DictationPolishSettings.preferenceKey) private var isDictationPolishEnabled =
-    DictationPolishSettings.defaultEnabled
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      HStack(spacing: 10) {
-        Image(systemName: model.phase.symbolName)
-          .font(.title2)
-          .symbolEffect(.pulse, isActive: model.phase.isListening)
+    VStack(spacing: 0) {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 14) {
+          phaseHeader
 
-        VStack(alignment: .leading, spacing: 2) {
-          Text(model.phase.title)
-            .font(.headline)
-          Text(model.phase.detail)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+          VStack(spacing: 8) {
+            ShortcutModeRow(
+              title: "Assistant",
+              subtitle: "Commands, apps, and web actions",
+              systemImage: "sparkles",
+              shortcutName: .pushToTalk,
+              isConfigured: isAssistantShortcutConfigured,
+              onChange: { isAssistantShortcutConfigured = $0 != nil }
+            )
+
+            ShortcutModeRow(
+              title: "Dictation",
+              subtitle: "Type into the focused text field",
+              systemImage: "text.cursor",
+              shortcutName: .dictation,
+              isConfigured: isDictationShortcutConfigured,
+              onChange: { isDictationShortcutConfigured = $0 != nil }
+            )
+          }
+
+          readinessCard
+
+          if let pendingDictationText = model.pendingDictationText {
+            PendingDictationCard(
+              text: pendingDictationText,
+              copy: model.copyPendingDictation,
+              clear: model.clearPendingDictation
+            )
+          }
+
+          if model.canUndoDictation {
+            Button {
+              model.undoLastDictation()
+            } label: {
+              Label("Undo last dictation", systemImage: "arrow.uturn.backward")
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.phase.isBusy)
+          }
         }
+        .padding(16)
       }
+      .scrollIndicators(.hidden)
+      .frame(maxHeight: 520)
 
       Divider()
 
-      KeyboardShortcuts.Recorder(
-        "Assistant command shortcut:",
-        name: .pushToTalk
-      )
-
-      KeyboardShortcuts.Recorder(
-        "Hold-to-dictate shortcut:",
-        name: .dictation,
-        onChange: { shortcut in
-          isDictationShortcutConfigured = shortcut != nil
+      HStack(spacing: 12) {
+        SettingsLink {
+          Label("Settings", systemImage: "gearshape")
         }
-      )
+        .buttonStyle(.plain)
 
-      if !isDictationShortcutConfigured {
-        Label(
-          "Dictation is not configured. Record a separate shortcut above to type into the focused field.",
-          systemImage: "exclamationmark.triangle.fill"
-        )
-        .font(.caption)
-        .foregroundStyle(.orange)
-        .fixedSize(horizontal: false, vertical: true)
-      }
-
-      Toggle("Clean repeated speech", isOn: $isDictationPolishEnabled)
-        .font(.caption)
-        .onChange(of: isDictationPolishEnabled) { _, enabled in
-          model.setDictationPolishEnabled(enabled)
-        }
-
-      Text(
-        "Fast local cleanup for clear stutters. Turn it off for presentation-only transcription; punctuation and grammar are not rewritten."
-      )
-      .font(.caption2)
-      .foregroundStyle(.secondary)
-      .fixedSize(horizontal: false, vertical: true)
-
-      HStack(spacing: 8) {
-        Image(
-          systemName: model.voiceReadiness == .ready
-            ? "mic.circle.fill"
-            : "mic.circle"
-        )
-        .foregroundStyle(model.voiceReadiness == .ready ? .green : .secondary)
-
-        Text(model.voiceReadiness.title)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-
-        Spacer()
-
-        if model.voiceReadiness.canPrepare {
-          Button("Enable Voice") {
-            model.prepareVoiceInput()
-          }
-          .controlSize(.small)
-        } else if model.voiceReadiness.needsSettings {
-          Button("Open Settings") {
-            model.openMicrophoneSettings()
-          }
-          .controlSize(.small)
-        }
-      }
-
-      HStack(spacing: 8) {
-        Image(
-          systemName: model.accessibilityPermissionState == .authorized
-            ? "accessibility.fill"
-            : "accessibility"
-        )
-        .foregroundStyle(
-          model.accessibilityPermissionState == .authorized ? .green : .secondary
-        )
-
-        Text(
-          model.accessibilityPermissionState == .authorized
-            ? "Global text insertion ready"
-            : "Accessibility required for dictation"
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
-
-        Spacer()
-
-        if model.accessibilityPermissionState == .notAuthorized {
-          Button("Enable") {
-            model.requestAccessibilityPermission()
-          }
-          .controlSize(.small)
-
-          Button("Settings") {
-            model.openAccessibilitySettings()
-          }
-          .controlSize(.small)
-        }
-      }
-
-      if model.accessibilityPermissionState == .notAuthorized {
-        Text(AccessibilityPermissionClient.recoveryInstructions)
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-
-      if let pendingDictationText = model.pendingDictationText {
-        VStack(alignment: .leading, spacing: 6) {
-          Text("Pending dictation")
+        if diagnostics.isEnabled {
+          Label("Diagnostics on", systemImage: "record.circle")
             .font(.caption)
-            .foregroundStyle(.secondary)
-
-          Text(pendingDictationText)
-            .font(.caption)
-            .lineLimit(4)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-
-          HStack {
-            Button("Copy") {
-              model.copyPendingDictation()
-            }
-            .controlSize(.small)
-
-            Button("Clear") {
-              model.clearPendingDictation()
-            }
-            .controlSize(.small)
-
-            Spacer()
-          }
-        }
-      }
-
-      VStack(alignment: .leading, spacing: 6) {
-        Text("Manual transcript (development fallback)")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-
-        TextField("Open Safari or search YouTube…", text: $model.manualTranscript)
-          .textFieldStyle(.roundedBorder)
-          .onSubmit(model.runManually)
-      }
-
-      DeveloperDiagnosticsView(diagnostics: diagnostics)
-      SpeechVocabularyView(vocabulary: vocabulary)
-
-      HStack {
-        Button("Run") {
-          model.runManually()
-        }
-        .keyboardShortcut(.return, modifiers: [])
-        .disabled(model.phase.isBusy)
-
-        if model.canUndoDictation {
-          Button("Undo Dictation") {
-            model.undoLastDictation()
-          }
-          .disabled(model.phase.isBusy)
+            .foregroundStyle(.orange)
+            .help("Final commands and non-secure dictation are retained locally for dogfooding.")
         }
 
         Spacer()
@@ -195,21 +83,246 @@ struct MenuContentView: View {
         Button("Quit") {
           NSApplication.shared.terminate(nil)
         }
+        .buttonStyle(.plain)
+      }
+      .font(.caption)
+      .padding(.horizontal, 16)
+      .padding(.vertical, 12)
+    }
+    .frame(width: 380)
+    .onAppear(perform: refreshReadiness)
+    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification))
+    { _ in
+      refreshReadiness()
+    }
+  }
+
+  private var phaseHeader: some View {
+    HStack(alignment: .top, spacing: 12) {
+      ZStack {
+        Circle()
+          .fill(phaseTint.opacity(0.14))
+        Image(systemName: model.phase.symbolName)
+          .font(.system(size: 18, weight: .semibold))
+          .foregroundStyle(phaseTint)
+          .symbolEffect(.pulse, isActive: model.phase.isListening)
+      }
+      .frame(width: 40, height: 40)
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(model.phase.title)
+          .font(.headline)
+        Text(model.phase.detail)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .lineLimit(3)
+      }
+
+      Spacer(minLength: 0)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(model.phase.title)
+    .accessibilityValue(model.phase.detail)
+  }
+
+  private var readinessCard: some View {
+    VStack(spacing: 0) {
+      readinessRow(
+        title: model.voiceReadiness.title,
+        systemImage: model.voiceReadiness == .ready ? "mic.fill" : "mic",
+        tint: voiceReadinessTint
+      ) {
+        if model.voiceReadiness.canPrepare {
+          Button("Set Up") {
+            model.prepareVoiceInput()
+          }
+          .controlSize(.small)
+        } else if model.voiceReadiness.needsSettings {
+          Button("Microphone Settings") {
+            model.openMicrophoneSettings()
+          }
+          .controlSize(.small)
+        }
+      }
+
+      Divider()
+        .padding(.leading, 42)
+
+      readinessRow(
+        title: model.accessibilityPermissionState == .authorized
+          ? "Global text insertion ready"
+          : "Accessibility required for dictation",
+        systemImage: "accessibility",
+        tint: model.accessibilityPermissionState == .authorized ? .green : .orange
+      ) {
+        if model.accessibilityPermissionState == .notAuthorized {
+          HStack(spacing: 6) {
+            Button("Enable") {
+              model.requestAccessibilityPermission()
+            }
+            .controlSize(.small)
+
+            Button {
+              model.openAccessibilitySettings()
+            } label: {
+              Image(systemName: "gearshape")
+            }
+            .controlSize(.small)
+            .help("Open Accessibility Settings")
+            .accessibilityLabel("Open Accessibility Settings")
+          }
+        }
+      }
+
+      if model.accessibilityPermissionState == .notAuthorized {
+        Divider()
+          .padding(.leading, 42)
+
+        Text(AccessibilityPermissionClient.recoveryInstructions)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 9)
       }
     }
-    .padding(16)
-    .frame(width: 390)
-    .onAppear {
-      isDictationShortcutConfigured = KeyboardShortcuts.getShortcut(for: .dictation) != nil
-      model.setDictationPolishEnabled(isDictationPolishEnabled)
-      model.refreshVoiceReadiness()
-      model.refreshAccessibilityPermission()
+    .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+  }
+
+  private func readinessRow<Action: View>(
+    title: String,
+    systemImage: String,
+    tint: Color,
+    @ViewBuilder action: () -> Action
+  ) -> some View {
+    HStack(spacing: 10) {
+      Image(systemName: systemImage)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(tint)
+        .frame(width: 22, height: 22)
+        .background(tint.opacity(0.12), in: Circle())
+
+      Text(title)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      Spacer(minLength: 8)
+
+      action()
     }
-    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification))
-    {
-      _ in
-      model.refreshVoiceReadiness()
-      model.refreshAccessibilityPermission()
+    .padding(.horizontal, 10)
+    .padding(.vertical, 9)
+  }
+
+  private var phaseTint: Color {
+    switch model.phase {
+    case .idle:
+      .accentColor
+    case .preparingVoice, .listening, .finalizingVoice, .transcribing, .executing:
+      .blue
+    case .success:
+      .green
+    case .failure:
+      .orange
+    }
+  }
+
+  private var voiceReadinessTint: Color {
+    switch model.voiceReadiness {
+    case .ready:
+      .green
+    case .checking, .preparing:
+      .blue
+    case .needsPermission, .needsAssets, .denied, .restricted:
+      .orange
+    case .unavailable:
+      .red
+    }
+  }
+
+  private func refreshReadiness() {
+    isAssistantShortcutConfigured = KeyboardShortcuts.getShortcut(for: .pushToTalk) != nil
+    isDictationShortcutConfigured = KeyboardShortcuts.getShortcut(for: .dictation) != nil
+    model.refreshVoiceReadiness()
+    model.refreshAccessibilityPermission()
+  }
+}
+
+private struct ShortcutModeRow: View {
+  let title: String
+  let subtitle: String
+  let systemImage: String
+  let shortcutName: KeyboardShortcuts.Name
+  let isConfigured: Bool
+  let onChange: (KeyboardShortcuts.Shortcut?) -> Void
+
+  var body: some View {
+    HStack(spacing: 11) {
+      Image(systemName: systemImage)
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(isConfigured ? Color.accentColor : Color.orange)
+        .frame(width: 30, height: 30)
+        .background(
+          (isConfigured ? Color.accentColor : Color.orange).opacity(0.11),
+          in: RoundedRectangle(cornerRadius: 8)
+        )
+
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title)
+          .font(.subheadline.weight(.semibold))
+        Text(isConfigured ? subtitle : "Choose a shortcut to enable")
+          .font(.caption2)
+          .foregroundStyle(isConfigured ? Color.secondary : Color.orange)
+      }
+
+      Spacer(minLength: 6)
+
+      KeyboardShortcuts.Recorder(
+        "\(title) shortcut",
+        name: shortcutName,
+        onChange: onChange
+      )
+      .labelsHidden()
+    }
+    .padding(11)
+    .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+    .accessibilityElement(children: .contain)
+  }
+}
+
+private struct PendingDictationCard: View {
+  let text: String
+  let copy: () -> Void
+  let clear: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Label("Dictation needs your review", systemImage: "doc.text.magnifyingglass")
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(.orange)
+
+      Text(text)
+        .font(.caption)
+        .lineLimit(4)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      HStack {
+        Button("Copy", action: copy)
+          .buttonStyle(.borderedProminent)
+          .controlSize(.small)
+        Button("Clear", action: clear)
+          .controlSize(.small)
+        Spacer()
+      }
+    }
+    .padding(12)
+    .background(.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
+    .overlay {
+      RoundedRectangle(cornerRadius: 12)
+        .strokeBorder(.orange.opacity(0.22))
     }
   }
 }

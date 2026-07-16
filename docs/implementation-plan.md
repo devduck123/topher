@@ -302,7 +302,51 @@ not parallel implementation projects. The canonical contracts are
 
 ## Product polish backlog
 
-### Topher visual identity: the assistant that helps drive your Mac
+### Interaction shell and in-use feedback — in progress
+
+- Complete in the first UI slice: keep the menu-bar control as the fast,
+  glanceable surface: show the active mode, readiness, the configured shortcut,
+  and the one recovery action that matters now. A separate native settings
+  window now moves manual development input, vocabulary maintenance, and
+  detailed diagnostics into General, Personalization, and Developer sections
+  without hiding the persistent diagnostics-on state.
+- Pending: add a deliberate first-launch and relaunch experience so opening
+  Topher never appears to do nothing when the app has no Dock icon, the menu-bar
+  item is disabled, or the menu bar is crowded. Explain where Topher lives, how
+  to invoke each implemented mode, why each permission is needed, and how to
+  quit.
+- In progress: define one presentation model for command and dictation phases
+  so the menu-bar symbol, control panel, and passive HUD use consistent names,
+  symbols, colors, timing, and recovery actions without collapsing the modes
+  into one authority path.
+- Pending: refine the passive HUD for preparation, listening, finalization,
+  execution or insertion, success, and failure. Keep it non-activating and
+  privacy-safe; verify placement across display arrangements and Dock positions,
+  readable result duration, long or empty text, and no focus theft.
+- Complete in the first UI slice: require an explicit manual command before
+  enabling **Run Command**. The manual field now starts empty, trims its input,
+  and has no window-wide Return shortcut that can run while another control has
+  focus.
+- Complete in the first UI slice: use native macOS controls and semantic
+  materials, a bounded scrolling menu, and text or shape in addition to color
+  for every primary state. Isolated light/dark renders cover the compact menu
+  and all settings sections at their production minimum widths, including
+  keyboard focus through personalization fields. Pending installed-app
+  verification covers increased contrast, reduced transparency, reduced
+  motion, VoiceOver, larger text, and short displays.
+- Complete in the first UI slice: add a deterministic regression test for blank
+  manual input and rerun the full model suite. Pending: add render or snapshot
+  coverage for high-value states and complete a manual matrix for first launch,
+  menu-bar visibility, permission grant/denial/recovery, command and dictation
+  holds, failures, multiple displays, Dock positions, and accessibility
+  appearances.
+
+Exit: a first-time user can find Topher, understand its current modes and
+permissions, complete or recover from an interaction without opening developer
+tools, and use the interface without focus theft, clipped content, accidental
+execution, or color- and motion-only feedback.
+
+### Topher visual identity and Dock presence — planned
 
 - Design a small, friendly car combined with Topher's existing spark motif.
   The character should feel like a capable little copilot rather than a generic
@@ -319,12 +363,16 @@ not parallel implementation projects. The canonical contracts are
 - Verify the menu-bar symbol at native scale, standard and increased display
   scaling, light/dark mode, and with transcript diagnostics enabled. Include an
   accessible label; never communicate state through color alone.
-- Decide explicitly whether Topher remains an `LSUIElement` menu-bar-only app
-  or offers an intentional Dock mode. Do not add a permanent Dock presence as
-  an accidental side effect of installing the new app icon.
+- Record an explicit lifecycle decision before changing `LSUIElement`. The
+  recommended default remains menu-bar-only; offer a Dock mode only if its icon
+  opens a useful control or settings window, and test activation, application
+  switching, relaunch, duplicate ownership, and quit behavior in both modes.
+  Do not add a permanent Dock presence as an accidental side effect of
+  installing the new app icon.
 - Keep source artwork and exported assets in the repository, document the
   export process, and check licensing/originality before shipping.
 
 Exit: Topher has a distinctive car-plus-spark identity that is legible in the
 menu bar, polished everywhere macOS displays its app icon, accessible across
-states and appearances, and does not change menu-bar-only lifecycle behavior.
+states and appearances, and preserves the documented menu-bar-only lifecycle;
+any Dock mode is separately intentional and tested.

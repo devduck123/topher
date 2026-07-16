@@ -7,6 +7,14 @@ struct DeveloperDiagnosticsView: View {
   @State private var isExpanded = false
   @State private var pendingConfirmation: Confirmation?
 
+  init(
+    diagnostics: DeveloperDiagnosticsController,
+    startsExpanded: Bool = false
+  ) {
+    self.diagnostics = diagnostics
+    _isExpanded = State(initialValue: startsExpanded)
+  }
+
   var body: some View {
     DisclosureGroup(isExpanded: $isExpanded) {
       VStack(alignment: .leading, spacing: 10) {

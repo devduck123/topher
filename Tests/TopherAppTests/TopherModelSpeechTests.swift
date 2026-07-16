@@ -773,6 +773,7 @@ final class TopherModelSpeechTests: XCTestCase {
         )
       )
     )
+    model.manualTranscript = "Open Safari"
 
     model.runManually()
     await waitUntil { model.phase == .success("Opened Safari.") }
@@ -783,6 +784,31 @@ final class TopherModelSpeechTests: XCTestCase {
       model.phase == .success("Voice input is ready. Hold your shortcut again to speak.")
     }
     XCTAssertEqual(model.voiceFeedback, .hidden)
+  }
+
+  func testManualCommandStartsEmptyAndBlankInputCannotRun() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice
+    )
+
+    XCTAssertEqual(model.manualTranscript, "")
+    XCTAssertFalse(model.canRunManualCommand)
+
+    model.runManually()
+    await Task.yield()
+    XCTAssertEqual(model.phase, .idle)
+
+    model.manualTranscript = "  \n  "
+    XCTAssertFalse(model.canRunManualCommand)
+    model.runManually()
+    await Task.yield()
+    XCTAssertEqual(model.phase, .idle)
+
+    model.manualTranscript = "Open Safari"
+    XCTAssertTrue(model.canRunManualCommand)
   }
 
   func testInFlightCommandBlocksDuplicateManualAndVoiceExecution() async {
@@ -803,6 +829,7 @@ final class TopherModelSpeechTests: XCTestCase {
         )
       )
     )
+    model.manualTranscript = "Open Safari"
 
     model.runManually()
     await waitUntil { model.phase == .executing && openContinuation != nil }

@@ -11,9 +11,10 @@ request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 231 Swift tests. Build 13
-passes all 231 normally and under Thread Sanitizer; Xcode Debug, universal
-Release, static analysis, and strict installed-bundle checks also pass. Direct Apple
+Status: the 0.4.0 development tree currently defines 232 Swift tests. The
+latest complete local run passed all 232 tests. Build 13 passed its 231-test
+tree under Thread Sanitizer; Xcode Debug, universal Release, static analysis,
+and strict installed-bundle checks also passed. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
 were verified for the strictly checked Release bundle. A live Core Audio
@@ -25,8 +26,12 @@ The comparative speech benchmark is still open.
 
 ## Implemented in this slice
 
-- A SwiftUI `MenuBarExtra` with visible ready, listening, transcribing,
-  executing, success, and failure states.
+- A compact SwiftUI `MenuBarExtra` with visible ready, listening, transcribing,
+  executing, success, and failure states; quick access to both shortcuts and
+  permission recovery; and a bounded scroll height for smaller displays.
+- A separate native settings window with General, Personalization, and
+  Developer sections. Manual command execution, detailed local diagnostics,
+  and vocabulary editing stay out of the everyday menu-bar surface.
 - A user-recorded global shortcut. Key down starts microphone capture after
   permission and local assets are ready; key up stops capture and explicitly
   finalizes the transcript.
@@ -216,8 +221,11 @@ rather than invoking `Contents/MacOS/Topher` directly.
 
 For an interactive smoke test:
 
-1. Click Topher's sparkles icon in the menu bar.
-2. Record a normal modified shortcut.
+1. Click Topher's sparkles icon in the menu bar. Confirm the compact panel shows
+   both interaction modes, readiness, and the diagnostics indicator without
+   expanding the retained request history.
+2. Open **Settings** and verify the General, Personalization, and Developer
+   sections. Record a normal modified assistant shortcut under General.
 3. Hold it once. Grant microphone access if macOS asks, then let Topher prepare
    the local English speech asset. Release and hold again after Topher says it
    is ready.
@@ -230,7 +238,8 @@ For an interactive smoke test:
 6. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
    fallback. Say a malformed address or an explicitly missing app and confirm
    it fails closed.
-7. Use the manual transcript field and **Run** as a development fallback.
+7. Open **Settings → Developer**, enter a manual command, and use **Run
+   Command** as a development fallback. Confirm blank input cannot run.
 8. Record a different hold-to-dictate shortcut, explicitly allow Topher under
    **Privacy & Security → Accessibility**, focus a normal editable field in
    another app, hold the dictation shortcut, say a sentence, and release.
@@ -399,6 +408,7 @@ mental model.
 - [Build 11 fast dictation-polish verification](docs/evidence/2026-07-16-build-11-fast-dictation-polish.md)
 - [Build 12 Accessibility-identity recovery verification](docs/evidence/2026-07-16-build-12-accessibility-identity-recovery.md)
 - [Build 13 verified cross-app dictation verification](docs/evidence/2026-07-16-build-13-verified-cross-app-dictation.md)
+- [UI/UX interaction-shell verification](docs/evidence/2026-07-16-ui-ux-interaction-shell.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)

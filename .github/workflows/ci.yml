@@ -42,12 +42,22 @@ jobs:
       - name: Run unit tests
         run: swift test
 
+      - name: Build unsigned Debug app
+        run: |
+          xcodebuild \
+            -project Topher.xcodeproj \
+            -scheme TopherApp \
+            -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/TopherDebugDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
       - name: Build unsigned Release app
         run: |
           xcodebuild \
             -project Topher.xcodeproj \
             -scheme TopherApp \
             -configuration Release \
-            -derivedDataPath "$RUNNER_TEMP/TopherDerivedData" \
+            -derivedDataPath "$RUNNER_TEMP/TopherReleaseDerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             build

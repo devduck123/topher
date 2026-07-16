@@ -289,6 +289,8 @@ mental model.
 
 ## Read next
 
+- [Documentation map](docs/README.md)
+- [Product vision](docs/product/vision.md)
 - [Build 8 application-awareness verification](docs/evidence/2026-07-15-build-8-application-awareness.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)

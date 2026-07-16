@@ -251,7 +251,7 @@ final class TopherModel: ObservableObject {
       phase = .success("Accessibility access is ready for global dictation.")
     } else {
       phase = .failure(
-        "Allow Topher in System Settings → Privacy & Security → Accessibility, then try again."
+        "Allow Topher in System Settings → Privacy & Security → Accessibility. \(AccessibilityPermissionClient.recoveryInstructions)"
       )
     }
   }
@@ -316,7 +316,7 @@ final class TopherModel: ObservableObject {
     guard accessibilityPermissionState == .authorized else {
       accessibilityPermissionState = accessibilityPermission.requestAuthorization()
       let message =
-        "Allow Topher in System Settings → Privacy & Security → Accessibility, then hold the dictation shortcut again."
+        "Allow Topher in System Settings → Privacy & Security → Accessibility. \(AccessibilityPermissionClient.recoveryInstructions) Then hold the dictation shortcut again."
       phase = .failure(message)
       presentVoiceResult(.failure(message))
       return false

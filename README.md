@@ -178,6 +178,19 @@ After producing a signed Release bundle, install it through the checked helper:
 scripts/install_local_build.sh /path/to/Build/Products/Release/Topher.app
 ```
 
+Ad-hoc local rebuilds receive a new code requirement. If Accessibility appears
+enabled but Topher still reports it unavailable, explicitly reset only Topher's
+stale grant while installing the new build:
+
+```sh
+scripts/install_local_build.sh --reset-accessibility \
+  /path/to/Build/Products/Release/Topher.app
+```
+
+This removes only Topher's Accessibility decision; macOS must ask for explicit
+approval again. The helper never resets it without the flag. A stable Apple
+Development signature is the durable development fix.
+
 The helper verifies the source and installed signatures, stops the previous
 local build, launches once, and fails unless exactly one Topher process remains.
 
@@ -216,6 +229,8 @@ For an interactive smoke test:
    selection, with the caret next to an existing word, and with a password
    field. Use **Undo Dictation** before moving the caret. If an editor is not
    supported, review the pending text in Topher and press **Copy** explicitly.
+   If Settings shows Topher enabled while the app still reports denial, quit
+   Topher, select its stale row and click **−**, relaunch, and allow it again.
 9. For a bounded-duration recovery check, keep holding dictation past its
    configured maximum. Confirm Topher finalizes and inserts or previews the
    best available text once, then does not start another request until the
@@ -366,6 +381,7 @@ mental model.
 - [Build 9 global-dictation verification](docs/evidence/2026-07-15-build-9-global-dictation-foundation.md)
 - [Build 10 dictation-resilience and dogfood-corpus verification](docs/evidence/2026-07-16-build-10-dictation-resilience-and-dogfood-corpus.md)
 - [Build 11 fast dictation-polish verification](docs/evidence/2026-07-16-build-11-fast-dictation-polish.md)
+- [Build 12 Accessibility-identity recovery verification](docs/evidence/2026-07-16-build-12-accessibility-identity-recovery.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)

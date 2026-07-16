@@ -53,6 +53,10 @@ default.
   to `main`, rewrite shared history, or use destructive Git commands.
 - Commit, push, create or update a pull request, merge, release, install a
   bundle, or change external state only when the task authorizes that action.
+- Ad-hoc rebuilds can stale Topher's Accessibility grant because their code
+  requirement changes. The checked installer warns on identity drift; its
+  `--reset-accessibility` flag is an explicit, Topher-only TCC mutation and must
+  never be added or invoked silently.
 - Keep changes scoped and every checkpoint runnable. Prefer a small vertical
   slice over speculative protocols, services, or generalized agent frameworks.
 - A request to review, explain, or diagnose does not by itself authorize a fix.

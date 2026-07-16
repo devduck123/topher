@@ -30,6 +30,9 @@ struct AccessibilityPermissionEnvironment {
 
 @MainActor
 struct AccessibilityPermissionClient {
+  static let recoveryInstructions =
+    "If Topher is already enabled there, quit Topher, remove the existing Topher row with the − button, relaunch, then allow it again."
+
   private let environment: AccessibilityPermissionEnvironment
 
   init(environment: AccessibilityPermissionEnvironment? = nil) {

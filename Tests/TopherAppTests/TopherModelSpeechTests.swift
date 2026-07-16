@@ -162,6 +162,10 @@ final class TopherModelSpeechTests: XCTestCase {
 
     XCTAssertEqual(promptCount, 1)
     XCTAssertEqual(model.accessibilityPermissionState, .notAuthorized)
+    guard case .failure(let message) = model.phase else {
+      return XCTFail("Expected Accessibility recovery guidance")
+    }
+    XCTAssertTrue(message.contains("remove the existing Topher row with the − button"))
     XCTAssertEqual(voice.prepareCount, 0)
     XCTAssertEqual(voice.startCount, 0)
   }

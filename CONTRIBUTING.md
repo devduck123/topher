@@ -112,6 +112,13 @@ macOS permissions are capability boundaries, not setup chores:
 - Test from Xcode and from a signed bundle in `/Applications`; TCC decisions are
   tied to application identity and signing.
 - Never assume a successful ad-hoc local build is ready for distribution.
+- Ad-hoc signatures encode changing code hashes, so a rebuild can leave a stale
+  Accessibility row that looks enabled while macOS denies the new binary. The
+  installer warns when the code requirement changes. Use its explicit
+  `--reset-accessibility` flag only when replacing that local grant is intended,
+  then approve Topher again. Prefer a stable Apple Development identity for
+  repeated permission testing; inspect availability with
+  `security find-identity -v -p codesigning`.
 - Developer ID signing and notarization are required before distributing an app
   binary to other Macs.
 

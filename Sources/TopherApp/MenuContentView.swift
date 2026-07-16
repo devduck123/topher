@@ -126,6 +126,13 @@ struct MenuContentView: View {
         }
       }
 
+      if model.accessibilityPermissionState == .notAuthorized {
+        Text(AccessibilityPermissionClient.recoveryInstructions)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
       if let pendingDictationText = model.pendingDictationText {
         VStack(alignment: .leading, spacing: 6) {
           Text("Pending dictation")

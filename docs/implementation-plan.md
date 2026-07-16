@@ -256,6 +256,10 @@ not parallel implementation projects. The canonical contracts are
   a bounded synchronous local pass. Preserve ambiguous/intentional repetition,
   keep recovered partials unpolished, retain raw versus polished diagnostics,
   and provide a persisted presentation-only switch.
+- Complete in build 12: detect a changed installed code requirement, warn about
+  stale Accessibility consent, provide an explicit Topher-only reset during
+  checked installation, and show removal/relaunch guidance when the Settings
+  row looks enabled but macOS still denies the current binary.
 - Pending: benchmark a separately optional smart-formatting tier using the full
   finalized utterance and typed destination-app identity. Precommit a deadline,
   fall back to the fast tier on timeout or uncertainty, retain raw text and

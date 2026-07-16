@@ -354,6 +354,10 @@ extension TranscriptInterpretationReason {
     switch self {
     case .dictationDisfluencyCleanup:
       "Repeated speech removed"
+    case .dictationPauseJoin:
+      "Short-pause sentence joined"
+    case .dictationSpokenPunctuation:
+      "Spoken punctuation"
     case .speechAlternative:
       "Speech alternative"
     case .vocabularyCorrection:

@@ -50,6 +50,9 @@ The current dictation-polish contract is decision
 [`0015`](decisions/0015-layer-dictation-polish-under-a-latency-budget.md).
 Verified focused-field mutation and the bounded plain-value adapter are decision
 [`0016`](decisions/0016-verify-accessibility-dictation-mutations.md).
+The bounded web-composer, pause, spoken-punctuation, and dictation-alternative
+follow-up is decision
+[`0017`](decisions/0017-bounded-contextual-dictation-followup.md).
 
 ### Evidence
 

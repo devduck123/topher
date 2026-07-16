@@ -230,6 +230,9 @@ final class CommandResolverTests: XCTestCase {
       ("Search for tnc.com", .google, "tnc.com"),
       ("Search Crunchyroll anime releases", .google, "Crunchyroll anime releases"),
       ("Search Chrome extensions", .google, "Chrome extensions"),
+      ("Search Chrome for Ball is Life", .google, "Ball is Life"),
+      ("Search in Chrome for Swift concurrency", .google, "Swift concurrency"),
+      ("Chrome search for GPT 5", .google, "GPT 5"),
     ]
 
     for (transcript, provider, queryText) in cases {

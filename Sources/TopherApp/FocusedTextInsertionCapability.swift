@@ -107,6 +107,7 @@ struct FocusedTextInsertionEnvironment {
   let processIdentifier: (FocusedTextElementID) -> pid_t?
   let isSecure: (FocusedTextElementID) -> Bool
   let role: (FocusedTextElementID) -> FocusedTextTargetRole
+  let hasWebAreaAncestor: (FocusedTextElementID) -> Bool
   let selectedText: (FocusedTextElementID) -> String?
   let selectedRange: (FocusedTextElementID) -> FocusedTextRange?
   let value: (FocusedTextElementID) -> String?
@@ -129,6 +130,7 @@ struct FocusedTextInsertionEnvironment {
       processIdentifier: { registry.processIdentifier($0) },
       isSecure: { registry.isSecure($0) },
       role: { registry.role($0) },
+      hasWebAreaAncestor: { registry.hasWebAreaAncestor($0) },
       selectedText: { registry.selectedText($0) },
       selectedRange: { registry.selectedRange($0) },
       value: { registry.value($0) },
@@ -191,8 +193,10 @@ final class FocusedTextInsertionCapability {
 
   private static let maximumSelectionUTF16Length = 16_384
   private static let maximumWholeValueUTF16Length = 16_384
-  private static let verificationRetryCount = 3
-  private static let verificationRetryDelay: Duration = .milliseconds(10)
+  private static let maximumWebComposerUTF16Length = 4_096
+  private static let verificationRetryDelays: [Duration] = [
+    .milliseconds(10), .milliseconds(20), .milliseconds(40), .milliseconds(80),
+  ]
 
   init(environment: FocusedTextInsertionEnvironment? = nil) {
     self.environment = environment ?? .live
@@ -246,7 +250,8 @@ final class FocusedTextInsertionCapability {
     let permitsWholeValueMutation = Self.permitsWholeValueMutation(
       profile: profile,
       value: value,
-      selectedRange: selectedRange
+      selectedRange: selectedRange,
+      hasWebAreaAncestor: environment.hasWebAreaAncestor(element)
     )
     guard profile.canSetSelectedText || permitsWholeValueMutation else {
       environment.release(element)
@@ -502,10 +507,10 @@ final class FocusedTextInsertionCapability {
   ) async -> MutationVerificationResult {
     var readMutationState = false
 
-    for attempt in 0...Self.verificationRetryCount {
+    for attempt in 0...Self.verificationRetryDelays.count {
       guard !Task.isCancelled else { return .unavailable }
       if attempt > 0 {
-        await environment.waitForMutation(Self.verificationRetryDelay)
+        await environment.waitForMutation(Self.verificationRetryDelays[attempt - 1])
       }
       guard !environment.isSecure(preparedTarget.element) else {
         return .secureField
@@ -553,14 +558,25 @@ final class FocusedTextInsertionCapability {
   private static func permitsWholeValueMutation(
     profile: FocusedTextTargetProfile,
     value: String?,
-    selectedRange: FocusedTextRange
+    selectedRange: FocusedTextRange,
+    hasWebAreaAncestor: Bool
   ) -> Bool {
     guard profile.canSetValue, let value else { return false }
     guard profile.role == .textField || profile.role == .textArea else { return false }
     let length = (value as NSString).length
+    let isBoundedPlainWebAppend =
+      profile.role == .textArea
+      && hasWebAreaAncestor
+      && length > 0
+      && length <= maximumWebComposerUTF16Length
+      && selectedRange.location == length
+      && selectedRange.length == 0
+      && value.rangeOfCharacter(from: .newlines) == nil
+      && !value.contains("\u{FFFC}")
     return profile.role == .textField
       || length == 0
       || (selectedRange.location == 0 && selectedRange.length == length)
+      || isBoundedPlainWebAppend
   }
 
   private static func replacingSelection(
@@ -624,7 +640,7 @@ final class FocusedTextInsertionCapability {
     var insertion = text
     if let preceding = context.precedingText.last,
       let first = insertion.first,
-      isWordLike(preceding),
+      isWordLike(preceding) || sentenceBoundaryPunctuation.contains(preceding),
       isWordLike(first)
     {
       insertion.insert(" ", at: insertion.startIndex)
@@ -645,6 +661,10 @@ final class FocusedTextInsertionCapability {
         CharacterSet.alphanumerics.contains($0)
       }
   }
+
+  private static let sentenceBoundaryPunctuation: Set<Character> = [
+    ",", ".", ":", ";", "!", "?",
+  ]
 }
 
 @MainActor
@@ -694,6 +714,30 @@ private final class AccessibilityElementRegistry {
       return .webArea
     }
     return .other
+  }
+
+  func hasWebAreaAncestor(_ id: FocusedTextElementID) -> Bool {
+    guard var current = elements[id] else { return false }
+
+    for _ in 0..<12 {
+      if copyStringAttribute(kAXRoleAttribute as CFString, from: current) == "AXWebArea" {
+        return true
+      }
+      var value: CFTypeRef?
+      guard
+        AXUIElementCopyAttributeValue(
+          current,
+          kAXParentAttribute as CFString,
+          &value
+        ) == .success,
+        let value,
+        CFGetTypeID(value) == AXUIElementGetTypeID()
+      else { return false }
+      let parent = unsafeDowncast(value, to: AXUIElement.self)
+      guard !CFEqual(current, parent) else { return false }
+      current = parent
+    }
+    return false
   }
 
   func isSecure(_ id: FocusedTextElementID) -> Bool {

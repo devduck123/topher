@@ -263,6 +263,51 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
     XCTAssertEqual(harness.writeCount, 0)
   }
 
+  func testUsesWholeValueForBoundedAppendAtEndOfPlainWebComposer() async throws {
+    let content = "First thought."
+    let harness = FocusedTextHarness(
+      content: content,
+      selection: .init(location: (content as NSString).length, length: 0)
+    )
+    harness.exposesValue = true
+    harness.canSetValue = true
+    harness.hasWebAreaAncestor = true
+    let capability = FocusedTextInsertionCapability(environment: harness.environment)
+
+    XCTAssertEqual(capability.prepareTarget(), .ready)
+    let outcome = await capability.insert(try DictationText("Second thought."))
+
+    guard case .inserted(let result) = outcome else {
+      return XCTFail("Expected a verified web-composer insertion")
+    }
+    XCTAssertEqual(result.evidence.method, .wholeValue)
+    XCTAssertEqual(result.evidence.verification, .contentAndCaret)
+    XCTAssertEqual(harness.content, "First thought. Second thought.")
+    XCTAssertEqual(harness.selectedTextWriteCount, 0)
+    XCTAssertEqual(harness.valueWriteCount, 1)
+  }
+
+  func testRefusesBoundedWebAppendForMultilineOrNativeTextArea() {
+    for (content, isWebContent) in [
+      ("First line\nSecond line", true),
+      ("First line\u{2028}Second line", true),
+      ("Native rich text", false),
+    ] {
+      let harness = FocusedTextHarness(
+        content: content,
+        selection: .init(location: (content as NSString).length, length: 0)
+      )
+      harness.canSetSelectedText = false
+      harness.exposesValue = true
+      harness.canSetValue = true
+      harness.hasWebAreaAncestor = isWebContent
+      let capability = FocusedTextInsertionCapability(environment: harness.environment)
+
+      XCTAssertEqual(capability.prepareTarget(), .unsupportedField)
+      XCTAssertEqual(harness.writeCount, 0)
+    }
+  }
+
   func testUndoRestoresReplacedTextOnlyWhenFocusCaretAndContentStillMatch() async throws {
     let harness = FocusedTextHarness(
       content: "hello world", selection: .init(location: 6, length: 5))
@@ -368,6 +413,7 @@ private final class FocusedTextHarness {
   var selection: FocusedTextRange
   var isSecure = false
   var role: FocusedTextTargetRole = .textArea
+  var hasWebAreaAncestor = false
   var canSetSelectedText = true
   var canSetSelectedRange = true
   var canSetValue = false
@@ -411,6 +457,7 @@ private final class FocusedTextHarness {
         return isSecure
       },
       role: { [weak self] _ in self?.role ?? .other },
+      hasWebAreaAncestor: { [weak self] _ in self?.hasWebAreaAncestor ?? false },
       selectedText: { [weak self] element in
         guard let self, element == firstElement else { return nil }
         selectedTextReadCount += 1

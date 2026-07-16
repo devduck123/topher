@@ -114,8 +114,100 @@ public struct TranscriptVocabulary: Equatable, Sendable {
 
 public enum TranscriptInterpretationReason: String, Codable, Equatable, Sendable {
   case dictationDisfluencyCleanup
+  case dictationPauseJoin
+  case dictationSpokenPunctuation
   case speechAlternative
   case vocabularyCorrection
+}
+
+/// Selects an alternative for dictation only when it is uniquely equivalent to
+/// replacing a known spoken form with its canonical personal-vocabulary term.
+/// It never performs general hypothesis ranking or rewrites unrelated prose.
+public struct DictationTranscriptSelector: Sendable {
+  private let vocabulary: TranscriptVocabulary
+
+  public init(vocabulary: TranscriptVocabulary = .developerDefaults) {
+    self.vocabulary = vocabulary
+  }
+
+  public func select(
+    primary: TranscriptHypothesis,
+    alternatives: [TranscriptHypothesis] = []
+  ) -> TranscriptInterpretation {
+    let raw = primary.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    var candidates: [String] = []
+
+    for entry in vocabulary.entries {
+      for spokenForm in entry.spokenForms {
+        let corrected = Self.replacingPhrase(
+          spokenForm,
+          with: entry.canonicalTerm,
+          in: raw
+        )
+        guard corrected != raw else { continue }
+        let correctedKey = TranscriptVocabulary.normalized(corrected)
+        guard
+          alternatives.contains(where: {
+            TranscriptVocabulary.normalized($0.text) == correctedKey
+          })
+        else { continue }
+        candidates.append(corrected)
+      }
+    }
+
+    let unique = Dictionary(
+      grouping: candidates,
+      by: TranscriptVocabulary.normalized
+    ).compactMap { $0.value.first }
+    guard unique.count == 1, let selected = unique.first else {
+      return TranscriptInterpretation(
+        rawTranscript: raw,
+        selectedTranscript: raw,
+        confidence: primary.confidence,
+        reason: nil
+      )
+    }
+
+    return TranscriptInterpretation(
+      rawTranscript: raw,
+      selectedTranscript: selected,
+      confidence: primary.confidence,
+      reason: .speechAlternative
+    )
+  }
+
+  private static func replacingPhrase(
+    _ phrase: String,
+    with replacement: String,
+    in text: String
+  ) -> String {
+    guard
+      let range = text.range(
+        of: phrase,
+        options: [.caseInsensitive, .diacriticInsensitive]
+      ),
+      isPhraseBoundary(range.lowerBound, in: text, preceding: true),
+      isPhraseBoundary(range.upperBound, in: text, preceding: false)
+    else { return text }
+    return text.replacingCharacters(in: range, with: replacement)
+  }
+
+  private static func isPhraseBoundary(
+    _ index: String.Index,
+    in text: String,
+    preceding: Bool
+  ) -> Bool {
+    let adjacentIndex: String.Index
+    if preceding {
+      guard index != text.startIndex else { return true }
+      adjacentIndex = text.index(before: index)
+    } else {
+      guard index != text.endIndex else { return true }
+      adjacentIndex = index
+    }
+    let character = text[adjacentIndex]
+    return !character.isLetter && !character.isNumber
+  }
 }
 
 public struct TranscriptInterpretation: Equatable, Sendable {

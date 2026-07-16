@@ -10,6 +10,16 @@ public enum DictationPolishPolicy: Equatable, Sendable {
   case presentationOnly
 }
 
+public struct DictationPause: Equatable, Sendable {
+  public let boundaryUTF16Offset: Int
+  public let durationMilliseconds: UInt64
+
+  public init(boundaryUTF16Offset: Int, durationMilliseconds: UInt64) {
+    self.boundaryUTF16Offset = boundaryUTF16Offset
+    self.durationMilliseconds = durationMilliseconds
+  }
+}
+
 /// Text that is safe to hand to the focused-field insertion boundary.
 ///
 /// Presentation cleanup is always applied. The default conservative polish may
@@ -21,12 +31,17 @@ public struct DictationText: Equatable, Sendable {
 
   public let value: String
   public let removedRepeatedWordCount: Int
+  public let joinedShortPause: Bool
+  public let normalizedSpokenPunctuation: Bool
 
   public init(
     _ transcript: String,
+    pauses: [DictationPause] = [],
     polishPolicy: DictationPolishPolicy = .conservative
   ) throws {
-    let presentationText = Self.formatPresentation(transcript)
+    let pauseResult = Self.joiningShortPauseContinuations(in: transcript, pauses: pauses)
+    let punctuationResult = Self.normalizingSpokenPunctuation(in: pauseResult.text)
+    let presentationText = Self.formatPresentation(punctuationResult.text)
     let polishResult =
       switch polishPolicy {
       case .conservative:
@@ -41,10 +56,85 @@ public struct DictationText: Equatable, Sendable {
     }
     value = formatted
     removedRepeatedWordCount = polishResult.removedWordCount
+    joinedShortPause = pauseResult.changed
+    normalizedSpokenPunctuation = punctuationResult.changed
   }
 
   public var removedRepeatedSpeech: Bool {
     removedRepeatedWordCount > 0
+  }
+
+  public var interpretationReason: TranscriptInterpretationReason? {
+    if removedRepeatedSpeech { return .dictationDisfluencyCleanup }
+    if joinedShortPause { return .dictationPauseJoin }
+    if normalizedSpokenPunctuation { return .dictationSpokenPunctuation }
+    return nil
+  }
+
+  private static func joiningShortPauseContinuations(
+    in transcript: String,
+    pauses: [DictationPause]
+  ) -> (text: String, changed: Bool) {
+    guard !pauses.isEmpty else { return (transcript, false) }
+    let source = transcript as NSString
+    let expression = try? NSRegularExpression(pattern: #"\.\s+And\s+([A-Za-z]+)"#)
+    let matches =
+      expression?.matches(
+        in: transcript,
+        range: NSRange(location: 0, length: source.length)
+      ) ?? []
+    var replacements: [NSRange] = []
+
+    for match in matches {
+      guard match.numberOfRanges == 2 else { continue }
+      let nextWord = source.substring(with: match.range(at: 1)).lowercased()
+      guard continuationWords.contains(nextWord) else { continue }
+      let matchedText = source.substring(with: match.range)
+      guard let andRange = matchedText.range(of: "And") else { continue }
+      let prefixLength = (matchedText[..<andRange.lowerBound] as Substring).utf16.count
+      let periodEnd = match.range.location + 1
+      let andStart = match.range.location + prefixLength
+      guard
+        pauses.contains(where: {
+          $0.durationMilliseconds <= maximumContinuationPauseMilliseconds
+            && $0.boundaryUTF16Offset >= periodEnd
+            && $0.boundaryUTF16Offset <= andStart
+        })
+      else { continue }
+      replacements.append(
+        NSRange(location: match.range.location, length: andStart + 3 - match.range.location)
+      )
+    }
+
+    guard !replacements.isEmpty else { return (transcript, false) }
+    let output = NSMutableString(string: transcript)
+    for range in replacements.sorted(by: { $0.location > $1.location }) {
+      output.replaceCharacters(in: range, with: " and")
+    }
+    return (output as String, true)
+  }
+
+  private static func normalizingSpokenPunctuation(
+    in transcript: String
+  ) -> (text: String, changed: Bool) {
+    let source = transcript as NSString
+    let expression = try? NSRegularExpression(
+      pattern: #"\b([A-Z][A-Z0-9]{0,11})\s+slash\s+([A-Z][A-Z0-9]{0,11})\b"#
+    )
+    let matches =
+      expression?.matches(
+        in: transcript,
+        range: NSRange(location: 0, length: source.length)
+      ) ?? []
+    guard !matches.isEmpty else { return (transcript, false) }
+
+    let output = NSMutableString(string: transcript)
+    for match in matches.reversed() {
+      let left = source.substring(with: match.range(at: 1))
+      let right = source.substring(with: match.range(at: 2))
+      output.replaceCharacters(in: match.range, with: "\(left)/\(right)")
+    }
+    return (output as String, true)
   }
 
   private static func formatPresentation(_ transcript: String) -> String {
@@ -187,6 +277,11 @@ public struct DictationText: Equatable, Sendable {
   }
 
   private static let closingPunctuation: Set<Character> = [",", ".", "?", "!", ";", ":"]
+  private static let maximumContinuationPauseMilliseconds: UInt64 = 700
+  private static let continuationWords: Set<String> = [
+    "add", "also", "continue", "dictate", "do", "include", "keep", "make", "say", "ship",
+    "test", "then", "type", "use", "work", "write",
+  ]
   private static let intentionalRepeatedWords: Set<String> = [
     "again", "blah", "bye", "go", "ha", "had", "hear", "ho", "more", "never", "night",
     "no", "so", "that", "there", "very", "win",

@@ -127,6 +127,7 @@ final class TopherModel: ObservableObject {
   private let accessibilityPermission: AccessibilityPermissionClient
   private let focusedTextInsertion: FocusedTextInsertionCapability
   private let dictationClipboard: DictationClipboardCapability
+  private let vocabularyProvider: @MainActor () -> TranscriptVocabulary
 
   private var assistantShortcutEventsTask: Task<Void, Never>?
   private var dictationShortcutEventsTask: Task<Void, Never>?
@@ -187,6 +188,7 @@ final class TopherModel: ObservableObject {
     self.accessibilityPermission = accessibilityPermission
     self.focusedTextInsertion = focusedTextInsertion ?? FocusedTextInsertionCapability()
     self.dictationClipboard = dictationClipboard ?? DictationClipboardCapability()
+    self.vocabularyProvider = vocabularyProvider
     voiceReadiness = captureController.readiness
     accessibilityPermissionState = accessibilityPermission.currentState
 
@@ -551,10 +553,19 @@ final class TopherModel: ObservableObject {
           captureMetrics: transcription.captureMetrics
         )
       case .dictation:
+        let selection = DictationTranscriptSelector(
+          vocabulary: vocabularyProvider()
+        ).select(
+          primary: transcription.primary,
+          alternatives: transcription.alternatives
+        )
         startDictationProcessing(
-          transcript,
+          selection.selectedTranscript,
+          rawTranscript: selection.rawTranscript,
           preparation: dictationPreparation,
-          confidence: transcription.primary.confidence,
+          confidence: selection.confidence,
+          pauses: selection.reason == nil ? transcription.pauses : [],
+          interpretationReason: selection.reason,
           captureMetrics: transcription.captureMetrics,
           presentsGlobally: presentsGlobally
         )
@@ -739,8 +750,11 @@ final class TopherModel: ObservableObject {
 
   private func startDictationProcessing(
     _ transcript: String,
+    rawTranscript: String? = nil,
     preparation: FocusedTextPreparationOutcome?,
     confidence: Double? = nil,
+    pauses: [DictationPause] = [],
+    interpretationReason: TranscriptInterpretationReason? = nil,
     captureMetrics: VoiceCaptureMetrics? = nil,
     presentsGlobally: Bool
   ) {
@@ -752,8 +766,11 @@ final class TopherModel: ObservableObject {
       guard let self else { return }
       await processDictation(
         transcript,
+        rawTranscript: rawTranscript ?? transcript,
         preparation: preparation,
         confidence: confidence,
+        pauses: pauses,
+        interpretationReason: interpretationReason,
         captureMetrics: captureMetrics,
         presentsGlobally: presentsGlobally
       )
@@ -763,8 +780,11 @@ final class TopherModel: ObservableObject {
 
   private func processDictation(
     _ transcript: String,
+    rawTranscript: String,
     preparation: FocusedTextPreparationOutcome?,
     confidence: Double? = nil,
+    pauses: [DictationPause] = [],
+    interpretationReason: TranscriptInterpretationReason? = nil,
     captureMetrics: VoiceCaptureMetrics? = nil,
     presentsGlobally: Bool
   ) async {
@@ -779,6 +799,7 @@ final class TopherModel: ObservableObject {
     do {
       dictationText = try DictationText(
         transcript,
+        pauses: pauses,
         polishPolicy: isDictationPolishEnabled ? .conservative : .presentationOnly
       )
     } catch DictationTextError.tooLong {
@@ -787,7 +808,7 @@ final class TopherModel: ObservableObject {
       phase = .failure(message)
       if presentsGlobally { presentVoiceResult(.failure(message)) }
       recordDictationIfEnabled(
-        transcript: transcript,
+        transcript: rawTranscript,
         interpretedTranscript: nil,
         confidence: confidence,
         captureMetrics: captureMetrics,
@@ -809,9 +830,10 @@ final class TopherModel: ObservableObject {
       focusedTextInsertion.discardPreparedTarget()
       presentDictationFallback(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         failureReason: preparation == .noFocusedElement
           ? .noFocusedElement
           : .unsupportedField,
@@ -829,11 +851,9 @@ final class TopherModel: ObservableObject {
       phase = .success(message)
       if presentsGlobally { presentVoiceResult(.success(message)) }
       recordDictationIfEnabled(
-        transcript: transcript,
-        interpretedTranscript: result.text == transcript ? nil : result.text,
-        interpretationReason: dictationText.removedRepeatedSpeech
-          ? .dictationDisfluencyCleanup
-          : nil,
+        transcript: rawTranscript,
+        interpretedTranscript: result.text == rawTranscript ? nil : result.text,
+        interpretationReason: interpretationReason ?? dictationText.interpretationReason,
         confidence: confidence,
         captureMetrics: captureMetrics,
         outcome: .dictationInserted,
@@ -845,9 +865,10 @@ final class TopherModel: ObservableObject {
     case .mutationNotObserved(let evidence):
       presentDictationFallback(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         failureReason: .mutationNotObserved,
         insertionEvidence: evidence,
         processingDuration: startedAt.duration(to: clock.now),
@@ -857,9 +878,10 @@ final class TopherModel: ObservableObject {
     case .mutationUnverified(let evidence):
       presentUnverifiedDictation(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         insertionEvidence: evidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
@@ -876,9 +898,10 @@ final class TopherModel: ObservableObject {
     case .focusChanged:
       presentDictationFallback(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         failureReason: .focusChanged,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
@@ -886,9 +909,10 @@ final class TopherModel: ObservableObject {
     case .selectionChanged:
       presentDictationFallback(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         failureReason: .selectionChanged,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
@@ -896,9 +920,10 @@ final class TopherModel: ObservableObject {
     case .unsupportedField:
       presentDictationFallback(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         failureReason: .unsupportedField,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
@@ -906,9 +931,10 @@ final class TopherModel: ObservableObject {
     case .failed:
       presentDictationFallback(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         failureReason: .mutationFailed,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
@@ -916,9 +942,10 @@ final class TopherModel: ObservableObject {
     case .noPreparedTarget:
       presentDictationFallback(
         dictationText,
-        transcript: transcript,
+        transcript: rawTranscript,
         confidence: confidence,
         captureMetrics: captureMetrics,
+        interpretationReason: interpretationReason,
         failureReason: .noPreparedTarget,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
@@ -931,6 +958,7 @@ final class TopherModel: ObservableObject {
     transcript: String,
     confidence: Double?,
     captureMetrics: VoiceCaptureMetrics?,
+    interpretationReason: TranscriptInterpretationReason? = nil,
     failureReason: DictationFailureReason,
     insertionEvidence: FocusedTextInsertionEvidence? = nil,
     processingDuration: Duration,
@@ -943,9 +971,7 @@ final class TopherModel: ObservableObject {
     recordDictationIfEnabled(
       transcript: transcript,
       interpretedTranscript: dictationText.value == transcript ? nil : dictationText.value,
-      interpretationReason: dictationText.removedRepeatedSpeech
-        ? .dictationDisfluencyCleanup
-        : nil,
+      interpretationReason: interpretationReason ?? dictationText.interpretationReason,
       confidence: confidence,
       captureMetrics: captureMetrics,
       outcome: .dictationFallback,
@@ -961,6 +987,7 @@ final class TopherModel: ObservableObject {
     transcript: String,
     confidence: Double?,
     captureMetrics: VoiceCaptureMetrics?,
+    interpretationReason: TranscriptInterpretationReason? = nil,
     insertionEvidence: FocusedTextInsertionEvidence,
     processingDuration: Duration,
     presentsGlobally: Bool
@@ -973,9 +1000,7 @@ final class TopherModel: ObservableObject {
     recordDictationIfEnabled(
       transcript: transcript,
       interpretedTranscript: dictationText.value == transcript ? nil : dictationText.value,
-      interpretationReason: dictationText.removedRepeatedSpeech
-        ? .dictationDisfluencyCleanup
-        : nil,
+      interpretationReason: interpretationReason ?? dictationText.interpretationReason,
       confidence: confidence,
       captureMetrics: captureMetrics,
       outcome: .dictationFallback,

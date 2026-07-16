@@ -266,6 +266,17 @@ not parallel implementation projects. The canonical contracts are
   caret with at most 30 ms of retry, and retain typed uncertain results for
   review. Add a 16,384-UTF-16-unit whole-value adapter only for plain text
   fields, empty text areas, and full-value text-area replacement.
+- Complete in build 14: parse “Search Chrome for X” as a Google search for X;
+  pass Apple alternatives into a dictation-only selector that accepts only a
+  unique configured-vocabulary equivalence; use transient Apple word timing
+  for a fixed short-pause “. And” continuation rule; and normalize spoken
+  `slash` only between strong developer tokens such as `UI` and `UX`.
+- Complete in build 14: extend whole-value insertion only to an append-only
+  caret at the end of a single-line, object-free, web-descendant text area of
+  at most 4,096 UTF-16 units. Keep multiline/native rich surfaces fail-closed,
+  choose one mutation before writing, verify exact content/caret, and extend
+  ambiguous-host polling from 30 to a cumulative 150 ms without delaying an
+  immediate success.
 - Pending: benchmark a separately optional smart-formatting tier using the full
   finalized utterance and typed destination-app identity. Precommit a deadline,
   fall back to the fast tier on timeout or uncertainty, retain raw text and

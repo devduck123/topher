@@ -268,7 +268,8 @@ public struct CommandResolver: Sendable {
       (
         .google,
         [
-          "search google for", "google search for", "search the web for", "search for",
+          "search google for", "google search for", "search the web for",
+          "search chrome for", "search in chrome for", "chrome search for", "search for",
           "google", "search",
         ]
       ),

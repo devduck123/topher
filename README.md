@@ -11,10 +11,9 @@ request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 232 Swift tests. The
-latest complete local run passed all 232 tests. Build 13 passed its 231-test
-tree under Thread Sanitizer; Xcode Debug, universal Release, static analysis,
-and strict installed-bundle checks also passed. Direct Apple
+Status: the 0.4.0 development tree currently defines 244 Swift tests. Build 14
+passes all 244 normally and under Thread Sanitizer; Xcode Debug, universal
+Release, static analysis, and strict installed-bundle checks also pass. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
 were verified for the strictly checked Release bundle. A live Core Audio
@@ -42,6 +41,13 @@ The comparative speech benchmark is still open.
   restarts such as “I I think.” This bounded synchronous pass adds no network
   or model wait, preserves ambiguous and intentional repetition, and can be
   disabled with **Clean repeated speech** for presentation-only transcription.
+- Transient Apple word timing can conservatively join a short-pause fragment
+  such as “code out. And dictate” without retaining timing or audio. Strong
+  developer-token phrasing such as “UI slash UX” becomes `UI/UX`; broader
+  punctuation and grammar rewriting remain out of scope.
+- Dictation may select one Apple alternative only when it uniquely matches a
+  known built-in or personal-vocabulary spoken form, such as `gidhub` versus
+  `GitHub`. It does not generally rerank or rewrite prose.
 - An explicit Accessibility permission boundary for dictation. Topher rejects
   secure/protected fields before capture, revalidates focus, selection, nearby
   text, and secure state before insertion, never presses Return, and never
@@ -51,6 +57,10 @@ The comparative speech benchmark is still open.
   uses the standard value attribute only for a small plain text field, an empty
   text area, or full-value text-area replacement; rich and ambiguous surfaces
   fall back without a second mutation attempt.
+- A bounded append-only adapter covers short, single-line, plain-valued text
+  areas inside a web Accessibility tree, including the nonempty composer shape
+  used by ChatGPT/Codex. Multiline, object-bearing, native rich, partially
+  selected, and oversized surfaces still fail closed.
 - Context-aware word spacing at the insertion boundary, one guarded undo for
   the latest insertion, and a local review/copy fallback for editors Topher
   cannot safely mutate. Clipboard writes happen only after pressing **Copy**.
@@ -86,6 +96,8 @@ The comparative speech benchmark is still open.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
   known site, provider searches retain their provider, and unknown bare
   searches use Google in the default browser (Chrome in dogfood use).
+- Browser-qualified Google phrasing such as “Search Chrome for Ball is Life”
+  removes the browser words and searches only for the requested query.
 - Explicit app/site precedence: “Open Netflix” prefers the known website,
   “Open Netflix app” requires an installed app, and “Open Netflix website”
   requires web navigation. An unfamiliar “Open X” opens an installed exact
@@ -142,9 +154,8 @@ explicit pending review when the host app cannot be observed reliably.
 This is a safer cross-app dictation foundation, not yet a claim of broad
 Wispr-style editor compatibility or benchmarked transcription quality. Live
 acceptance in ChatGPT/Codex, Notion, Chrome, and rich editors remains pending.
-Filler
-removal, grammar/tone rewriting, context-aware punctuation, spoken punctuation
-commands, multi-paragraph editing,
+Filler removal, grammar/tone rewriting, general context-aware punctuation,
+general spoken-punctuation commands, multi-paragraph editing,
 always-on wake listening, remote chat, conversational follow-ups, browser-page
 reading, broader Accessibility context, and visual screen understanding remain
 separate future work.
@@ -409,12 +420,14 @@ mental model.
 - [Build 12 Accessibility-identity recovery verification](docs/evidence/2026-07-16-build-12-accessibility-identity-recovery.md)
 - [Build 13 verified cross-app dictation verification](docs/evidence/2026-07-16-build-13-verified-cross-app-dictation.md)
 - [UI/UX interaction-shell verification](docs/evidence/2026-07-16-ui-ux-interaction-shell.md)
+- [Build 14 contextual dictation follow-up](docs/evidence/2026-07-16-build-14-contextual-dictation-followup.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)
 - [Bounded dictation recovery and dogfood-corpus decision](docs/decisions/0014-bounded-dictation-recovery-and-dogfood-corpora.md)
 - [Latency-budgeted dictation-polish decision](docs/decisions/0015-layer-dictation-polish-under-a-latency-budget.md)
 - [Verified Accessibility mutation decision](docs/decisions/0016-verify-accessibility-dictation-mutations.md)
+- [Bounded contextual dictation follow-up decision](docs/decisions/0017-bounded-contextual-dictation-followup.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

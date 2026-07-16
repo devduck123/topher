@@ -484,6 +484,77 @@ final class TopherModelSpeechTests: XCTestCase {
     )
   }
 
+  func testDictationUsesKnownVocabularyAlternativeWithoutCommandInterpretation() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(
+      .finalWithEvidence(
+        FinalTranscription(
+          text: "I pushed this to gidhub today",
+          alternatives: [TranscriptHypothesis(text: "I pushed this to GitHub today")],
+          confidence: 0.8
+        )
+      )
+    )
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(field.content, "I pushed this to GitHub today")
+  }
+
+  func testDictationUsesShortPauseEvidenceForConservativeSentenceJoin() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+    let firstClause = "I wish I could type my code out."
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(
+      .finalWithEvidence(
+        FinalTranscription(
+          text: firstClause + " And dictate everything sometimes.",
+          confidence: 0.9,
+          pauses: [
+            .init(
+              boundaryUTF16Offset: (firstClause as NSString).length,
+              durationMilliseconds: 400
+            )
+          ]
+        )
+      )
+    )
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(
+      field.content,
+      "I wish I could type my code out and dictate everything sometimes."
+    )
+  }
+
   func testDictationBecomingSecureIsDiscardedWithoutDiagnosticRetention() async throws {
     let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
       "TopherSecureDictationDiagnosticsTests-\(UUID().uuidString)",
@@ -1351,7 +1422,10 @@ final class TopherModelSpeechTests: XCTestCase {
     developerDiagnostics: DeveloperDiagnosticsController? = nil,
     accessibilityPermission: AccessibilityPermissionClient? = nil,
     focusedTextInsertion: FocusedTextInsertionCapability? = nil,
-    dictationClipboard: DictationClipboardCapability? = nil
+    dictationClipboard: DictationClipboardCapability? = nil,
+    vocabularyProvider: @escaping @MainActor () -> TranscriptVocabulary = {
+      .developerDefaults
+    }
   ) -> TopherModel {
     TopherModel(
       applicationOpener: applicationOpener ?? inertApplicationOpener(),
@@ -1368,6 +1442,7 @@ final class TopherModelSpeechTests: XCTestCase {
       accessibilityPermission: accessibilityPermission,
       focusedTextInsertion: focusedTextInsertion,
       dictationClipboard: dictationClipboard,
+      vocabularyProvider: vocabularyProvider,
       listenForShortcutEvents: false
     )
   }
@@ -1482,6 +1557,7 @@ private final class ModelFocusedTextHarness {
       processIdentifier: { _ in 1001 },
       isSecure: { [weak self] _ in self?.isSecure ?? true },
       role: { [weak self] _ in self?.role ?? .other },
+      hasWebAreaAncestor: { _ in false },
       selectedText: { [weak self] _ in
         guard let self else { return nil }
         selectedTextReadCount += 1

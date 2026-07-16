@@ -53,6 +53,16 @@
       "checks": ["No spoken comma is required", "One result tab opens"]
     },
     {
+      "id": "assistant-search-chrome-qualified",
+      "mode": "assistant",
+      "category": "web-search",
+      "utterance": "Search Chrome for Ball is Life.",
+      "setup": "Chrome is installed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open one Google search for Ballislife without retaining 'Chrome for' in the query.",
+      "checks": ["Browser qualifier is removed", "One result tab opens", "Query resolves to the configured canonical term"]
+    },
+    {
       "id": "assistant-search-youtube-look-for",
       "mode": "assistant",
       "category": "web-search",
@@ -171,6 +181,36 @@
       "expectedStatus": "supported",
       "expectedResult": "Insert once into the focused composer and report verified insertion without sending.",
       "checks": ["Correct composer", "One insertion", "No submission", "Diagnostics include fixed insertion evidence"]
+    },
+    {
+      "id": "dictation-codex-composer-nonempty",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "This is a second dictated thought.",
+      "setup": "Focus the caret after a short single-line sentence already present in a non-secure Codex or ChatGPT composer.",
+      "expectedStatus": "supported",
+      "expectedResult": "Append once with one separating space and report verified whole-value insertion without sending.",
+      "checks": ["Existing text is preserved exactly", "One insertion", "No submission", "Multiline or rich content is not used for this case"]
+    },
+    {
+      "id": "dictation-short-pause-continuation",
+      "mode": "dictation",
+      "category": "dictation-polish",
+      "utterance": "I wish I could type my code out. And dictate everything sometimes.",
+      "setup": "Focus an empty field and speak one sentence with a brief natural pause before 'and dictate'.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert one sentence ending with 'code out and dictate everything sometimes.' when Apple timing identifies a short pause.",
+      "checks": ["No extra sentence break", "No retained timing data", "A deliberate long pause remains a sentence boundary"]
+    },
+    {
+      "id": "dictation-developer-spoken-slash",
+      "mode": "dictation",
+      "category": "dictation-polish",
+      "utterance": "Today I am working on UI slash UX changes.",
+      "setup": "Focus an empty field and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert 'Today I am working on UI/UX changes.'",
+      "checks": ["UI/UX uses a slash", "Lowercase literal uses of the word slash remain unchanged"]
     },
     {
       "id": "dictation-notion-block",

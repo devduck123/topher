@@ -44,16 +44,23 @@ development build. There is not yet a notarized public binary release.
 - Accessibility mutation success is verified by bounded text readback instead
   of trusting the framework setter result. The plain-value adapter may
   transiently read at most 16,384 UTF-16 units and is restricted to writable
-  text fields, empty text areas, or full-value text-area replacement. It is not
-  used for web areas, partially selected nonempty text areas, or protected
-  content, and the captured value is never logged or persisted separately.
+  text fields, empty text areas, full-value text-area replacement, or an
+  append-only caret at the end of a single-line, object-free web-descendant
+  text area whose existing value is at most 4,096 UTF-16 units. It is not used
+  for multiline or object-bearing web composers, native partially selected
+  nonempty text areas, or protected content, and the captured value is never
+  logged or persisted separately.
 - Dictation never synthesizes Return, submits, sends, or mutates the clipboard
   automatically. Copy is a separate explicit action, and guarded undo refuses
   to run after the focus, caret, or inserted content changes.
 - Current dictation polish is an in-process bounded transform of finalized
   user-authored text. It acquires no screen/app content, uses no network or
   model, preserves the raw diagnostic form when recording is enabled, and has
-  a persisted presentation-only switch. Recovered partials are never polished.
+  a persisted presentation-only switch. Transient word timing may authorize
+  only the fixed short-pause allowlisted-continuation rule and is never
+  retained. An Apple alternative may replace dictation only when it uniquely
+  equals a configured vocabulary correction; unrelated prose changes are
+  rejected. Recovered partials are never polished.
 - Raw audio and screen captures are not persisted beyond the active request by
   default.
 - Sensitive content is excluded from ordinary logs.

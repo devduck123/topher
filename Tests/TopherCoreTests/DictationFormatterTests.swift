@@ -31,6 +31,61 @@ final class DictationFormatterTests: XCTestCase {
     )
   }
 
+  func testNormalizesSpokenSlashOnlyBetweenStrongDeveloperTokens() throws {
+    let text = try DictationText("I am working on UI slash UX changes")
+
+    XCTAssertEqual(text.value, "I am working on UI/UX changes")
+    XCTAssertTrue(text.normalizedSpokenPunctuation)
+    XCTAssertEqual(text.interpretationReason, .dictationSpokenPunctuation)
+
+    XCTAssertEqual(
+      try DictationText("Use and slash or as literal words").value,
+      "Use and slash or as literal words"
+    )
+  }
+
+  func testJoinsOnlyTimedShortPauseAndFragments() throws {
+    let transcript = "I wish I could type my code out. And dictate everything sometimes."
+    let boundary = ("I wish I could type my code out." as NSString).length
+    let text = try DictationText(
+      transcript,
+      pauses: [.init(boundaryUTF16Offset: boundary, durationMilliseconds: 420)]
+    )
+
+    XCTAssertEqual(
+      text.value,
+      "I wish I could type my code out and dictate everything sometimes."
+    )
+    XCTAssertTrue(text.joinedShortPause)
+    XCTAssertEqual(text.interpretationReason, .dictationPauseJoin)
+  }
+
+  func testPreservesLongPausesAndLikelyNewSentenceSubjects() throws {
+    let first = "I finished the work."
+    let boundary = (first as NSString).length
+    XCTAssertEqual(
+      try DictationText(
+        first + " And started testing.",
+        pauses: [.init(boundaryUTF16Offset: boundary, durationMilliseconds: 900)]
+      ).value,
+      first + " And started testing."
+    )
+    XCTAssertEqual(
+      try DictationText(
+        first + " And we deployed it.",
+        pauses: [.init(boundaryUTF16Offset: boundary, durationMilliseconds: 300)]
+      ).value,
+      first + " And we deployed it."
+    )
+    XCTAssertEqual(
+      try DictationText(
+        first + " And Tommy reviewed it.",
+        pauses: [.init(boundaryUTF16Offset: boundary, durationMilliseconds: 300)]
+      ).value,
+      first + " And Tommy reviewed it."
+    )
+  }
+
   func testConservativelyRemovesAdjacentSpokenRestarts() throws {
     let singleWord = try DictationText("I I think we should ship this")
     XCTAssertEqual(singleWord.value, "I think we should ship this")

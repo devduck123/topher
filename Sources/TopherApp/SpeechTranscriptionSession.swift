@@ -1,4 +1,5 @@
 import AVFAudio
+import CoreMedia
 import Dispatch
 import Foundation
 import OSLog
@@ -27,16 +28,19 @@ struct VoiceCaptureMetrics: Equatable, Sendable {
 struct FinalTranscription: Equatable, Sendable {
   let primary: TranscriptHypothesis
   let alternatives: [TranscriptHypothesis]
+  let pauses: [DictationPause]
   let captureMetrics: VoiceCaptureMetrics?
 
   init(
     text: String,
     alternatives: [TranscriptHypothesis] = [],
     confidence: Double? = nil,
+    pauses: [DictationPause] = [],
     captureMetrics: VoiceCaptureMetrics? = nil
   ) {
     primary = TranscriptHypothesis(text: text, confidence: confidence)
     self.alternatives = alternatives
+    self.pauses = pauses
     self.captureMetrics = captureMetrics
   }
 
@@ -45,6 +49,7 @@ struct FinalTranscription: Equatable, Sendable {
       text: primary.text,
       alternatives: alternatives,
       confidence: primary.confidence,
+      pauses: pauses,
       captureMetrics: metrics
     )
   }
@@ -85,17 +90,26 @@ struct SpeechRecognitionUpdate: Equatable, Sendable {
   let text: String
   let alternatives: [String]
   let confidence: Double?
+  let pauses: [DictationPause]
+  let audioStartMilliseconds: UInt64?
+  let audioEndMilliseconds: UInt64?
   let isFinal: Bool
 
   init(
     text: String,
     alternatives: [String] = [],
     confidence: Double? = nil,
+    pauses: [DictationPause] = [],
+    audioStartMilliseconds: UInt64? = nil,
+    audioEndMilliseconds: UInt64? = nil,
     isFinal: Bool
   ) {
     self.text = text
     self.alternatives = alternatives
     self.confidence = confidence
+    self.pauses = pauses
+    self.audioStartMilliseconds = audioStartMilliseconds
+    self.audioEndMilliseconds = audioEndMilliseconds
     self.isFinal = isFinal
   }
 }
@@ -125,6 +139,7 @@ struct SpeechAnalysisRuntime {
     var preset = SpeechTranscriber.Preset.progressiveTranscription
     preset.reportingOptions.insert(.alternativeTranscriptions)
     preset.attributeOptions.insert(.transcriptionConfidence)
+    preset.attributeOptions.insert(.audioTimeRange)
     let transcriber = SpeechTranscriber(locale: supportedLocale, preset: preset)
     guard
       let audioFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
@@ -155,6 +170,9 @@ struct SpeechAnalysisRuntime {
                     text: String(result.text.characters),
                     alternatives: result.alternatives.map { String($0.characters) },
                     confidence: Self.averageConfidence(in: result.text),
+                    pauses: Self.pauseEvidence(in: result.text),
+                    audioStartMilliseconds: Self.milliseconds(result.range.start),
+                    audioEndMilliseconds: Self.milliseconds(result.range.end),
                     isFinal: result.isFinal
                   )
                 )
@@ -197,6 +215,38 @@ struct SpeechAnalysisRuntime {
     let values = text.runs.compactMap(\.transcriptionConfidence)
     guard !values.isEmpty else { return nil }
     return values.reduce(0, +) / Double(values.count)
+  }
+
+  static func pauseEvidence(in text: AttributedString) -> [DictationPause] {
+    struct TimedRun {
+      let boundaryUTF16Offset: Int
+      let range: CMTimeRange
+    }
+
+    let runs = text.runs.compactMap { run -> TimedRun? in
+      guard let range = run.audioTimeRange, range.isValid else { return nil }
+      let prefix = text[text.startIndex..<run.range.lowerBound]
+      return TimedRun(
+        boundaryUTF16Offset: String(prefix.characters).utf16.count,
+        range: range
+      )
+    }
+    guard runs.count >= 2 else { return [] }
+
+    return zip(runs, runs.dropFirst()).compactMap { previous, next in
+      let gap = CMTimeGetSeconds(next.range.start) - CMTimeGetSeconds(previous.range.end)
+      guard gap.isFinite, gap >= 0 else { return nil }
+      return DictationPause(
+        boundaryUTF16Offset: next.boundaryUTF16Offset,
+        durationMilliseconds: UInt64((gap * 1_000).rounded())
+      )
+    }
+  }
+
+  private static func milliseconds(_ time: CMTime) -> UInt64? {
+    let seconds = CMTimeGetSeconds(time)
+    guard seconds.isFinite, seconds >= 0 else { return nil }
+    return UInt64((seconds * 1_000).rounded())
   }
 }
 
@@ -307,6 +357,9 @@ final class AppleSpeechTranscriptionSession {
   private var volatileText = ""
   private var finalizedHypotheses = [""]
   private var volatileHypotheses: [String] = []
+  private var finalizedPauses: [DictationPause] = []
+  private var volatilePauses: [DictationPause] = []
+  private var finalizedAudioEndMilliseconds: UInt64?
   private var latestConfidence: Double?
 
   convenience init(
@@ -388,6 +441,9 @@ final class AppleSpeechTranscriptionSession {
     volatileText = ""
     finalizedHypotheses = [""]
     volatileHypotheses = []
+    finalizedPauses = []
+    volatilePauses = []
+    finalizedAudioEndMilliseconds = nil
     latestConfidence = nil
     phase = .active
 
@@ -491,21 +547,45 @@ final class AppleSpeechTranscriptionSession {
       // an empty result. Never retain or execute the superseded phrase.
       volatileText = ""
       volatileHypotheses = []
+      volatilePauses = finalizedPauses
       eventContinuation?.yield(.partial(combinedTranscript))
       return
     }
 
     let candidates = Self.unique([text] + update.alternatives)
+    var updatePauses = Self.pauses(update.pauses, from: update.text, trimmedTo: text)
+    if !finalizedText.isEmpty,
+      let previousEnd = finalizedAudioEndMilliseconds,
+      let currentStart = update.audioStartMilliseconds,
+      currentStart >= previousEnd
+    {
+      updatePauses.append(
+        DictationPause(
+          boundaryUTF16Offset: 0,
+          durationMilliseconds: currentStart - previousEnd
+        )
+      )
+    }
     latestConfidence = update.confidence
 
     if update.isFinal {
+      let offset = Self.appendOffset(after: finalizedText)
       finalizedHypotheses = Self.combining(finalizedHypotheses, with: candidates)
       finalizedText = finalizedHypotheses.first ?? joining(finalizedText, text)
+      finalizedPauses.append(contentsOf: Self.offsetting(updatePauses, by: offset))
+      finalizedAudioEndMilliseconds = update.audioEndMilliseconds
       volatileText = ""
       volatileHypotheses = []
+      volatilePauses = finalizedPauses
     } else {
       volatileText = text
       volatileHypotheses = Self.combining(finalizedHypotheses, with: candidates)
+      volatilePauses =
+        finalizedPauses
+        + Self.offsetting(
+          updatePauses,
+          by: Self.appendOffset(after: finalizedText)
+        )
     }
     eventContinuation?.yield(.partial(combinedTranscript))
   }
@@ -520,8 +600,43 @@ final class AppleSpeechTranscriptionSession {
     return FinalTranscription(
       text: primaryText,
       alternatives: hypotheses.dropFirst().map { TranscriptHypothesis(text: $0) },
-      confidence: latestConfidence
+      confidence: latestConfidence,
+      pauses: volatileText.isEmpty ? finalizedPauses : volatilePauses
     )
+  }
+
+  private static func appendOffset(after text: String) -> Int {
+    (text as NSString).length + (text.isEmpty ? 0 : 1)
+  }
+
+  private static func offsetting(
+    _ pauses: [DictationPause],
+    by offset: Int
+  ) -> [DictationPause] {
+    pauses.map {
+      DictationPause(
+        boundaryUTF16Offset: $0.boundaryUTF16Offset + offset,
+        durationMilliseconds: $0.durationMilliseconds
+      )
+    }
+  }
+
+  private static func pauses(
+    _ pauses: [DictationPause],
+    from rawText: String,
+    trimmedTo text: String
+  ) -> [DictationPause] {
+    guard rawText != text else { return pauses }
+    let range = (rawText as NSString).range(of: text)
+    guard range.location != NSNotFound else { return [] }
+    return pauses.compactMap { pause in
+      let adjusted = pause.boundaryUTF16Offset - range.location
+      guard adjusted >= 0, adjusted <= range.length else { return nil }
+      return DictationPause(
+        boundaryUTF16Offset: adjusted,
+        durationMilliseconds: pause.durationMilliseconds
+      )
+    }
   }
 
   private static func combining(_ prefixes: [String], with candidates: [String]) -> [String] {
@@ -603,6 +718,9 @@ final class AppleSpeechTranscriptionSession {
     volatileText = ""
     finalizedHypotheses = [""]
     volatileHypotheses = []
+    finalizedPauses = []
+    volatilePauses = []
+    finalizedAudioEndMilliseconds = nil
     latestConfidence = nil
   }
 }

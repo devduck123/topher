@@ -186,7 +186,8 @@ final class TopherModelSpeechTests: XCTestCase {
       FocusedTextInsertionEvidence(
         method: .selectedText,
         verification: .unavailable,
-        target: field.profile
+        target: field.profile,
+        wholeValueDecision: .rejectedValueNotSettable
       )
     )
   }
@@ -1557,7 +1558,8 @@ private final class ModelFocusedTextHarness {
       processIdentifier: { _ in 1001 },
       isSecure: { [weak self] _ in self?.isSecure ?? true },
       role: { [weak self] _ in self?.role ?? .other },
-      hasWebAreaAncestor: { _ in false },
+      webAreaAncestorDepth: { _ in nil },
+      hasUniformTextAttributes: { _, _ in true },
       selectedText: { [weak self] _ in
         guard let self else { return nil }
         selectedTextReadCount += 1

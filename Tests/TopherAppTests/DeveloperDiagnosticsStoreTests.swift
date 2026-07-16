@@ -274,7 +274,8 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
               canSetSelectedText: true,
               canSetSelectedRange: true,
               canSetValue: false
-            )
+            ),
+            wholeValueDecision: .rejectedValueNotSettable
           )
         ),
         processingDurationMilliseconds: 0,
@@ -291,6 +292,10 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     XCTAssertEqual(record.dictationInsertionEvidence?.method, .selectedText)
     XCTAssertEqual(record.dictationInsertionEvidence?.verification, .unavailable)
     XCTAssertEqual(record.dictationInsertionEvidence?.target.role, .textArea)
+    XCTAssertEqual(
+      record.dictationInsertionEvidence?.wholeValueDecision,
+      .rejectedValueNotSettable
+    )
 
     let reloaded = try await makeStore(initialEnabled: false).snapshot()
     XCTAssertEqual(reloaded.records.first, record)

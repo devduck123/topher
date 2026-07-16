@@ -108,6 +108,13 @@ def print_summary(title, records)
       result[record.dig("dictationInsertionEvidence", "target", "role")] += 1
     end
   )
+  print_counts(
+    "Whole-value adapter decisions:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      decision = record.dig("dictationInsertionEvidence", "wholeValueDecision")
+      result[decision || "not recorded"] += 1
+    end
+  )
 
   timings = {
     "hold to listening" => "holdToListeningMilliseconds",

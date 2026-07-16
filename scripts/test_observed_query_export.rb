@@ -66,6 +66,7 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
         "dictationInsertionEvidence" => {
           "method" => "wholeValue",
           "verification" => "contentAndCaret",
+          "wholeValueDecision" => "eligiblePlainWebComposer",
           "target" => {
             "role" => "textArea",
             "canSetSelectedText" => true,
@@ -119,6 +120,10 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
     "insertion verification"
   )
   assert(dictation.dig("dictationTargetRoles", "textArea") == 1, "target role")
+  assert(
+    dictation.dig("dictationWholeValueDecisions", "eligiblePlainWebComposer") == 1,
+    "whole-value decision"
+  )
 
   outside = File.join(input_directory, "outside.json")
   File.write(outside, "unchanged", mode: "w", perm: 0o600)

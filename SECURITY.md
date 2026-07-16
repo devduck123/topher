@@ -45,10 +45,13 @@ development build. There is not yet a notarized public binary release.
   of trusting the framework setter result. The plain-value adapter may
   transiently read at most 16,384 UTF-16 units and is restricted to writable
   text fields, empty text areas, full-value text-area replacement, or an
-  append-only caret at the end of a single-line, object-free web-descendant
-  text area whose existing value is at most 4,096 UTF-16 units. It is not used
-  for multiline or object-bearing web composers, native partially selected
-  nonempty text areas, or protected content, and the captured value is never
+  object-free, uniformly plain web-descendant text area whose existing value is
+  at most 4,096 UTF-16 units. The bounded web ancestor and uniform attributed
+  value must be observed both before capture and immediately before mutation;
+  the selection may be mid-value and the plain value may contain newlines. It
+  is not used for rich, mixed-format, object-bearing, oversized, cyclic, or
+  structurally changing web composers, native partially selected nonempty text
+  areas, or protected content, and the captured value and attributes are never
   logged or persisted separately.
 - Dictation never synthesizes Return, submits, sends, or mutates the clipboard
   automatically. Copy is a separate explicit action, and guarded undo refuses

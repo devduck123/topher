@@ -3,6 +3,8 @@ import KeyboardShortcuts
 import SwiftUI
 
 struct MenuContentView: View {
+  static let panelSize = CGSize(width: 380, height: 460)
+
   @ObservedObject var model: TopherModel
   @ObservedObject var diagnostics: DeveloperDiagnosticsController
 
@@ -61,7 +63,7 @@ struct MenuContentView: View {
         .padding(16)
       }
       .scrollIndicators(.hidden)
-      .frame(maxHeight: 520)
+      .frame(maxHeight: .infinity)
 
       Divider()
 
@@ -89,7 +91,7 @@ struct MenuContentView: View {
       .padding(.horizontal, 16)
       .padding(.vertical, 12)
     }
-    .frame(width: 380)
+    .frame(width: Self.panelSize.width, height: Self.panelSize.height)
     .onAppear(perform: refreshReadiness)
     .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification))
     { _ in

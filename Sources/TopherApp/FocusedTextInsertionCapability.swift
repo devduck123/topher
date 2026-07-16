@@ -71,6 +71,32 @@ enum FocusedTextInsertionVerification: String, Codable, Equatable, Sendable {
   case unavailable
 }
 
+enum FocusedTextWholeValueDecision: String, Codable, Equatable, Sendable {
+  case eligibleTextField
+  case eligibleEmptyTextArea
+  case eligibleFullValueReplacement
+  case eligiblePlainWebComposer
+  case rejectedValueUnavailableOrInconsistent
+  case rejectedValueNotSettable
+  case rejectedUnsupportedRole
+  case rejectedNonWebTextArea
+  case rejectedOversizedWebValue
+  case rejectedObjectBearingWebValue
+  case rejectedRichWebValue
+
+  var permitsMutation: Bool {
+    switch self {
+    case .eligibleTextField, .eligibleEmptyTextArea, .eligibleFullValueReplacement,
+      .eligiblePlainWebComposer:
+      true
+    case .rejectedValueUnavailableOrInconsistent, .rejectedValueNotSettable,
+      .rejectedUnsupportedRole, .rejectedNonWebTextArea, .rejectedOversizedWebValue,
+      .rejectedObjectBearingWebValue, .rejectedRichWebValue:
+      false
+    }
+  }
+}
+
 struct FocusedTextTargetProfile: Codable, Equatable, Sendable {
   let role: FocusedTextTargetRole
   let canSetSelectedText: Bool
@@ -82,6 +108,19 @@ struct FocusedTextInsertionEvidence: Codable, Equatable, Sendable {
   let method: FocusedTextInsertionMethod
   let verification: FocusedTextInsertionVerification
   let target: FocusedTextTargetProfile
+  let wholeValueDecision: FocusedTextWholeValueDecision?
+
+  init(
+    method: FocusedTextInsertionMethod,
+    verification: FocusedTextInsertionVerification,
+    target: FocusedTextTargetProfile,
+    wholeValueDecision: FocusedTextWholeValueDecision? = nil
+  ) {
+    self.method = method
+    self.verification = verification
+    self.target = target
+    self.wholeValueDecision = wholeValueDecision
+  }
 }
 
 struct FocusedTextInsertionResult: Equatable, Sendable {
@@ -107,7 +146,8 @@ struct FocusedTextInsertionEnvironment {
   let processIdentifier: (FocusedTextElementID) -> pid_t?
   let isSecure: (FocusedTextElementID) -> Bool
   let role: (FocusedTextElementID) -> FocusedTextTargetRole
-  let hasWebAreaAncestor: (FocusedTextElementID) -> Bool
+  let webAreaAncestorDepth: (FocusedTextElementID) -> Int?
+  let hasUniformTextAttributes: (FocusedTextElementID, String) -> Bool
   let selectedText: (FocusedTextElementID) -> String?
   let selectedRange: (FocusedTextElementID) -> FocusedTextRange?
   let value: (FocusedTextElementID) -> String?
@@ -130,7 +170,8 @@ struct FocusedTextInsertionEnvironment {
       processIdentifier: { registry.processIdentifier($0) },
       isSecure: { registry.isSecure($0) },
       role: { registry.role($0) },
-      hasWebAreaAncestor: { registry.hasWebAreaAncestor($0) },
+      webAreaAncestorDepth: { registry.webAreaAncestorDepth($0) },
+      hasUniformTextAttributes: { registry.hasUniformTextAttributes($1, on: $0) },
       selectedText: { registry.selectedText($0) },
       selectedRange: { registry.selectedRange($0) },
       value: { registry.value($0) },
@@ -176,7 +217,7 @@ final class FocusedTextInsertionCapability {
     let selectedRange: FocusedTextRange
     let textContext: FocusedTextContext
     let value: String?
-    let permitsWholeValueMutation: Bool
+    let wholeValueDecision: FocusedTextWholeValueDecision
   }
 
   private struct UndoReceipt {
@@ -247,13 +288,16 @@ final class FocusedTextInsertionCapability {
       selectedRange: selectedRange,
       selectedText: selectedText
     )
-    let permitsWholeValueMutation = Self.permitsWholeValueMutation(
+    let wholeValueDecision = Self.wholeValueDecision(
       profile: profile,
       value: value,
       selectedRange: selectedRange,
-      hasWebAreaAncestor: environment.hasWebAreaAncestor(element)
+      webAreaAncestorDepth: environment.webAreaAncestorDepth(element),
+      hasUniformTextAttributes: {
+        value.map { environment.hasUniformTextAttributes(element, $0) } ?? false
+      }
     )
-    guard profile.canSetSelectedText || permitsWholeValueMutation else {
+    guard profile.canSetSelectedText || wholeValueDecision.permitsMutation else {
       environment.release(element)
       return .unsupportedField
     }
@@ -266,7 +310,7 @@ final class FocusedTextInsertionCapability {
       selectedRange: selectedRange,
       textContext: environment.textContext(element, selectedRange),
       value: value,
-      permitsWholeValueMutation: permitsWholeValueMutation
+      wholeValueDecision: wholeValueDecision
     )
     return .ready
   }
@@ -342,7 +386,7 @@ final class FocusedTextInsertionCapability {
 
     discardUndoReceipt()
 
-    if let expectedValue, preparedTarget.permitsWholeValueMutation {
+    if let expectedValue, preparedTarget.wholeValueDecision.permitsMutation {
       return await insertWholeValue(
         expectedValue,
         preparedTarget: preparedTarget,
@@ -367,7 +411,8 @@ final class FocusedTextInsertionCapability {
       let evidence = FocusedTextInsertionEvidence(
         method: .selectedText,
         verification: verification.publicValue,
-        target: preparedTarget.profile
+        target: preparedTarget.profile,
+        wholeValueDecision: preparedTarget.wholeValueDecision
       )
 
       switch verification {
@@ -437,7 +482,8 @@ final class FocusedTextInsertionCapability {
       FocusedTextInsertionEvidence(
         method: .wholeValue,
         verification: verification,
-        target: preparedTarget.profile
+        target: preparedTarget.profile,
+        wholeValueDecision: preparedTarget.wholeValueDecision
       )
     }
 
@@ -458,12 +504,31 @@ final class FocusedTextInsertionCapability {
       return .focusChanged
     }
     guard
-      environment.canSetValue(preparedTarget.element),
+      environment.role(preparedTarget.element) == preparedTarget.profile.role,
+      environment.canSetValue(preparedTarget.element)
+    else {
+      environment.release(preparedTarget.element)
+      return .unsupportedField
+    }
+    guard
       environment.value(preparedTarget.element) == preparedTarget.value,
       (expectedValue as NSString).length <= Self.maximumWholeValueUTF16Length
     else {
       environment.release(preparedTarget.element)
       return .selectionChanged
+    }
+    if preparedTarget.wholeValueDecision == .eligiblePlainWebComposer {
+      let attributesStillUniform =
+        preparedTarget.value.map { value in
+          environment.hasUniformTextAttributes(preparedTarget.element, value)
+        } ?? false
+      guard
+        environment.webAreaAncestorDepth(preparedTarget.element) != nil,
+        attributesStillUniform
+      else {
+        environment.release(preparedTarget.element)
+        return .unsupportedField
+      }
     }
     guard environment.setValue(preparedTarget.element, expectedValue) else {
       environment.release(preparedTarget.element)
@@ -555,28 +620,31 @@ final class FocusedTextInsertionCapability {
     return value
   }
 
-  private static func permitsWholeValueMutation(
+  private static func wholeValueDecision(
     profile: FocusedTextTargetProfile,
     value: String?,
     selectedRange: FocusedTextRange,
-    hasWebAreaAncestor: Bool
-  ) -> Bool {
-    guard profile.canSetValue, let value else { return false }
-    guard profile.role == .textField || profile.role == .textArea else { return false }
+    webAreaAncestorDepth: Int?,
+    hasUniformTextAttributes: () -> Bool
+  ) -> FocusedTextWholeValueDecision {
+    guard profile.role == .textField || profile.role == .textArea else {
+      return .rejectedUnsupportedRole
+    }
+    guard profile.canSetValue else { return .rejectedValueNotSettable }
+    guard let value else { return .rejectedValueUnavailableOrInconsistent }
     let length = (value as NSString).length
-    let isBoundedPlainWebAppend =
-      profile.role == .textArea
-      && hasWebAreaAncestor
-      && length > 0
-      && length <= maximumWebComposerUTF16Length
-      && selectedRange.location == length
-      && selectedRange.length == 0
-      && value.rangeOfCharacter(from: .newlines) == nil
-      && !value.contains("\u{FFFC}")
-    return profile.role == .textField
-      || length == 0
-      || (selectedRange.location == 0 && selectedRange.length == length)
-      || isBoundedPlainWebAppend
+    if profile.role == .textField { return .eligibleTextField }
+    if length == 0 { return .eligibleEmptyTextArea }
+    if selectedRange.location == 0 && selectedRange.length == length {
+      return .eligibleFullValueReplacement
+    }
+    guard webAreaAncestorDepth != nil else { return .rejectedNonWebTextArea }
+    guard length <= maximumWebComposerUTF16Length else {
+      return .rejectedOversizedWebValue
+    }
+    guard !value.contains("\u{FFFC}") else { return .rejectedObjectBearingWebValue }
+    guard hasUniformTextAttributes() else { return .rejectedRichWebValue }
+    return .eligiblePlainWebComposer
   }
 
   private static func replacingSelection(
@@ -716,12 +784,15 @@ private final class AccessibilityElementRegistry {
     return .other
   }
 
-  func hasWebAreaAncestor(_ id: FocusedTextElementID) -> Bool {
-    guard var current = elements[id] else { return false }
+  func webAreaAncestorDepth(_ id: FocusedTextElementID) -> Int? {
+    guard var current = elements[id] else { return nil }
+    var visited: [AXUIElement] = []
 
-    for _ in 0..<12 {
+    for depth in 0...32 {
+      guard !visited.contains(where: { CFEqual($0, current) }) else { return nil }
+      visited.append(current)
       if copyStringAttribute(kAXRoleAttribute as CFString, from: current) == "AXWebArea" {
-        return true
+        return depth
       }
       var value: CFTypeRef?
       guard
@@ -732,12 +803,48 @@ private final class AccessibilityElementRegistry {
         ) == .success,
         let value,
         CFGetTypeID(value) == AXUIElementGetTypeID()
-      else { return false }
+      else { return nil }
       let parent = unsafeDowncast(value, to: AXUIElement.self)
-      guard !CFEqual(current, parent) else { return false }
+      guard !CFEqual(current, parent) else { return nil }
       current = parent
     }
-    return false
+    return nil
+  }
+
+  func hasUniformTextAttributes(_ value: String, on id: FocusedTextElementID) -> Bool {
+    guard let element = elements[id] else { return false }
+    let length = (value as NSString).length
+    guard length > 0 else { return true }
+    var range = CFRange(location: 0, length: length)
+    guard let parameter = AXValueCreate(.cfRange, &range) else { return false }
+    var rawAttributedString: CFTypeRef?
+    guard
+      AXUIElementCopyParameterizedAttributeValue(
+        element,
+        kAXAttributedStringForRangeParameterizedAttribute as CFString,
+        parameter,
+        &rawAttributedString
+      ) == .success,
+      let attributedString = rawAttributedString as? NSAttributedString,
+      attributedString.length == length,
+      attributedString.string == value
+    else { return false }
+
+    var effectiveRange = NSRange()
+    let attributes = attributedString.attributes(at: 0, effectiveRange: &effectiveRange)
+    guard effectiveRange.location == 0 && effectiveRange.length == length else { return false }
+
+    // A whole-value write would flatten rich text. Chromium's plain
+    // contenteditable surfaces currently expose only AXFont for their uniform
+    // draft text. Reject every other attribute and visibly styled font so the
+    // fallback cannot silently discard links, attachments, emphasis, or mixed
+    // formatting.
+    guard attributes.count == 1, attributes.keys.first?.rawValue == "AXFont" else {
+      return false
+    }
+    let fontDescription = attributes.values.map(String.init(describing:)).joined(separator: " ")
+      .lowercased()
+    return !["bold", "italic", "oblique"].contains(where: fontDescription.contains)
   }
 
   func isSecure(_ id: FocusedTextElementID) -> Bool {

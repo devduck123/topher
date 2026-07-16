@@ -11,8 +11,8 @@ request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 244 Swift tests. Build 14
-passes all 244 normally and under Thread Sanitizer; Xcode Debug, universal
+Status: the 0.4.0 development tree currently defines 248 Swift tests. Build 15
+passes all 248 normally and under Thread Sanitizer; Xcode Debug, universal
 Release, static analysis, and strict installed-bundle checks also pass. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -27,7 +27,8 @@ The comparative speech benchmark is still open.
 
 - A compact SwiftUI `MenuBarExtra` with visible ready, listening, transcribing,
   executing, success, and failure states; quick access to both shortcuts and
-  permission recovery; and a bounded scroll height for smaller displays.
+  permission recovery; and a deterministic 380 × 460 point panel whose scroll
+  content cannot collapse behind the footer.
 - A separate native settings window with General, Personalization, and
   Developer sections. Manual command execution, detailed local diagnostics,
   and vocabulary editing stay out of the everyday menu-bar surface.
@@ -57,10 +58,11 @@ The comparative speech benchmark is still open.
   uses the standard value attribute only for a small plain text field, an empty
   text area, or full-value text-area replacement; rich and ambiguous surfaces
   fall back without a second mutation attempt.
-- A bounded append-only adapter covers short, single-line, plain-valued text
-  areas inside a web Accessibility tree, including the nonempty composer shape
-  used by ChatGPT/Codex. Multiline, object-bearing, native rich, partially
-  selected, and oversized surfaces still fail closed.
+- A bounded web-composer adapter covers object-free, uniformly plain text areas
+  inside a web Accessibility tree, including the deeply nested composer shape
+  currently exposed by ChatGPT/Codex. It supports a valid caret or selection
+  anywhere in a short plain value, including newlines, while rich, mixed-format,
+  object-bearing, native nonempty, and oversized surfaces still fail closed.
 - Context-aware word spacing at the insertion boundary, one guarded undo for
   the latest insertion, and a local review/copy fallback for editors Topher
   cannot safely mutate. Clipboard writes happen only after pressing **Copy**.
@@ -153,7 +155,8 @@ explicit pending review when the host app cannot be observed reliably.
 
 This is a safer cross-app dictation foundation, not yet a claim of broad
 Wispr-style editor compatibility or benchmarked transcription quality. Live
-acceptance in ChatGPT/Codex, Notion, Chrome, and rich editors remains pending.
+acceptance in ChatGPT/Codex, Notion, Chrome, and rich editors remains pending;
+Build 15 is specifically prepared for another live Codex composer test.
 Filler removal, grammar/tone rewriting, general context-aware punctuation,
 general spoken-punctuation commands, multi-paragraph editing,
 always-on wake listening, remote chat, conversational follow-ups, browser-page
@@ -255,10 +258,12 @@ For an interactive smoke test:
    **Privacy & Security → Accessibility**, focus a normal editable field in
    another app, hold the dictation shortcut, say a sentence, and release.
    Confirm text is inserted once without Return being pressed. Repeat in an
-   empty ChatGPT/Codex composer, an empty Notion block, a Chrome search field,
-   and Notes; then repeat with a selection, with the caret next to an existing
-   word, and with a password field. Use **Undo Dictation** before moving the
-   caret only when Topher offers it. If an editor is not
+   empty and nonempty ChatGPT/Codex composer, a short plain multiline Codex
+   draft, an empty Notion block, a Chrome search field, and Notes; then repeat
+   with a selection, with the caret next to an existing word, with a rich web
+   draft, and with a password field. Plain drafts should insert exactly once;
+   rich drafts must remain unchanged and fall back for review. Use **Undo
+   Dictation** before moving the caret only when Topher offers it. If an editor is not
    supported, review the pending text in Topher and press **Copy** explicitly.
    If Settings shows Topher enabled while the app still reports denial, quit
    Topher, select its stale row and click **−**, relaunch, and allow it again.
@@ -279,10 +284,11 @@ contains only the `com.apple.security.device.audio-input` entitlement needed
 for capture. The direct `SpeechAnalyzer` path does not request legacy
 `SFSpeechRecognizer` authorization. Topher does not request Automation/Apple
 Events or Screen Recording access. Accessibility is used only for the focused
-text element, selection, immediate text boundary, a bounded plain value when
-its role permits the safe adapter, insertion, verification, and guarded undo.
-A plain value is limited to 16,384 UTF-16 units, exists transiently in memory,
-and is never separately logged or persisted.
+text element, selection, immediate text boundary, a bounded plain value and its
+attributed representation when the safe web adapter needs structural evidence,
+insertion, verification, and guarded undo. A plain value is limited to 16,384
+UTF-16 units, and the web-composer path is limited to 4,096. Both exist
+transiently in memory and are never separately logged or persisted.
 
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
 not written to disk. Partial transcripts exist transiently in process memory
@@ -343,7 +349,8 @@ an available confidence summary, its source, an ephemeral launch-session ID, a
 fixed typed outcome, fixed command/capability metadata, typed unsupported,
 dictation-fallback, capture-failure, and conservative-cleanup reasons, the
 fixed dictation insertion method, verification result, and content-free target
-role/capability profile, whether
+role/capability profile plus a fixed whole-value eligibility or refusal reason,
+whether
 the maximum duration auto-finalized the request, optional local
 transcript/action ratings and fixed action-issue tags, capture-stage and
 processing durations, and app version/build. It never contains raw audio,
@@ -421,6 +428,7 @@ mental model.
 - [Build 13 verified cross-app dictation verification](docs/evidence/2026-07-16-build-13-verified-cross-app-dictation.md)
 - [UI/UX interaction-shell verification](docs/evidence/2026-07-16-ui-ux-interaction-shell.md)
 - [Build 14 contextual dictation follow-up](docs/evidence/2026-07-16-build-14-contextual-dictation-followup.md)
+- [Build 15 menu and web-composer recovery](docs/evidence/2026-07-16-build-15-menu-and-web-composer-recovery.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)
@@ -428,6 +436,7 @@ mental model.
 - [Latency-budgeted dictation-polish decision](docs/decisions/0015-layer-dictation-polish-under-a-latency-budget.md)
 - [Verified Accessibility mutation decision](docs/decisions/0016-verify-accessibility-dictation-mutations.md)
 - [Bounded contextual dictation follow-up decision](docs/decisions/0017-bounded-contextual-dictation-followup.md)
+- [Bounded uniform web-composer insertion decision](docs/decisions/0018-bounded-uniform-web-composer-insertion.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

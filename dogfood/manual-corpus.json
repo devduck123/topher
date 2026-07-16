@@ -187,10 +187,30 @@
       "mode": "dictation",
       "category": "focused-insertion",
       "utterance": "This is a second dictated thought.",
-      "setup": "Focus the caret after a short single-line sentence already present in a non-secure Codex or ChatGPT composer.",
+      "setup": "Focus the caret after a short plain sentence already present in a non-secure Codex or ChatGPT composer.",
       "expectedStatus": "supported",
       "expectedResult": "Append once with one separating space and report verified whole-value insertion without sending.",
-      "checks": ["Existing text is preserved exactly", "One insertion", "No submission", "Multiline or rich content is not used for this case"]
+      "checks": ["Existing text is preserved exactly", "One insertion", "No submission", "Diagnostics report an eligible plain web composer"]
+    },
+    {
+      "id": "dictation-codex-composer-multiline",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "This thought belongs in the middle.",
+      "setup": "Create a short plain multiline draft in Codex or ChatGPT, place the caret in the middle of one line, and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert once at the captured caret while preserving every other character and without sending.",
+      "checks": ["Existing lines remain exact", "One insertion at the captured caret", "No submission", "Verified whole-value evidence is visible"]
+    },
+    {
+      "id": "dictation-rich-web-editor-refusal",
+      "mode": "dictation",
+      "category": "security",
+      "utterance": "Do not flatten the existing formatting.",
+      "setup": "Focus a nonempty web editor draft containing mixed formatting, a link, mention, or attachment and use the dictation shortcut.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Preserve the editor exactly and place the transcript in Topher's explicit review fallback.",
+      "checks": ["No field mutation", "Formatting and objects remain intact", "No automatic clipboard write", "Diagnostics report a rejected rich or object-bearing value"]
     },
     {
       "id": "dictation-short-pause-continuation",

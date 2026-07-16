@@ -160,6 +160,13 @@ struct DeveloperDiagnosticsView: View {
           .foregroundStyle(.secondary)
       }
 
+      if let evidence = record.dictationInsertionEvidence {
+        Text(insertionEvidenceSummary(evidence))
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(2)
+      }
+
       if let reason = record.captureFailureReason {
         Text("Capture failure: \(reason.displayName)")
           .font(.caption2)
@@ -323,6 +330,15 @@ struct DeveloperDiagnosticsView: View {
     return summary
   }
 
+  private func insertionEvidenceSummary(_ evidence: FocusedTextInsertionEvidence) -> String {
+    var summary =
+      "Adapter: \(evidence.method.rawValue) · \(evidence.verification.rawValue) · \(evidence.target.role.rawValue)"
+    if let decision = evidence.wholeValueDecision {
+      summary += " · \(decision.displayName)"
+    }
+    return summary
+  }
+
   private func confirmationAlert(_ confirmation: Confirmation) -> Alert {
     switch confirmation {
     case .enable:
@@ -362,6 +378,35 @@ extension TranscriptInterpretationReason {
       "Speech alternative"
     case .vocabularyCorrection:
       "Vocabulary correction"
+    }
+  }
+}
+
+extension FocusedTextWholeValueDecision {
+  fileprivate var displayName: String {
+    switch self {
+    case .eligibleTextField:
+      "Text field value eligible"
+    case .eligibleEmptyTextArea:
+      "Empty text area eligible"
+    case .eligibleFullValueReplacement:
+      "Full selection eligible"
+    case .eligiblePlainWebComposer:
+      "Plain web composer eligible"
+    case .rejectedValueUnavailableOrInconsistent:
+      "Value unavailable or inconsistent"
+    case .rejectedValueNotSettable:
+      "Value is not writable"
+    case .rejectedUnsupportedRole:
+      "Unsupported target role"
+    case .rejectedNonWebTextArea:
+      "No bounded web ancestor"
+    case .rejectedOversizedWebValue:
+      "Web value exceeds safety bound"
+    case .rejectedObjectBearingWebValue:
+      "Web value contains an object"
+    case .rejectedRichWebValue:
+      "Web value has mixed formatting"
     }
   }
 }

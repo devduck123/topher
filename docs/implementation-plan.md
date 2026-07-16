@@ -277,6 +277,14 @@ not parallel implementation projects. The canonical contracts are
   choose one mutation before writing, verify exact content/caret, and extend
   ambiguous-host polling from 30 to a cumulative 150 ms without delaying an
   immediate success.
+- Complete in build 15: recover the current Codex/ChatGPT plain-composer shape
+  by finding a cycle-free web ancestor up to 32 parents away and admitting one
+  whole-value mutation for a bounded, object-free, uniformly attributed plain
+  value at any valid selection, including multiline drafts. Revalidate the
+  role, value, web ancestry, and uniform attributes immediately before the
+  write; keep native and rich surfaces fail-closed; expose the fixed adapter
+  decision in local diagnostics; and give the menu popover a deterministic
+  readable height instead of allowing its scroll content to collapse.
 - Pending: benchmark a separately optional smart-formatting tier using the full
   finalized utterance and typed destination-app identity. Precommit a deadline,
   fall back to the fast tier on timeout or uncertainty, retain raw text and

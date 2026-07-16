@@ -138,6 +138,7 @@ eligible_records.each do |record|
     "dictationInsertionMethods" => {},
     "dictationInsertionVerifications" => {},
     "dictationTargetRoles" => {},
+    "dictationWholeValueDecisions" => {},
     "unsupportedReasons" => {},
     "dictationFailureReasons" => {},
     "captureFailureReasons" => {},
@@ -164,6 +165,9 @@ eligible_records.each do |record|
       "dictationInsertionEvidence", "verification"
     ),
     "dictationTargetRoles" => record.dig("dictationInsertionEvidence", "target", "role"),
+    "dictationWholeValueDecisions" => record.dig(
+      "dictationInsertionEvidence", "wholeValueDecision"
+    ),
     "unsupportedReasons" => record["unsupportedReason"],
     "dictationFailureReasons" => record["dictationFailureReason"],
     "captureFailureReasons" => record["captureFailureReason"],

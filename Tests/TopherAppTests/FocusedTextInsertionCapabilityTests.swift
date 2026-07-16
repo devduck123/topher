@@ -132,7 +132,8 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
         FocusedTextInsertionEvidence(
           method: .selectedText,
           verification: .unavailable,
-          target: harness.profile
+          target: harness.profile,
+          wholeValueDecision: .rejectedValueNotSettable
         )
       )
     )
@@ -158,7 +159,8 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
           evidence: FocusedTextInsertionEvidence(
             method: .wholeValue,
             verification: .contentAndCaret,
-            target: harness.profile
+            target: harness.profile,
+            wholeValueDecision: .eligibleEmptyTextArea
           )
         )
       )
@@ -188,7 +190,8 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
           evidence: FocusedTextInsertionEvidence(
             method: .wholeValue,
             verification: .contentAndCaret,
-            target: harness.profile
+            target: harness.profile,
+            wholeValueDecision: .eligibleTextField
           )
         )
       )
@@ -216,7 +219,8 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
         FocusedTextInsertionEvidence(
           method: .wholeValue,
           verification: .notObserved,
-          target: harness.profile
+          target: harness.profile,
+          wholeValueDecision: .eligibleTextField
         )
       )
     )
@@ -243,7 +247,8 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
           evidence: FocusedTextInsertionEvidence(
             method: .wholeValue,
             verification: .contentAndCaret,
-            target: harness.profile
+            target: harness.profile,
+            wholeValueDecision: .eligibleTextField
           )
         )
       )
@@ -271,7 +276,7 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
     )
     harness.exposesValue = true
     harness.canSetValue = true
-    harness.hasWebAreaAncestor = true
+    harness.webAreaAncestorDepth = 22
     let capability = FocusedTextInsertionCapability(environment: harness.environment)
 
     XCTAssertEqual(capability.prepareTarget(), .ready)
@@ -287,12 +292,36 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
     XCTAssertEqual(harness.valueWriteCount, 1)
   }
 
-  func testRefusesBoundedWebAppendForMultilineOrNativeTextArea() {
-    for (content, isWebContent) in [
-      ("First line\nSecond line", true),
-      ("First line\u{2028}Second line", true),
-      ("Native rich text", false),
-    ] {
+  func testUsesWholeValueForUniformMultilineWebComposerAtCaret() async throws {
+    let content = "First line\nSecond line"
+    let harness = FocusedTextHarness(
+      content: content,
+      selection: .init(location: 5, length: 0)
+    )
+    harness.exposesValue = true
+    harness.canSetValue = true
+    harness.webAreaAncestorDepth = 22
+    let capability = FocusedTextInsertionCapability(environment: harness.environment)
+
+    XCTAssertEqual(capability.prepareTarget(), .ready)
+    let outcome = await capability.insert(try DictationText("new"))
+
+    guard case .inserted(let result) = outcome else {
+      return XCTFail("Expected a verified multiline web-composer insertion")
+    }
+    XCTAssertEqual(result.evidence.method, .wholeValue)
+    XCTAssertEqual(result.evidence.wholeValueDecision, .eligiblePlainWebComposer)
+    XCTAssertEqual(harness.content, "First new line\nSecond line")
+    XCTAssertEqual(harness.selectedTextWriteCount, 0)
+    XCTAssertEqual(harness.valueWriteCount, 1)
+  }
+
+  func testRefusesWholeValueMutationForNativeObjectBearingOrStyledTextArea() {
+    for (content, webDepth, hasUniformTextAttributes) in [
+      ("Native rich text", nil, true),
+      ("Attached \u{FFFC}", 22, true),
+      ("Styled web text", 22, false),
+    ] as [(String, Int?, Bool)] {
       let harness = FocusedTextHarness(
         content: content,
         selection: .init(location: (content as NSString).length, length: 0)
@@ -300,12 +329,53 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
       harness.canSetSelectedText = false
       harness.exposesValue = true
       harness.canSetValue = true
-      harness.hasWebAreaAncestor = isWebContent
+      harness.webAreaAncestorDepth = webDepth
+      harness.hasUniformTextAttributes = hasUniformTextAttributes
       let capability = FocusedTextInsertionCapability(environment: harness.environment)
 
       XCTAssertEqual(capability.prepareTarget(), .unsupportedField)
       XCTAssertEqual(harness.writeCount, 0)
     }
+  }
+
+  func testReadsAttributedTextOnlyForOtherwiseEligibleWebComposer() {
+    let harness = FocusedTextHarness(
+      content: "Existing draft",
+      selection: .init(location: 8, length: 0)
+    )
+    harness.exposesValue = true
+    harness.canSetValue = true
+    let capability = FocusedTextInsertionCapability(environment: harness.environment)
+
+    XCTAssertEqual(capability.prepareTarget(), .ready)
+    XCTAssertEqual(harness.uniformTextAttributeReadCount, 0)
+
+    capability.discardPreparedTarget()
+    harness.webAreaAncestorDepth = 22
+
+    XCTAssertEqual(capability.prepareTarget(), .ready)
+    XCTAssertEqual(harness.uniformTextAttributeReadCount, 1)
+  }
+
+  func testWebComposerFormattingChangeBeforeMutationFailsClosed() async throws {
+    let harness = FocusedTextHarness(
+      content: "Existing draft",
+      selection: .init(location: 8, length: 0)
+    )
+    harness.exposesValue = true
+    harness.canSetValue = true
+    harness.webAreaAncestorDepth = 22
+    let capability = FocusedTextInsertionCapability(environment: harness.environment)
+
+    XCTAssertEqual(capability.prepareTarget(), .ready)
+    harness.hasUniformTextAttributes = false
+
+    let outcome = await capability.insert(try DictationText("safe"))
+
+    XCTAssertEqual(outcome, .unsupportedField)
+    XCTAssertEqual(harness.content, "Existing draft")
+    XCTAssertEqual(harness.writeCount, 0)
+    XCTAssertEqual(harness.uniformTextAttributeReadCount, 2)
   }
 
   func testUndoRestoresReplacedTextOnlyWhenFocusCaretAndContentStillMatch() async throws {
@@ -396,7 +466,8 @@ final class FocusedTextInsertionCapabilityTests: XCTestCase {
             canSetSelectedText: true,
             canSetSelectedRange: true,
             canSetValue: false
-          )
+          ),
+          wholeValueDecision: .rejectedValueNotSettable
         )
       )
     )
@@ -413,7 +484,8 @@ private final class FocusedTextHarness {
   var selection: FocusedTextRange
   var isSecure = false
   var role: FocusedTextTargetRole = .textArea
-  var hasWebAreaAncestor = false
+  var webAreaAncestorDepth: Int?
+  var hasUniformTextAttributes = true
   var canSetSelectedText = true
   var canSetSelectedRange = true
   var canSetValue = false
@@ -423,6 +495,7 @@ private final class FocusedTextHarness {
   var deferValueMutationUntilWait = false
   var setSelectedRangeSucceeds = true
   var selectedTextReadCount = 0
+  var uniformTextAttributeReadCount = 0
   var writeCount = 0
   var selectedTextWriteCount = 0
   var valueWriteCount = 0
@@ -457,7 +530,12 @@ private final class FocusedTextHarness {
         return isSecure
       },
       role: { [weak self] _ in self?.role ?? .other },
-      hasWebAreaAncestor: { [weak self] _ in self?.hasWebAreaAncestor ?? false },
+      webAreaAncestorDepth: { [weak self] _ in self?.webAreaAncestorDepth },
+      hasUniformTextAttributes: { [weak self] _, _ in
+        guard let self else { return false }
+        uniformTextAttributeReadCount += 1
+        return hasUniformTextAttributes
+      },
       selectedText: { [weak self] element in
         guard let self, element == firstElement else { return nil }
         selectedTextReadCount += 1

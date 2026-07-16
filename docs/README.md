@@ -53,6 +53,8 @@ Verified focused-field mutation and the bounded plain-value adapter are decision
 The bounded web-composer, pause, spoken-punctuation, and dictation-alternative
 follow-up is decision
 [`0017`](decisions/0017-bounded-contextual-dictation-followup.md).
+The deep, uniform web-composer insertion boundary is decision
+[`0018`](decisions/0018-bounded-uniform-web-composer-insertion.md).
 
 ### Evidence
 

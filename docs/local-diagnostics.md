@@ -107,8 +107,11 @@ Each record contains only:
 - For an insertion attempt, fixed content-free evidence: selected-text or
   whole-value method, content-and-caret/content-only/not-observed/unavailable
   verification, target role, and whether its three relevant attributes were
-  settable. This evidence never includes the app name, process identifier,
-  selected text, full field value, or native error.
+  settable. It also records one fixed whole-value adapter decision, such as
+  eligible plain web composer, rejected non-web text area, rejected oversized
+  value, object-bearing value, or mixed formatting. This evidence never
+  includes the app name, process identifier, ancestor path, selected text,
+  full field value, attributed content, or native error.
 - Optional user-set judgments for whether the transcript text was accurate and
   whether Topher's action was correct. These are independent because correct
   transcription can still lead to the wrong intent, and vice versa.
@@ -153,9 +156,9 @@ record contains an empty transcript and a fixed capture-failure reason. It is
 never silently executed or inserted. If a prepared dictation target becomes
 secure, even that preview is discarded and no content-bearing record is made.
 
-Summarize retained outcomes, feedback rates, insertion methods/verification/
-roles, interpretation/polish reasons, and timing percentiles without printing
-command text:
+Summarize retained outcomes, feedback rates, insertion methods, verification,
+target roles, whole-value decisions, interpretation/polish reasons, and timing
+percentiles without printing command text:
 
 ```sh
 scripts/summarize_dogfood_diagnostics.rb

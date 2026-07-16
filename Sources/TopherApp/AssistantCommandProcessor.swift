@@ -2,7 +2,7 @@ import OSLog
 import TopherCore
 
 enum AssistantCommandOutcome: Equatable, Sendable {
-  case unsupported
+  case unsupported(reason: UnsupportedCommandReason)
   case denied(reason: String)
   case completed(ActionOutcome)
 }
@@ -24,6 +24,7 @@ final class AssistantCommandProcessor {
   private let vocabularyProvider: @MainActor () -> TranscriptVocabulary
   private let policy: CommandPolicy
   private let applicationOpener: ApplicationOpenCapability
+  private let browserRouteOpener: BrowserRouteOpenCapability
   private let webOpener: WebOpenCapability
   private let logger = Logger(subsystem: "dev.topher.app", category: "control-path")
 
@@ -34,12 +35,14 @@ final class AssistantCommandProcessor {
     },
     policy: CommandPolicy = .init(),
     applicationOpener: ApplicationOpenCapability? = nil,
+    browserRouteOpener: BrowserRouteOpenCapability? = nil,
     webOpener: WebOpenCapability? = nil
   ) {
     self.resolver = resolver
     self.vocabularyProvider = vocabularyProvider
     self.policy = policy
     self.applicationOpener = applicationOpener ?? ApplicationOpenCapability()
+    self.browserRouteOpener = browserRouteOpener ?? BrowserRouteOpenCapability()
     self.webOpener = webOpener ?? WebOpenCapability()
   }
 
@@ -57,14 +60,22 @@ final class AssistantCommandProcessor {
       alternatives: alternatives
     )
 
-    guard case .resolved(let command) = resolver.resolve(interpretation.selectedTranscript) else {
+    let resolution = resolver.resolve(interpretation.selectedTranscript)
+    guard case .resolved(let command) = resolution else {
+      let reason =
+        if case .unsupported(let unsupportedReason) = resolution {
+          unsupportedReason
+        } else {
+          UnsupportedCommandReason.unsupportedPhrasing
+        }
       logger.notice("Rejected an unsupported command")
       return AssistantCommandProcessingResult(
-        outcome: .unsupported,
+        outcome: .unsupported(reason: reason),
         trace: AssistantCommandTrace(
           outcome: .unsupported,
           commandKind: nil,
-          capabilityIdentifier: nil
+          capabilityIdentifier: nil,
+          unsupportedReason: reason
         ),
         interpretation: interpretation
       )
@@ -95,6 +106,9 @@ final class AssistantCommandProcessor {
     case .openApplication(let target):
       logExecution(ApplicationOpenCapability.descriptor)
       outcome = await applicationOpener.execute(target)
+    case .openBrowserRoute(let target):
+      logExecution(BrowserRouteOpenCapability.descriptor)
+      outcome = await browserRouteOpener.execute(target)
     case .openWebsite(let target):
       logExecution(WebOpenCapability.descriptor)
       outcome = await webOpener.execute(target)
@@ -141,6 +155,8 @@ final class AssistantCommandProcessor {
     switch command {
     case .openApplication:
       (.openApplication, ApplicationOpenCapability.descriptor.identifier)
+    case .openBrowserRoute:
+      (.openBrowserRoute, BrowserRouteOpenCapability.descriptor.identifier)
     case .openWebsite:
       (.openWebsite, WebOpenCapability.descriptor.identifier)
     case .searchWeb:

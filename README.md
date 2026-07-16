@@ -11,8 +11,8 @@ can reuse capture without inheriting command authority.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.3.0 development tree currently defines 133 Swift tests. The
-latest complete local run passed all 133 tests; Thread Sanitizer and final
+Status: the 0.3.0 development tree currently defines 142 Swift tests. The
+latest complete local run passed all 142 tests; Thread Sanitizer and final
 app-bundle checks are rerun at each checkpoint. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
@@ -43,13 +43,16 @@ The comparative speech benchmark is still open.
   without deciding what it means.
 - A dedicated assistant-command processor that resolves, checks policy, and
   awaits exactly one registered capability.
-- Typed, allowlisted commands for ChatGPT/Codex, Chrome, Notion, Safari, Visual
-  Studio Code, and Xcode, including bounded phrasing such as “Navigate Chrome,”
-  “Switch to Chrome,” and “Open Codex.”
-- Typed, allowlisted navigation to Crunchyroll, GitHub, Google, and YouTube.
+- Typed, allowlisted commands for ChatGPT/Codex, Chrome, Notes, Notion, Safari,
+  Visual Studio Code, and Xcode, including bounded phrasing such as “Navigate
+  Chrome,” “Switch to Chrome,” and “Open Codex.”
+- Typed, allowlisted navigation to Crunchyroll, Gmail, GitHub, Google, YouTube,
+  and the browser-owned Chrome Extensions route.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
   known site, provider searches retain their provider, and unknown bare
   searches use Google in the default browser (Chrome in dogfood use).
+- Target-aware query phrasing such as “Open YouTube for dining with Derek,”
+  plus fail-closed rejection of multiple executable actions in one request.
 - A bounded local personal-vocabulary editor for developer and product terms.
   Canonical terms may bias on-device recognition; known mis-transcriptions stay
   in Topher's deterministic correction layer, which can only select an already
@@ -59,7 +62,9 @@ The comparative speech benchmark is still open.
 - Safe rejection of unknown text and applications.
 - A bounded developer trace for recent final command
   transcripts and typed outcomes. Local dogfood builds start with it on; an
-  explicit off switch and **Clear Now** remain available at any time.
+  explicit off switch and **Clear Now** remain available at any time. Each
+  retained request can be rated independently for transcript accuracy and
+  action correctness.
 - XCTest coverage for parsing, policy, native capabilities, audio conversion,
   permission/assets, transcription, cancellation, and push-to-talk races.
 
@@ -132,8 +137,8 @@ For an interactive smoke test:
    is ready.
 4. Say “Open Safari,” release, and confirm the HUD changes from listening to
    finalizing before Safari opens exactly once.
-5. Try “Open Notion,” “Navigate Chrome,” “Pull up YouTube,” “Open GitHub,”
-   “Search Crunchyroll,” “Search YouTube for C++ and Swift,” and “Search for
+5. Try “Open Notion,” “Open Notes,” “Go to my Gmail,” “Open Chrome extensions,”
+   “Open YouTube for dining with Derek,” “Search Crunchyroll,” and “Search for
    best local speech model.”
 6. Speak unknown text and confirm it fails closed.
 7. Use the manual transcript field and **Run** as a development fallback.
@@ -196,14 +201,14 @@ phase, preserves an explicit opt-out, and adds an orange dot to the menu-bar
 icon while enabled. Re-enabling after an opt-out requires confirmation. Each
 record contains the exact finalized voice or manual command, the interpreted
 command and correction reason when Topher safely selected a different reading,
-  an available confidence summary, its source, a fixed typed outcome, fixed
-  command/capability metadata, capture-stage and processing durations, and app
-  version/build. It
-never contains raw audio,
-partials, or content Topher separately captures from a page, screen, message, or
-document. Topher does not append constructed destination URLs, Keychain/config
-values, or detailed framework errors. The user-authored command itself can
-contain a query, URL, pasted content, or secret.
+an available confidence summary, its source, a fixed typed outcome, fixed
+command/capability metadata, a typed unsupported reason, optional local
+transcript/action ratings, capture-stage and processing durations, and app
+version/build. It never contains raw audio, partials, or content Topher
+separately captures from a page, screen, message, or document. Topher does not
+append constructed destination URLs, Keychain/config values, or detailed
+framework errors. The user-authored command itself can contain a query, URL,
+pasted content, or secret.
 
 The trace is stored at
 `~/Library/Caches/dev.topher.app/TranscriptDiagnostics/transcript-diagnostics.json`.

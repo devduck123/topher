@@ -479,15 +479,29 @@ final class TopherModel: ObservableObject {
 
   private func apply(_ outcome: AssistantCommandOutcome, source: DeveloperTranscriptSource) {
     switch outcome {
-    case .unsupported:
-      applyFailure(
-        "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”",
-        source: source
-      )
+    case .unsupported(let reason):
+      applyFailure(unsupportedMessage(for: reason), source: source)
     case .denied(let reason):
       applyFailure(reason, source: source)
     case .completed(let actionOutcome):
       apply(actionOutcome, source: source)
+    }
+  }
+
+  private func unsupportedMessage(for reason: UnsupportedCommandReason) -> String {
+    switch reason {
+    case .compoundRequest:
+      "I can perform one action at a time. Try each request separately."
+    case .contextRequired:
+      "That request needs app, browser, or screen context that Topher does not have yet."
+    case .emptyInput, .missingValue:
+      "That command is missing a target or search value."
+    case .unknownTarget:
+      "Topher does not know that app or destination yet."
+    case .unsupportedAction:
+      "Topher knows that target but does not support that action yet."
+    case .unsupportedPhrasing:
+      "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
     }
   }
 

@@ -140,6 +140,12 @@ struct DeveloperDiagnosticsView: View {
           .foregroundStyle(.secondary)
       }
 
+      if let reason = record.unsupportedReason {
+        Text("Reason: \(reason.displayName)")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+
       Text(
         "\(record.recordedAt.formatted(date: .omitted, time: .standard)) · \(record.source.displayName) · \(record.outcome.displayName) · v\(record.appVersion) (\(record.appBuild)) · \(record.processingDurationMilliseconds) ms"
       )
@@ -153,8 +159,81 @@ struct DeveloperDiagnosticsView: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
       }
+
+      HStack(spacing: 10) {
+        if record.source == .voice {
+          feedbackControl(
+            label: "Transcript",
+            value: record.transcriptWasAccurate,
+            record: record,
+            dimension: .transcriptAccuracy
+          )
+        }
+        feedbackControl(
+          label: "Action",
+          value: record.actionWasCorrect,
+          record: record,
+          dimension: .actionCorrectness
+        )
+      }
+      .padding(.top, 2)
     }
-    .accessibilityElement(children: .combine)
+    .accessibilityElement(children: .contain)
+  }
+
+  @ViewBuilder
+  private func feedbackControl(
+    label: String,
+    value: Bool?,
+    record: DeveloperTranscriptRecord,
+    dimension: DeveloperDiagnosticFeedbackDimension
+  ) -> some View {
+    HStack(spacing: 3) {
+      Text(label)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+
+      feedbackButton(
+        systemImage: value == true ? "hand.thumbsup.fill" : "hand.thumbsup",
+        accessibilityLabel: "\(label) correct",
+        isSelected: value == true
+      ) {
+        diagnostics.setFeedback(
+          for: record,
+          dimension: dimension,
+          value: value == true ? nil : true
+        )
+      }
+
+      feedbackButton(
+        systemImage: value == false ? "hand.thumbsdown.fill" : "hand.thumbsdown",
+        accessibilityLabel: "\(label) incorrect",
+        isSelected: value == false
+      ) {
+        diagnostics.setFeedback(
+          for: record,
+          dimension: dimension,
+          value: value == false ? nil : false
+        )
+      }
+    }
+  }
+
+  private func feedbackButton(
+    systemImage: String,
+    accessibilityLabel: String,
+    isSelected: Bool,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .font(.caption2)
+        .foregroundStyle(isSelected ? .orange : .secondary)
+    }
+    .buttonStyle(.borderless)
+    .disabled(diagnostics.isUpdating)
+    .accessibilityLabel(accessibilityLabel)
+    .accessibilityValue(isSelected ? "Selected" : "Not selected")
   }
 
   private func timingSummary(_ record: DeveloperTranscriptRecord) -> String? {
@@ -218,6 +297,27 @@ extension TranscriptInterpretationReason {
       "Speech alternative"
     case .vocabularyCorrection:
       "Vocabulary correction"
+    }
+  }
+}
+
+extension UnsupportedCommandReason {
+  fileprivate var displayName: String {
+    switch self {
+    case .compoundRequest:
+      "Compound request"
+    case .contextRequired:
+      "Context required"
+    case .emptyInput:
+      "Empty input"
+    case .missingValue:
+      "Missing value"
+    case .unknownTarget:
+      "Unknown target"
+    case .unsupportedAction:
+      "Unsupported target action"
+    case .unsupportedPhrasing:
+      "Unsupported phrasing"
     }
   }
 }

@@ -19,6 +19,7 @@ enum DeveloperTranscriptSource: String, Codable, Equatable, Sendable {
 
 enum AssistantCommandKind: String, Codable, Equatable, Sendable {
   case openApplication
+  case openBrowserRoute
   case openWebsite
   case searchWeb
 }
@@ -50,6 +51,24 @@ struct AssistantCommandTrace: Equatable, Sendable {
   let outcome: AssistantCommandTraceOutcome
   let commandKind: AssistantCommandKind?
   let capabilityIdentifier: String?
+  let unsupportedReason: UnsupportedCommandReason?
+
+  init(
+    outcome: AssistantCommandTraceOutcome,
+    commandKind: AssistantCommandKind?,
+    capabilityIdentifier: String?,
+    unsupportedReason: UnsupportedCommandReason? = nil
+  ) {
+    self.outcome = outcome
+    self.commandKind = commandKind
+    self.capabilityIdentifier = capabilityIdentifier
+    self.unsupportedReason = unsupportedReason
+  }
+}
+
+enum DeveloperDiagnosticFeedbackDimension: Equatable, Sendable {
+  case transcriptAccuracy
+  case actionCorrectness
 }
 
 struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
@@ -70,6 +89,9 @@ struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
   let outcome: AssistantCommandTraceOutcome
   let commandKind: AssistantCommandKind?
   let capabilityIdentifier: String?
+  let unsupportedReason: UnsupportedCommandReason?
+  var transcriptWasAccurate: Bool?
+  var actionWasCorrect: Bool?
   let processingDurationMilliseconds: UInt64
   let appVersion: String
   let appBuild: String
@@ -284,12 +306,54 @@ actor DeveloperDiagnosticsStore {
       outcome: draft.trace.outcome,
       commandKind: draft.trace.commandKind,
       capabilityIdentifier: draft.trace.capabilityIdentifier,
+      unsupportedReason: draft.trace.unsupportedReason,
+      transcriptWasAccurate: nil,
+      actionWasCorrect: nil,
       processingDurationMilliseconds: draft.processingDurationMilliseconds,
       appVersion: draft.appVersion,
       appBuild: draft.appBuild
     )
 
     records?.append(record)
+    needsPersistence = true
+    do {
+      try applyRetentionBounds()
+      try persistPendingRecords()
+    } catch {
+      let writeError = error
+      records = previousRecords
+      needsPersistence = true
+      try? persistPendingRecords()
+      throw writeError
+    }
+    revision &+= 1
+    return currentSnapshot()
+  }
+
+  func setFeedback(
+    recordID: UUID,
+    dimension: DeveloperDiagnosticFeedbackDimension,
+    value: Bool?
+  ) throws -> DeveloperDiagnosticsSnapshot {
+    try loadIfNeeded()
+    guard let index = records?.firstIndex(where: { $0.id == recordID }) else {
+      return currentSnapshot()
+    }
+
+    let previousRecords = records ?? []
+    switch dimension {
+    case .transcriptAccuracy:
+      guard records?[index].transcriptWasAccurate != value else {
+        return currentSnapshot()
+      }
+      records?[index].transcriptWasAccurate = value
+    case .actionCorrectness:
+      guard records?[index].actionWasCorrect != value else {
+        return currentSnapshot()
+      }
+      records?[index].actionWasCorrect = value
+    }
+
     needsPersistence = true
     do {
       try applyRetentionBounds()
@@ -449,6 +513,9 @@ actor DeveloperDiagnosticsStore {
       outcome: record.outcome,
       commandKind: record.commandKind,
       capabilityIdentifier: record.capabilityIdentifier,
+      unsupportedReason: record.unsupportedReason,
+      transcriptWasAccurate: record.transcriptWasAccurate,
+      actionWasCorrect: record.actionWasCorrect,
       processingDurationMilliseconds: record.processingDurationMilliseconds,
       appVersion: record.appVersion,
       appBuild: record.appBuild

@@ -115,6 +115,33 @@ final class DeveloperDiagnosticsController: ObservableObject {
     errorMessage = nil
   }
 
+  func setFeedback(
+    for record: DeveloperTranscriptRecord,
+    dimension: DeveloperDiagnosticFeedbackDimension,
+    value: Bool?
+  ) {
+    guard !isUpdating else { return }
+    isUpdating = true
+    errorMessage = nil
+
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        let snapshot = try await store.setFeedback(
+          recordID: record.id,
+          dimension: dimension,
+          value: value
+        )
+        apply(snapshot)
+      } catch {
+        errorMessage = "Couldn’t save diagnostic feedback."
+        hasPendingStorageMaintenance = true
+        logger.error("Developer diagnostics feedback write failed")
+      }
+      isUpdating = false
+    }
+  }
+
   func beginTrace() async -> DeveloperDiagnosticsTraceToken? {
     await store.beginTrace()
   }

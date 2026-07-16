@@ -115,6 +115,10 @@ dependency, and installed-app denial/error recovery is verified.
   context from known ASR correction aliases; preserve already-resolved target
   wording; add installed ChatGPT/Codex (`com.openai.codex`) and Xcode
   (`com.apple.dt.Xcode`) targets.
+- Complete in build 5: add Notes and Gmail; model Chrome Extensions as a typed
+  browser-owned route; support target-specific Google/YouTube query phrasing;
+  reject independently executable compound actions; and retain typed reasons
+  for unsupported requests.
 - Add validated explicit HTTPS URL opening only if a later use case needs it.
 - Add application discovery plus explicit aliases without accepting arbitrary
   model-provided bundle IDs.
@@ -156,6 +160,9 @@ it does not, remove the model path.
   listening-to-first-transcript, and key-up-to-final durations for evidence
   carrying voice requests. Keep these distinct from final-to-action command
   processing duration.
+- Complete in build 5: let the user independently rate retained transcript
+  accuracy and action correctness, and provide a metadata-only summary script.
+  Do not infer speech accuracy from capability outcomes or confidence alone.
 - Add richer metadata-only lifecycle events only when a measured reliability
   question requires them.
 - Test shortcut conflicts and launch-at-login only if daily use warrants it.

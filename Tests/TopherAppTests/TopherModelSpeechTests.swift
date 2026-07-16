@@ -426,7 +426,7 @@ final class TopherModelSpeechTests: XCTestCase {
       diagnostics.records.count == 1
         && model.phase
           == .failure(
-            "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
+            "That request needs app, browser, or screen context that Topher does not have yet."
           )
     }
 
@@ -435,6 +435,7 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertFalse(record.transcript.contains("Summarize this\n"))
     XCTAssertEqual(record.source, .voice)
     XCTAssertEqual(record.outcome, .unsupported)
+    XCTAssertEqual(record.unsupportedReason, .contextRequired)
     XCTAssertNil(record.commandKind)
     XCTAssertEqual(record.transcriptionConfidence, 0.73)
     XCTAssertNotNil(record.holdToListeningMilliseconds)

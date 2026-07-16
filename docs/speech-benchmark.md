@@ -3,6 +3,13 @@
 Status: not yet run. No user voice recordings were provided, and no result below
 should be read as an accuracy or latency claim.
 
+During ordinary dogfooding, Topher's bounded local diagnostics provide separate
+thumb ratings for transcript accuracy and action correctness. Run
+`scripts/summarize_dogfood_diagnostics.rb` for aggregate counts and latency
+percentiles without printing command text. These subjective ratings help find
+regressions but do not replace the controlled corpus below: Apple confidence,
+capability success, and intent success are not proxies for word error rate.
+
 ## Corpus
 
 Use five natural takes of each phrase in a quiet room and five with typical room

@@ -8,6 +8,7 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
   case chatGPT
   case chrome
   case notion
+  case notes
   case safari
   case visualStudioCode
   case xcode
@@ -20,6 +21,8 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
       "Google Chrome"
     case .notion:
       "Notion"
+    case .notes:
+      "Notes"
     case .safari:
       "Safari"
     case .visualStudioCode:
@@ -37,6 +40,8 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
       "com.google.Chrome"
     case .notion:
       "notion.id"
+    case .notes:
+      "com.apple.Notes"
     case .safari:
       "com.apple.Safari"
     case .visualStudioCode:
@@ -54,6 +59,8 @@ public enum ApplicationTarget: String, CaseIterable, Equatable, Sendable {
       ["chrome", "google chrome"]
     case .notion:
       ["notion", "notion app", "notion desktop"]
+    case .notes:
+      ["notes", "notes app", "apple notes", "my notes"]
     case .safari:
       ["safari"]
     case .visualStudioCode:

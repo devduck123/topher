@@ -152,6 +152,42 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     XCTAssertEqual(reloadedRecord, record)
   }
 
+  func testPersistsIndependentTranscriptAndActionFeedback() async throws {
+    let store = makeStore(initialEnabled: true)
+    let token = try await traceToken(for: store)
+    let recorded = try await store.record(
+      draft(transcript: "Open gidhub.com"),
+      using: token
+    )
+    let recordID = try XCTUnwrap(recorded.records.first?.id)
+
+    _ = try await store.setFeedback(
+      recordID: recordID,
+      dimension: .transcriptAccuracy,
+      value: false
+    )
+    let updated = try await store.setFeedback(
+      recordID: recordID,
+      dimension: .actionCorrectness,
+      value: true
+    )
+
+    XCTAssertEqual(updated.records.first?.transcriptWasAccurate, false)
+    XCTAssertEqual(updated.records.first?.actionWasCorrect, true)
+
+    let reloaded = try await makeStore(initialEnabled: false).snapshot()
+    XCTAssertEqual(reloaded.records.first?.transcriptWasAccurate, false)
+    XCTAssertEqual(reloaded.records.first?.actionWasCorrect, true)
+
+    let cleared = try await store.setFeedback(
+      recordID: recordID,
+      dimension: .transcriptAccuracy,
+      value: nil
+    )
+    XCTAssertNil(cleared.records.first?.transcriptWasAccurate)
+    XCTAssertEqual(cleared.records.first?.actionWasCorrect, true)
+  }
+
   func testDropsUnreasonableCaptureStageTimings() async throws {
     let store = makeStore(initialEnabled: true)
     let token = try await traceToken(for: store)

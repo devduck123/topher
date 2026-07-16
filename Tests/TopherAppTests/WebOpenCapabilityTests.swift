@@ -39,11 +39,57 @@ final class WebOpenCapabilityTests: XCTestCase {
 
     _ = await capability.execute(.github)
     _ = await capability.execute(.crunchyroll)
+    _ = await capability.execute(.gmail)
 
     XCTAssertEqual(
       openedURLs.map(\.absoluteString),
-      ["https://github.com/", "https://www.crunchyroll.com/"]
+      ["https://github.com/", "https://www.crunchyroll.com/", "https://mail.google.com/"]
     )
+  }
+
+  func testOpensChromeExtensionsThroughTheChromeApplication() async {
+    let applicationURL = URL(fileURLWithPath: "/Applications/Google Chrome.app")
+    var openedApplicationURL: URL?
+    var arguments: [String] = []
+    let capability = BrowserRouteOpenCapability(
+      workspace: BrowserRouteWorkspace(
+        applicationURL: { bundleIdentifier in
+          XCTAssertEqual(bundleIdentifier, "com.google.Chrome")
+          return applicationURL
+        },
+        openApplication: { url, receivedArguments in
+          openedApplicationURL = url
+          arguments = receivedArguments
+        }
+      )
+    )
+
+    let outcome = await capability.execute(.chromeExtensions)
+
+    XCTAssertEqual(openedApplicationURL, applicationURL)
+    XCTAssertEqual(arguments, ["chrome://extensions/"])
+    XCTAssertEqual(outcome, .succeeded(message: "Opened Chrome Extensions."))
+    XCTAssertEqual(
+      BrowserRouteOpenCapability.descriptor,
+      CapabilityDescriptor(
+        identifier: "browserRouteNavigation",
+        access: .changesState,
+        risk: .lowRiskReversible
+      )
+    )
+  }
+
+  func testBrowserRouteFailsClosedWhenChromeIsUnavailable() async {
+    let capability = BrowserRouteOpenCapability(
+      workspace: BrowserRouteWorkspace(
+        applicationURL: { _ in nil },
+        openApplication: { _, _ in XCTFail("Must not attempt to open a missing browser") }
+      )
+    )
+
+    let outcome = await capability.execute(.chromeExtensions)
+
+    XCTAssertEqual(outcome, .failed(message: "Could not open Chrome Extensions."))
   }
 
   func testBuildsAnEncodedGoogleSearchURL() async throws {

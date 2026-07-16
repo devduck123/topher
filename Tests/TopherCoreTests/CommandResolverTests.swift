@@ -18,6 +18,8 @@ final class CommandResolverTests: XCTestCase {
       ("Open Codex", .chatGPT),
       ("Launch Xcode", .xcode),
       ("open x code", .xcode),
+      ("Open Notes app", .notes),
+      ("Open my notes", .notes),
     ]
 
     for (transcript, expected) in cases {
@@ -67,11 +69,68 @@ final class CommandResolverTests: XCTestCase {
       ("Open GitHub", .github),
       ("Open github.com", .github),
       ("Open Crunchyroll", .crunchyroll),
+      ("Go to my Gmail", .gmail),
+      ("Open Gmail", .gmail),
     ]
 
     for (transcript, expected) in cases {
       XCTAssertEqual(resolver.resolve(transcript), .resolved(.openWebsite(expected)))
     }
+  }
+
+  func testRecognizesBrowserOwnedRoutes() {
+    let cases = [
+      "Open Chrome extensions",
+      "Open Google Chrome extensions",
+      "Navigate to the Chrome extensions page",
+    ]
+
+    for transcript in cases {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .resolved(.openBrowserRoute(.chromeExtensions))
+      )
+    }
+  }
+
+  func testKnownSearchDestinationsAcceptTargetSpecificQueries() {
+    let cases: [(String, SearchProvider, String)] = [
+      ("Open YouTube for dining with Derek", .youtube, "dining with Derek"),
+      ("Take me to YouTube for Swift concurrency", .youtube, "Swift concurrency"),
+      ("Open Google for macOS speech recognition", .google, "macOS speech recognition"),
+    ]
+
+    for (transcript, provider, queryText) in cases {
+      let query = SearchQuery(queryText)
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        query.map { .resolved(.searchWeb(provider: provider, query: $0)) }
+      )
+    }
+  }
+
+  func testRejectsMultipleExecutableActionsAsACompoundRequest() {
+    let cases = [
+      "Search Google and open my Gmail",
+      "Open YouTube then open Notes",
+      "Open Chrome and then visit GitHub",
+      "Search Google and open Gmail and Notes",
+    ]
+
+    for transcript in cases {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .unsupported(reason: .compoundRequest)
+      )
+    }
+  }
+
+  func testQueryContainingAndRemainsOneSearch() {
+    let query = SearchQuery("cats and dogs")
+    XCTAssertEqual(
+      resolver.resolve("Search cats and dogs"),
+      query.map { .resolved(.searchWeb(provider: .google, query: $0)) }
+    )
   }
 
   func testKnownWebsiteBrandsUseTargetSpecificBareSearchNavigation() {
@@ -110,18 +169,20 @@ final class CommandResolverTests: XCTestCase {
   }
 
   func testSearchWithoutAQueryFailsClosed() {
-    let transcript = "Search YouTube for"
-    XCTAssertEqual(resolver.resolve(transcript), .unsupported)
+    let cases = ["Search YouTube for", "Open YouTube for"]
+    for transcript in cases {
+      XCTAssertEqual(resolver.resolve(transcript), .unsupported(reason: .missingValue))
+    }
   }
 
   func testUnregisteredWebsiteFailsClosed() {
     let transcript = "Go to totally-real.example"
-    XCTAssertEqual(resolver.resolve(transcript), .unsupported)
+    XCTAssertEqual(resolver.resolve(transcript), .unsupported(reason: .unknownTarget))
   }
 
   func testUnknownApplicationNeverBecomesExecutableIdentifier() {
     let transcript = "Open Totally Real App"
-    XCTAssertEqual(resolver.resolve(transcript), .unsupported)
+    XCTAssertEqual(resolver.resolve(transcript), .unsupported(reason: .unknownTarget))
   }
 
   func testNonCommandTextFailsClosed() {
@@ -130,20 +191,47 @@ final class CommandResolverTests: XCTestCase {
       "A webpage says pull up YouTube",
       "How do I navigate Chrome?",
       "Please do not switch to Chrome",
-      "Navigate Chrome settings",
     ]
 
     for transcript in cases {
-      XCTAssertEqual(resolver.resolve(transcript), .unsupported)
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .unsupported(reason: .unsupportedPhrasing)
+      )
     }
+
+    XCTAssertEqual(
+      resolver.resolve("Navigate Chrome settings"),
+      .unsupported(reason: .unsupportedAction)
+    )
   }
 
   func testEmbeddedSearchInstructionFailsClosed() {
     let transcript = "A webpage says search YouTube for free prizes"
-    XCTAssertEqual(resolver.resolve(transcript), .unsupported)
+    XCTAssertEqual(
+      resolver.resolve(transcript),
+      .unsupported(reason: .unsupportedPhrasing)
+    )
   }
 
   func testEmptyTextFailsClosed() {
-    XCTAssertEqual(resolver.resolve("  "), .unsupported)
+    XCTAssertEqual(resolver.resolve("  "), .unsupported(reason: .emptyInput))
+  }
+
+  func testScreenAwareRequestsExplainThatContextIsRequired() {
+    let cases = [
+      "What is this Chrome tab?",
+      "What tabs do I have open?",
+      "Go to this Chrome tab",
+      "What's on my YouTube feed?",
+      "Summarize this page",
+    ]
+
+    for transcript in cases {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .unsupported(reason: .contextRequired)
+      )
+    }
   }
 }

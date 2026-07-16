@@ -20,6 +20,64 @@ struct WebWorkspace {
 }
 
 @MainActor
+struct BrowserRouteWorkspace {
+  let applicationURL: (String) -> URL?
+  let openApplication: (URL, [String]) async throws -> Void
+
+  static var live: Self {
+    let workspace = NSWorkspace.shared
+    return Self(
+      applicationURL: { workspace.urlForApplication(withBundleIdentifier: $0) },
+      openApplication: { applicationURL, arguments in
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.promptsUserIfNeeded = true
+        configuration.arguments = arguments
+        _ = try await workspace.openApplication(
+          at: applicationURL,
+          configuration: configuration
+        )
+      }
+    )
+  }
+}
+
+@MainActor
+final class BrowserRouteOpenCapability {
+  static let descriptor = CapabilityDescriptor(
+    identifier: "browserRouteNavigation",
+    access: .changesState,
+    risk: .lowRiskReversible
+  )
+
+  private let workspace: BrowserRouteWorkspace
+
+  init(workspace: BrowserRouteWorkspace? = nil) {
+    self.workspace = workspace ?? .live
+  }
+
+  func execute(_ target: BrowserRouteTarget) async -> ActionOutcome {
+    guard let applicationURL = workspace.applicationURL(target.browser.bundleIdentifier) else {
+      return .failed(message: "Could not open \(target.displayName).")
+    }
+
+    do {
+      try await workspace.openApplication(applicationURL, [routeArgument(for: target)])
+      return .succeeded(message: "Opened \(target.displayName).")
+    } catch {
+      return .failed(message: "Could not open \(target.displayName).")
+    }
+  }
+
+  private func routeArgument(for target: BrowserRouteTarget) -> String {
+    switch target {
+    case .chromeExtensions:
+      "chrome://extensions/"
+    }
+  }
+}
+
+@MainActor
 final class WebOpenCapability {
   static let descriptor = CapabilityDescriptor(
     identifier: "webNavigation",
@@ -94,6 +152,8 @@ final class WebOpenCapability {
     switch target {
     case .crunchyroll:
       "www.crunchyroll.com"
+    case .gmail:
+      "mail.google.com"
     case .github:
       "github.com"
     case .google:

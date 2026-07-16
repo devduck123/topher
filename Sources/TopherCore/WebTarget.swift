@@ -3,6 +3,7 @@ import Foundation
 /// Websites Topher may open directly without accepting an arbitrary URL.
 public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
   case crunchyroll
+  case gmail
   case github
   case google
   case youtube
@@ -11,6 +12,8 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
     switch self {
     case .crunchyroll:
       "Crunchyroll"
+    case .gmail:
+      "Gmail"
     case .github:
       "GitHub"
     case .google:
@@ -24,6 +27,8 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
     switch self {
     case .crunchyroll:
       ["crunchyroll", "crunchy roll", "crunchyroll com"]
+    case .gmail:
+      ["gmail", "gmail com", "my gmail", "gmail inbox", "my gmail inbox"]
     case .github:
       ["github", "git hub", "github com"]
     case .google:
@@ -41,6 +46,50 @@ public enum WebsiteTarget: String, CaseIterable, Equatable, Sendable {
   /// Query-bearing provider forms such as `search YouTube for cats` are
   /// resolved before this rule.
   var acceptsBareSearchAsNavigation: Bool { true }
+
+  var queryProvider: SearchProvider? {
+    switch self {
+    case .google:
+      .google
+    case .youtube:
+      .youtube
+    case .crunchyroll, .gmail, .github:
+      nil
+    }
+  }
+}
+
+/// Browser-owned destinations that are not arbitrary web URLs.
+public enum BrowserRouteTarget: String, CaseIterable, Equatable, Sendable {
+  case chromeExtensions
+
+  public var displayName: String {
+    switch self {
+    case .chromeExtensions:
+      "Chrome Extensions"
+    }
+  }
+
+  public var browser: ApplicationTarget {
+    switch self {
+    case .chromeExtensions:
+      .chrome
+    }
+  }
+
+  var aliases: Set<String> {
+    switch self {
+    case .chromeExtensions:
+      [
+        "chrome extensions", "google chrome extensions", "chrome extension manager",
+        "chrome extensions page", "the chrome extensions page", "extensions in chrome",
+      ]
+    }
+  }
+
+  static func matching(_ normalizedName: String) -> Self? {
+    allCases.first { $0.aliases.contains(normalizedName) }
+  }
 }
 
 /// Search providers with application-owned URL construction.

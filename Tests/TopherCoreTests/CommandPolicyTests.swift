@@ -11,6 +11,7 @@ final class CommandPolicyTests: XCTestCase {
 
   func testAllowsRegisteredWebCapabilities() {
     XCTAssertEqual(policy.evaluate(.openWebsite(.youtube)), .allowed)
+    XCTAssertEqual(policy.evaluate(.openBrowserRoute(.chromeExtensions)), .allowed)
 
     let query = SearchQuery("local models")
     XCTAssertNotNil(query)

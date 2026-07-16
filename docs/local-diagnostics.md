@@ -94,6 +94,10 @@ Each record contains only:
   capability failed, or no usable speech.
 - The fixed command kind and registered capability identifier when resolution
   produced one.
+- A fixed unsupported reason when resolution rejects the command.
+- Optional user-set judgments for whether the transcript text was accurate and
+  whether Topher's action was correct. These are independent because correct
+  transcription can still lead to the wrong intent, and vice versa.
 - Voice-stage durations when available: hold-to-listening,
   listening-to-first-transcript, and key-up-to-final. These are monotonic local
   durations and do not imply a detected acoustic speech-onset time.
@@ -113,6 +117,23 @@ The JSON file is:
 ```text
 ~/Library/Caches/dev.topher.app/TranscriptDiagnostics/transcript-diagnostics.json
 ```
+
+The latest three menu records expose an **Action** rating and, for voice
+requests, a separate **Transcript** rating. Selecting an already-selected
+rating clears that judgment.
+Ratings use the same local file, permissions, retention, and **Clear Now**
+semantics as the corresponding request.
+
+Summarize retained outcomes, feedback rates, interpretation changes, and timing
+percentiles without printing command text:
+
+```sh
+scripts/summarize_dogfood_diagnostics.rb
+```
+
+Capability success is not a transcription-accuracy metric. The transcript
+rating is useful dogfood evidence, while controlled corpus runs remain the
+source of word-error-rate and proper-noun claims.
 
 Topher uses the Caches directory because these records are disposable
 development evidence, not durable user history. Topher sets POSIX mode `0700`

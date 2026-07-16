@@ -73,6 +73,41 @@ final class AssistantCommandProcessorTests: XCTestCase {
     XCTAssertEqual(executionStartedCount, 1)
   }
 
+  func testBrowserRouteCommandExecutesExactlyOnce() async {
+    let applicationURL = URL(fileURLWithPath: "/Applications/Google Chrome.app")
+    var openCount = 0
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      browserRouteOpener: BrowserRouteOpenCapability(
+        workspace: BrowserRouteWorkspace(
+          applicationURL: { _ in applicationURL },
+          openApplication: { receivedURL, arguments in
+            openCount += 1
+            XCTAssertEqual(receivedURL, applicationURL)
+            XCTAssertEqual(arguments, ["chrome://extensions/"])
+          }
+        )
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    let result = await processor.process("Open Chrome extensions")
+
+    XCTAssertEqual(
+      result.outcome,
+      .completed(.succeeded(message: "Opened Chrome Extensions."))
+    )
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilitySucceeded,
+        commandKind: .openBrowserRoute,
+        capabilityIdentifier: BrowserRouteOpenCapability.descriptor.identifier
+      )
+    )
+    XCTAssertEqual(openCount, 1)
+  }
+
   func testSearchCommandExecutesExactlyOnceAndPreservesTheQuery() async throws {
     var openedURLs: [URL] = []
     let processor = AssistantCommandProcessor(
@@ -114,13 +149,14 @@ final class AssistantCommandProcessorTests: XCTestCase {
       executionStartedCount += 1
     }
 
-    XCTAssertEqual(result.outcome, .unsupported)
+    XCTAssertEqual(result.outcome, .unsupported(reason: .unsupportedPhrasing))
     XCTAssertEqual(
       result.trace,
       AssistantCommandTrace(
         outcome: .unsupported,
         commandKind: nil,
-        capabilityIdentifier: nil
+        capabilityIdentifier: nil,
+        unsupportedReason: .unsupportedPhrasing
       )
     )
     XCTAssertEqual(executionStartedCount, 0)

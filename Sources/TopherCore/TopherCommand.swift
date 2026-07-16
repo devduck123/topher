@@ -2,8 +2,19 @@ import Foundation
 
 public enum TopherCommand: Equatable, Sendable {
   case openApplication(ApplicationTarget)
+  case openBrowserRoute(BrowserRouteTarget)
   case openWebsite(WebsiteTarget)
   case searchWeb(provider: SearchProvider, query: SearchQuery)
+}
+
+public enum UnsupportedCommandReason: String, Codable, Equatable, Sendable {
+  case compoundRequest
+  case contextRequired
+  case emptyInput
+  case missingValue
+  case unknownTarget
+  case unsupportedAction
+  case unsupportedPhrasing
 }
 
 /// The deterministic resolver either produces a typed executable proposal or
@@ -11,7 +22,7 @@ public enum TopherCommand: Equatable, Sendable {
 /// command.
 public enum CommandResolution: Equatable, Sendable {
   case resolved(TopherCommand)
-  case unsupported
+  case unsupported(reason: UnsupportedCommandReason)
 }
 
 public enum ActionRisk: String, Equatable, Sendable {

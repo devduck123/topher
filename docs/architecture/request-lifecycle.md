@@ -38,7 +38,7 @@ global shortcut
   -> AssistantCommandProcessor
      -> TranscriptInterpreter (safe alternatives and explicit vocabulary)
      -> CommandResolver
-     -> CommandResolution.resolved(TopherCommand) or unsupported
+     -> CommandResolution.resolved(TopherCommand) or typed unsupported reason
      -> CommandPolicy
      -> exactly one registered native capability
   -> visible result
@@ -119,6 +119,10 @@ Crunchyroll” can mean navigate to the known Crunchyroll destination, while
 “Search Crunchyroll anime releases” remains a general web query. Unknown search
 subjects use Google through the default browser. Application matching does not
 take priority merely because an installed application resembles a website.
+Browser-owned internal routes, such as Chrome Extensions, are distinct typed
+targets rather than arbitrary URL strings. A request that independently
+resolves to multiple executable actions is rejected as compound until a future
+planner and confirmation design can preserve ordering and authority safely.
 
 A model may help interpret phrasing, but it cannot create capabilities, grant
 permissions, set policy, or return executable code. Unavailable local reasoning

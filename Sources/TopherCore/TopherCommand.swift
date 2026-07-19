@@ -19,6 +19,7 @@ public enum UnsupportedCommandReason: String, Codable, Equatable, Sendable {
   case applicationNotFound
   case compoundRequest
   case contextRequired
+  case dictationModeRequired
   case emptyInput
   case missingValue
   case uncertainDomain

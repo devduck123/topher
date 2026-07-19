@@ -17,6 +17,7 @@ that answers the question instead of reading every file.
 | What are the security and privacy invariants? | [`SECURITY.md`](../SECURITY.md) |
 | How should contributors build and validate changes? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | How do local logs and retained dogfood diagnostics work? | [Local diagnostics](local-diagnostics.md) |
+| What should I say during manual testing? | [Dogfood query corpus](../dogfood/README.md) |
 | How is the Chrome adapter installed and dogfooded? | [Chrome extension guide](../ChromeExtension/README.md) |
 | How will speech quality be selected? | [Speech benchmark](speech-benchmark.md) |
 
@@ -46,6 +47,27 @@ merely to describe an implementation detail.
 `docs/decisions/` records consequential choices, rejected alternatives, and the
 evidence available at decision time. Add a new ADR or explicitly supersede an
 older one when a decision changes. Do not silently rewrite accepted history.
+The current dictation-polish contract is decision
+[`0016`](decisions/0016-layer-dictation-polish-under-a-latency-budget.md).
+Verified focused-field mutation and the bounded plain-value adapter are decision
+[`0017`](decisions/0017-verify-accessibility-dictation-mutations.md).
+The bounded web-composer, pause, spoken-punctuation, and dictation-alternative
+follow-up is decision
+[`0018`](decisions/0018-bounded-contextual-dictation-followup.md).
+The deep, uniform web-composer insertion boundary is decision
+[`0019`](decisions/0019-bounded-uniform-web-composer-insertion.md).
+The semantic end-append, placeholder-refusal, and bounded app-family evidence
+boundary is decision
+[`0020`](decisions/0020-require-semantic-web-append-evidence.md).
+Application-scoped focus recovery and the Codex/ChatGPT semantic empty-composer
+exception are decision
+[`0021`](decisions/0021-recover-focus-and-require-semantic-empty-composer-proof.md).
+Combined semantic-signal resolution, the exact known Codex suggestion adapter,
+and bounded Notion start/middle caret insertion are decision
+[`0022`](decisions/0022-combine-semantic-signals-and-bound-notion-caret-insertion.md).
+Stable post-write caret placement, punctuation-boundary composition, and shared
+strong-token search-query notation are decision
+[`0023`](decisions/0023-stabilize-caret-and-share-technical-notation.md).
 
 ### Evidence
 
@@ -61,6 +83,8 @@ edit an older record to claim a test that was not run then.
   sources before using them for a new decision.
 - `docs/local-diagnostics.md` and `docs/speech-benchmark.md` define repeatable
   operational procedures and acceptance measurements.
+- `dogfood/manual-corpus.json` is the sanitized human acceptance checklist;
+  `.topher-local` observed-query data is private and never committed.
 
 ## Common reading routes
 
@@ -73,7 +97,8 @@ edit an older record to claim a test that was not run then.
 - **Chrome context work:** decision 0013 → `ChromeExtension/README.md` → Core
   protocol/App bridge sources and tests → latest Chrome evidence record.
 - **Release or installation work:** contributing guide → README security posture
-  → latest release evidence → install helper.
+  → [latest integrated release evidence](evidence/2026-07-19-build-19-dictation-chrome-integration.md)
+  → install helper.
 - **Code review:** changed files and tests → `AGENTS.md` review priorities →
   relevant contract and risk documents.
 

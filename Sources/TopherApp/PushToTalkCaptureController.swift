@@ -69,7 +69,7 @@ enum PushToTalkCaptureState: Equatable, Sendable {
   case finalizing(String)
 }
 
-enum PushToTalkCaptureFailure: Equatable, Sendable {
+enum PushToTalkCaptureFailure: String, Codable, Equatable, Sendable {
   case microphonePermissionRequired
   case microphoneDenied
   case microphoneRestricted
@@ -78,7 +78,6 @@ enum PushToTalkCaptureFailure: Equatable, Sendable {
   case startFailed
   case resultStreamEnded
   case resultStreamFailed
-  case listeningTimedOut
   case finalizationFailed
   case finalizationTimedOut
 }
@@ -91,9 +90,11 @@ enum PushToTalkCaptureEvent: Equatable, Sendable {
   case stateChanged(PushToTalkCaptureState)
   case readyForNextHold
   case releasedBeforeListening
+  case maximumDurationReached(String)
   case completed(String)
   case completedWithEvidence(FinalTranscription)
   case failed(PushToTalkCaptureFailure)
+  case failedWithRecovery(PushToTalkCaptureFailure, transcript: String)
 }
 
 /// Owns one global push-to-talk capture lifecycle without deciding what the
@@ -125,6 +126,7 @@ final class PushToTalkCaptureController {
     var listeningStartedAt: UInt64?
     var firstTranscriptAt: UInt64?
     var releasedAt: UInt64?
+    var maximumDurationReached = false
   }
 
   var onEvent: EventHandler = { _ in }
@@ -230,11 +232,14 @@ final class PushToTalkCaptureController {
   }
 
   @discardableResult
-  func beginHold() -> Bool {
+  func beginHold(maximumDuration: Duration? = nil) -> Bool {
     guard !isShutDown, !isBusy, !isHeld else { return false }
 
     isHeld = true
-    startPreparation(startWhenReady: true)
+    startPreparation(
+      startWhenReady: true,
+      maximumDuration: maximumDuration ?? listeningTimeout
+    )
     return true
   }
 
@@ -242,6 +247,10 @@ final class PushToTalkCaptureController {
     guard !isShutDown else { return }
 
     isHeld = false
+    finalizeListening(maximumDurationReached: false)
+  }
+
+  private func finalizeListening(maximumDurationReached: Bool) {
     guard case .listening(let visibleTranscript) = phase else { return }
 
     listeningTimeoutTask?.cancel()
@@ -249,9 +258,15 @@ final class PushToTalkCaptureController {
     endCaptureInterval()
     beginFinalizationInterval()
     timing?.releasedAt = uptimeNanoseconds()
+    timing?.maximumDurationReached = maximumDurationReached
     phase = .finalizing(visibleTranscript)
-    onEvent(.stateChanged(.finalizing(visibleTranscript)))
-    logger.info("Push-to-talk ended")
+    if maximumDurationReached {
+      onEvent(.maximumDurationReached(visibleTranscript))
+      logger.notice("Maximum capture duration reached; finalizing")
+    } else {
+      onEvent(.stateChanged(.finalizing(visibleTranscript)))
+      logger.info("Push-to-talk ended")
+    }
 
     let token = generation
     let currentEventsTask = transcriptionEventsTask
@@ -320,7 +335,10 @@ final class PushToTalkCaptureController {
     }
   }
 
-  private func startPreparation(startWhenReady: Bool) {
+  private func startPreparation(
+    startWhenReady: Bool,
+    maximumDuration: Duration = .seconds(30)
+  ) {
     lifecycleTask?.cancel()
     listeningTimeoutTask?.cancel()
     invalidateReadinessRefresh()
@@ -335,13 +353,18 @@ final class PushToTalkCaptureController {
 
     lifecycleTask = Task { [weak self] in
       guard let self else { return }
-      await prepareAndMaybeStart(token: token, startWhenReady: startWhenReady)
+      await prepareAndMaybeStart(
+        token: token,
+        startWhenReady: startWhenReady,
+        maximumDuration: maximumDuration
+      )
     }
   }
 
   private func prepareAndMaybeStart(
     token: UInt64,
-    startWhenReady: Bool
+    startWhenReady: Bool,
+    maximumDuration: Duration
   ) async {
     let initialPermission = microphonePermission.currentState
     let permissionState = await microphonePermission.requestAuthorization()
@@ -448,7 +471,7 @@ final class PushToTalkCaptureController {
       onEvent(.stateChanged(.listening("")))
       logger.info("Push-to-talk started")
       consume(events, token: token)
-      scheduleListeningTimeout(token: token)
+      scheduleMaximumDuration(token: token, duration: maximumDuration)
     } catch {
       await transcription.cancel()
       guard generation == token else { return }
@@ -517,19 +540,18 @@ final class PushToTalkCaptureController {
     }
   }
 
-  private func scheduleListeningTimeout(token: UInt64) {
+  private func scheduleMaximumDuration(token: UInt64, duration: Duration) {
     listeningTimeoutTask?.cancel()
-    let timeout = listeningTimeout
     listeningTimeoutTask = Task { [weak self] in
       do {
-        try await Task.sleep(for: timeout)
+        try await Task.sleep(for: duration)
       } catch {
         return
       }
 
       guard let self, generation == token else { return }
       guard case .listening = phase else { return }
-      await failAndCancel(.listeningTimedOut, token: token)
+      finalizeListening(maximumDurationReached: true)
     }
   }
 
@@ -574,12 +596,17 @@ final class PushToTalkCaptureController {
   ) async {
     guard generation == token else { return }
 
+    let recoverableTranscript = recoverableTranscript(for: failure)
     generation &+= 1
     listeningTimeoutTask?.cancel()
     listeningTimeoutTask = nil
     isHeld = false
     phase = .cleaningUp
-    onEvent(.failed(failure))
+    if let recoverableTranscript {
+      onEvent(.failedWithRecovery(failure, transcript: recoverableTranscript))
+    } else {
+      onEvent(.failed(failure))
+    }
     endOpenIntervals()
     clearTranscriptionResult()
     timing = nil
@@ -637,8 +664,31 @@ final class PushToTalkCaptureController {
       keyUpToFinalMilliseconds: Self.elapsedMilliseconds(
         from: timing.releasedAt,
         to: completedAt
-      )
+      ),
+      maximumDurationReached: timing.maximumDurationReached
     )
+  }
+
+  private func recoverableTranscript(
+    for failure: PushToTalkCaptureFailure
+  ) -> String? {
+    switch failure {
+    case .resultStreamEnded, .resultStreamFailed, .finalizationFailed,
+      .finalizationTimedOut:
+      break
+    case .microphonePermissionRequired, .microphoneDenied, .microphoneRestricted,
+      .speechModelNotReady, .speechAssetPreparationFailed, .startFailed:
+      return nil
+    }
+
+    let transcript =
+      switch phase {
+      case .listening(let transcript), .finalizing(let transcript):
+        transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+      case .idle, .preparing, .cleaningUp:
+        ""
+      }
+    return transcript.isEmpty ? nil : transcript
   }
 
   private static func elapsedMilliseconds(from start: UInt64?, to end: UInt64?) -> UInt64? {
@@ -706,8 +756,6 @@ final class PushToTalkCaptureController {
       logger.error("Voice result stream ended while listening")
     case .resultStreamFailed:
       logger.error("Voice result stream failed")
-    case .listeningTimedOut:
-      logger.notice("Push-to-talk timed out without a key-up event")
     case .finalizationFailed:
       logger.error("Voice transcription failed")
     case .finalizationTimedOut:

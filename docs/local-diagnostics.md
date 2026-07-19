@@ -2,10 +2,11 @@
 
 Topher has two deliberately separate diagnostic paths:
 
-| Path | Purpose | Contains command text? | Retention owner |
+| Path | Purpose | Contains request text? | Retention owner |
 |---|---|---:|---|
 | macOS Unified Logging | Lifecycle troubleshooting and signpost timing | No | macOS |
 | Bounded developer trace | Recent local dogfood requests and typed outcomes | Yes; defaults on during dogfooding with an explicit off switch | Topher, with hard bounds |
+| Private observed-query corpus | Durable local list of phrases for later manual testing | Yes; commands by default, dictation only by explicit flag | Developer, by explicit export and deletion |
 
 There is no remote telemetry backend. Enabling the developer trace does not
 send its records anywhere.
@@ -47,7 +48,7 @@ Console.app can stream them too; filter on subsystem `dev.topher.app`.
 
 Fixed events emitted across the three Unified Logging categories include:
 
-- Push-to-talk started, ended, or timed out.
+- Push-to-talk started, ended, or reached its mode-specific maximum duration.
 - Microphone permission denied or restricted.
 - Local speech asset preparation failed.
 - Voice capture failed to start, its result stream stopped/failed, or
@@ -80,27 +81,59 @@ metadata-only messages; there is no transcript fallback into `Logger` or
 
 ## Bounded developer transcript trace
 
-The menu's **Developer diagnostics** section exposes **Record final command
-transcripts**. During local dogfooding it defaults on so unsupported phrasing is
-captured without setup. Turning it off persists the opt-out; re-enabling it
+**Settings → Developer → Local diagnostics** exposes **Record final commands
+and dictation**. During local dogfooding it defaults on so unsupported phrasing
+and dictation outcomes are captured without setup. The menu shows the latest
+three retained requests and their ratings. Turning recording off persists the
+opt-out; re-enabling it
 presents a warning and requires confirmation. While enabled, an orange dot
 appears in both the diagnostics section and Topher's menu-bar icon.
 
 Each record contains only:
 
-- The exact finalized voice or manual command after surrounding whitespace is
-  removed. This can include a search term or secret typed/spoken by the user.
-- The bounded interpreted command only when it differs, a fixed correction
-  reason, and an available confidence summary.
-- Whether the request came from voice or the manual development field.
+- The exact finalized voice/manual command or non-secure dictation after
+  surrounding whitespace is removed. This can include a search term or secret
+  typed/spoken by the user.
+- The bounded interpreted, formatted, or inserted text only when it differs, a
+  fixed correction reason when applicable, and an available confidence summary.
+  Dictation repeated-speech cleanup therefore preserves both raw and polished
+  forms with the fixed `dictationDisfluencyCleanup` reason.
+- Whether the request came from assistant voice, dictation, or the manual
+  development field.
 - A fixed outcome: unsupported, policy denied, capability succeeded,
-  capability failed, or no usable speech.
+  capability failed, no usable speech, dictation inserted, dictation fallback,
+  dictation failed, or capture failed.
 - The fixed command kind and registered capability identifier when resolution
   produced one.
 - A fixed unsupported reason when resolution rejects the command.
+- Fixed dictation-fallback and content-free capture-failure reasons when those
+  paths occur, plus whether the maximum duration caused automatic finalization.
+- For every dictation target preparation, a fixed system-wide/application focus
+  source, known application family, and content-free failure reason when one
+  occurred. This identifies focus-discovery and field-contract failures without
+  storing a process identifier, element path, title, or field content.
+- For an insertion attempt, fixed content-free evidence: selected-text or
+  whole-value method, content-and-caret/content-only/not-observed/unavailable
+  verification, target role, and whether its three relevant attributes were
+  settable. It also records a fixed known application family, selection
+  relationship, placeholder state, attributed-value classification, and one
+  fixed whole-value adapter decision. A Codex/ChatGPT semantic-empty attempt may
+  additionally record fixed suggestion-attribute, character-count, text-marker,
+  known-application-suggestion, and final decision states. These values describe
+  only whether each signal was absent, unavailable, empty/nonempty,
+  recognized/unrecognized, or inconsistent; they never retain the suggestion
+  or editor text. Application
+  families are limited to Chrome, Codex/ChatGPT, Notion, Notes, Safari,
+  Terminal, Visual Studio Code, other, or unknown; no raw bundle identifier is
+  retained. This evidence never includes the app or window title,
+  process identifier, ancestor path, selected text, full field value, attributed
+  content, URL, or native error.
 - Optional user-set judgments for whether the transcript text was accurate and
   whether Topher's action was correct. These are independent because correct
   transcription can still lead to the wrong intent, and vice versa.
+- An optional fixed issue tag after a user marks an action or insertion wrong,
+  such as wrong destination, wrong field, wrong position, missing text,
+  duplicated text, an unremoved stutter/filler, or spacing/punctuation.
 - Voice-stage durations when available: hold-to-listening,
   listening-to-first-transcript, and key-up-to-final. These are monotonic local
   durations and do not imply a detected acoustic speech-onset time.
@@ -116,8 +149,10 @@ the complete speech-alternative list, microphone buffers, retrieved
 browser/screen/message/document context, browser-returned tab titles, URLs,
 fingerprints, native messages,
 constructed destination URLs, detailed framework errors, Keychain/config
-values, or arbitrary error text. The exact user-authored command can itself
-contain a query, URL, pasted content, credential, or error string.
+values, or arbitrary error text. The exact user-authored request can itself
+contain a query, URL, pasted content, credential, or error string. Dictation
+aimed at a secure field is refused before capture; if the field becomes secure
+during a hold, the final text is discarded without a preview or trace record.
 
 The JSON file is:
 
@@ -125,14 +160,23 @@ The JSON file is:
 ~/Library/Caches/dev.topher.app/TranscriptDiagnostics/transcript-diagnostics.json
 ```
 
-The latest three menu records expose an **Action** rating and, for voice
-requests, a separate **Transcript** rating. Selecting an already-selected
-rating clears that judgment.
+The latest three menu records expose an **Action** rating for commands or an
+**Insertion** rating for dictation. Voice and dictation records also expose a
+separate **Transcript** rating. Selecting an already-selected rating clears
+that judgment.
 Ratings use the same local file, permissions, retention, and **Clear Now**
 semantics as the corresponding request.
 
-Summarize retained outcomes, feedback rates, interpretation changes, and timing
-percentiles without printing command text:
+When capture fails after producing a usable partial, the partial remains only
+in the in-process manual field or dictation preview. The persisted failure
+record contains an empty transcript and a fixed capture-failure reason. It is
+never silently executed or inserted. If a prepared dictation target becomes
+secure, even that preview is discarded and no content-bearing record is made.
+
+Summarize retained outcomes, feedback rates, insertion methods, verification,
+target roles/application families, selection/placeholder/attribute decisions,
+whole-value and semantic signal decisions, interpretation/polish reasons, and timing percentiles
+without printing command text:
 
 ```sh
 scripts/summarize_dogfood_diagnostics.rb
@@ -196,13 +240,56 @@ than partially trusted.
 These semantics intentionally separate “stop collecting now” from “delete what
 was already collected.”
 
+## Dogfood query datasets
+
+Topher keeps two intentionally different corpora:
+
+- `dogfood/manual-corpus.json` is checked in. It contains sanitized, deliberate
+  assistant, dictation, negative, and future-context cases with setup and
+  expected-result notes. It is the shared human test menu and must not contain
+  private observed speech.
+- `.topher-local/dogfood/observed-queries.json` is gitignored local plaintext.
+  It records bounded phrases the developer actually tried, aggregate outcome
+  and rating metadata, and the builds in which they occurred. It is useful for
+  deciding what the product should understand, not as a claim that a phrase is
+  supported.
+
+Validate and inspect the public corpus:
+
+```sh
+ruby scripts/check_dogfood_corpus.rb
+ruby scripts/check_dogfood_corpus.rb --list
+ruby scripts/check_dogfood_corpus.rb --list --mode dictation
+```
+
+Create or incrementally update the private corpus from the rolling trace:
+
+```sh
+ruby scripts/export_observed_queries.rb
+```
+
+The export is a deliberate developer action, not an app background task. It is
+idempotent for already imported trace record IDs, merges duplicate phrases,
+keeps at most 500 entries and 1 MiB, limits a phrase to 4 KiB, rejects unsafe
+storage paths, and uses `0700` directories plus a `0600` file. It excludes
+dictation by default because prose is more likely to contain private content;
+`--include-dictation` is an explicit higher-sensitivity choice.
+
+This second file is not covered by the trace's 24-hour rolling deletion.
+Delete it deliberately when it is no longer useful. Never commit, publish, or
+attach it without reviewing every phrase. Promote only sanitized, generally
+useful cases into the checked-in manual corpus.
+
 ## Other places request text can exist
 
 Raw microphone buffers are passed to Apple's local speech analyzer and are not
 written to an audio file or project-owned cache. Speech text exists transiently
-in Topher's process memory and visible UI until command processing or later UI
-state replaces it. “Not in ordinary logs” is not the same as “never held in
-memory.”
+in Topher's process memory and visible UI until request processing or later UI
+state replaces it. An unsupported dictation target can keep finalized text in
+the in-process pending preview until the user clears it, replaces it with a
+later result, or quits. **Copy** explicitly writes it to the system clipboard;
+Topher never does so automatically. “Not in ordinary logs” is not the same as
+“never held in memory.”
 
 For searches, the query is sent to the selected provider when the default
 browser opens Google or YouTube, and normal browser history or provider

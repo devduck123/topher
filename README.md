@@ -1,28 +1,29 @@
 # Topher
 
-Topher is a local-first macOS assistant. This repository currently contains a
-small but end-to-end voice-command path: a native menu-bar UI, configurable
-global push-to-talk, on-device English transcription, deterministic typed
-command resolution, policy validation, native application launching, and
-allowlisted Google/YouTube navigation. It also contains a first structured
-Chrome context slice for active-tab identification, bounded tab listing, and
-exact-title tab activation through a narrow MV3/native-messaging bridge. The
-capture and command-processing boundaries are now independent so later
-dictation and context-aware requests can reuse capture without inheriting
-command authority.
+Topher is a local-first macOS assistant. This repository currently contains
+end-to-end voice-command and global-dictation paths: a native menu-bar UI, two
+configurable global hold shortcuts, on-device English transcription,
+deterministic typed command resolution, safe focused-field insertion, policy
+validation, native application launching, bounded web navigation, and a first
+structured Chrome context slice for active-tab identification, bounded tab
+listing, and exact-title activation through a narrow MV3/native-messaging
+bridge. Capture is shared, but command interpretation, context acquisition,
+browser activation, and dictation insertion remain separate request kinds and
+authority boundaries.
 
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 build 9 development tree defines 210 Swift tests. The latest
-complete normal and Thread Sanitizer runs passed all 210 tests. Xcode Debug,
-universal Release, and static-analysis builds pass; the signed Release embeds
-the universal native host at `Contents/Helpers`, and deep strict signature
-validation passes. Direct Apple
+Status: the 0.4.0 Build 19 integration combines the global-dictation and
+structured Chrome-context foundations. All 320 Swift tests pass normally and
+under Thread Sanitizer, all 13 extension tests and 40 native-host assertions
+pass, and Xcode Debug, universal Release, static analysis, and strict bundle
+checks succeed. The signed Release embeds the universal native Chrome host at
+`Contents/Helpers`.
+Build 18's exact Release artifact remains the installed dogfood bundle; Build 19
+has not been installed or live-tested. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
-local dogfooding. Installation in `/Applications`, launch, and process liveness
-were verified for the earlier 0.3.0 dogfood bundle; build 9 was deliberately not
-installed or launched. A live Core Audio
+local dogfooding. A live Core Audio
 callback-isolation failure was captured, fixed, and covered by an off-main
 regression test. Accuracy, latency, permission-recovery, sleep/wake, and
 repeated-session acceptance remain explicit post-merge dogfood gates; this
@@ -32,15 +33,68 @@ comparative speech benchmark is still open.
 
 ## Implemented in this slice
 
-- A SwiftUI `MenuBarExtra` with visible ready, listening, transcribing,
-  executing, success, and failure states.
+- A compact SwiftUI `MenuBarExtra` with visible ready, listening, transcribing,
+  executing, success, and failure states; quick access to both shortcuts and
+  permission recovery; and a deterministic 380 × 460 point panel whose scroll
+  content cannot collapse behind the footer. Its latest three local dogfood
+  records expose transcript and action/insertion ratings without opening Settings.
+- A separate native settings window with General, Personalization, and
+  Developer sections. Manual command execution, detailed local diagnostics,
+  and vocabulary editing stay out of the everyday menu-bar surface.
 - A user-recorded global shortcut. Key down starts microphone capture after
   permission and local assets are ready; key up stops capture and explicitly
   finalizes the transcript.
+- A distinct user-recorded global dictation shortcut that works while another
+  app is focused. Dictation bypasses the command resolver, conservatively
+  formats the transcript, and replaces only the selection captured at key-down.
+- Default-on, persisted, local repeated-speech cleanup for clear adjacent
+  restarts such as “I I think.” This bounded synchronous pass adds no network
+  or model wait, preserves ambiguous and intentional repetition, and can be
+  disabled with **Clean repeated speech** for presentation-only transcription.
+- Transient Apple word timing can conservatively join a short-pause fragment
+  such as “code out. And dictate” without retaining timing or audio. Strong
+  developer-token phrasing such as “UI slash UX” becomes `UI/UX` in dictation
+  and bounded web-search payloads; broader punctuation and grammar rewriting
+  remain out of scope. The original transcript remains unchanged in diagnostics.
+- Dictation may use one Apple alternative to correct one or more known built-in
+  or personal-vocabulary terms only when every changed lexical span is uniquely
+  corroborated, such as `gidhub` versus `GitHub`, `Kodex` versus `Codex`, or
+  `impending` versus `prepending`. Risky developer spoken forms used for
+  dictation do not expand command vocabulary. Topher does not generally rerank
+  or rewrite prose.
+- An explicit Accessibility permission boundary for dictation. Topher rejects
+  secure/protected fields before capture, revalidates focus, selection, nearby
+  text, and secure state before insertion, never presses Return, and never
+  submits or sends.
+- Verified cross-app insertion: Topher treats an Accessibility setter as an
+  attempt, not proof, and reports success only after bounded text readback. It
+  uses the standard value attribute only for a small plain text field, an empty
+  text area, or full-value text-area replacement; rich and ambiguous surfaces
+  fall back without a second mutation attempt.
+- A bounded web-composer adapter covers object-free plain text areas inside a
+  web Accessibility tree. For nonempty web values it generally permits only a
+  verified caret-at-end append; a Notion-only exception permits an unchanged
+  start/middle caret in a short, single-line, uniformly presented value. It
+  rejects placeholder-backed and other ambiguous selections and admits multiple
+  attributed runs only when they differ by spellcheck metadata while their
+  presentation remains uniform. Exposed links, mentions, attachments, list
+  markers, styled/mixed/unknown attributes, native nonempty, and oversized
+  surfaces still fail closed.
+- Context-aware word and sentence-punctuation spacing at the insertion boundary,
+  one guarded undo for the latest insertion, and a local review/copy fallback
+  for editors Topher cannot safely mutate. After a verified whole-value web
+  mutation, Topher may retry only caret placement and requires stable readback;
+  it never repeats the text write. Clipboard writes happen only after pressing
+  **Copy**.
 - Live partial text in Topher and a transient, non-activating cross-app voice
   HUD for preparation, listening, finalization, execution, and outcomes.
-- A 30-second listening watchdog, an 8-second finalization watchdog, immediate
-  stream-error recovery, and generation guards against late results.
+- Mode-aware maximum holds: 30 seconds for assistant commands and 120 seconds
+  for dictation. Reaching the limit finalizes the best transcript instead of
+  discarding it; the 8-second finalization watchdog and physical-key release
+  gate still prevent wedged or duplicate requests.
+- Recoverable partial assistant speech returns to the manual command field
+  without executing. Recoverable partial dictation stays in the local review
+  preview without insertion; secure targets still discard it.
 - Direct Apple on-device transcription for fixed `en_US`, with on-demand asset
   preparation, alternative hypotheses, confidence evidence, contextual
   vocabulary, and no raw-audio file writes.
@@ -57,21 +111,24 @@ comparative speech benchmark is still open.
   Discovered names resolve to typed bundle identities; execution asks macOS to
   resolve the bundle identifier again and never turns speech into a path,
   process argument, or arbitrary identifier.
-- Typed, allowlisted navigation to Crunchyroll, Gmail, GitHub, Google, YouTube,
-  Amazon, Ballislife, Hulu, Netflix, and the browser-owned Chrome Extensions
+- Typed, allowlisted navigation to Crunchyroll, eBay, Gmail, GitHub, Google,
+  YouTube, Amazon, Ballislife, Hulu, Netflix, and the browser-owned Chrome Extensions
   route. Internal Chrome routes are
   delivered as URLs to Chrome even when it is already running.
 - Entity-aware web phrasing: bare “Search/Open Crunchyroll” navigates to its
   known site, provider searches retain their provider, and unknown bare
   searches use Google in the default browser (Chrome in dogfood use).
+- Browser-qualified Google phrasing such as “Search Chrome for Ball is Life”
+  removes the browser words and searches only for the requested query.
 - Explicit app/site precedence: “Open Netflix” prefers the known website,
   “Open Netflix app” requires an installed app, and “Open Netflix website”
   requires web navigation. An unfamiliar “Open X” opens an installed exact
   app match or visibly falls back to a Google search; Topher does not guess
   `x.com`.
 - Exact known targets can be terse commands such as “Notes,” “VS Code,” and
-  “YouTube.” Target-first query phrasing such as “YouTube for dining with
-  Derek” is supported, and likely sentence-ending punctuation is removed only
+  “YouTube.” Target-first query phrasing such as “YouTube dining with Derek”
+  and “Go to YouTube, look for dining with Derek” is supported, and likely
+  sentence-ending punctuation is removed only
   from the extracted command value while the raw transcript remains intact.
 - Explicit navigation to validated public domains such as “Go to tnc.com” uses
   HTTPS only. Paths, credentials, ports, IP addresses, custom schemes, and
@@ -106,27 +163,55 @@ comparative speech benchmark is still open.
 - A separate policy decision before execution.
 - Safe rejection of malformed address-like input, ambiguous installed-app
   names, and explicitly requested applications that are not installed.
-- A bounded developer trace for recent final command
+- A bounded developer trace for recent final command and non-secure dictation
   transcripts and typed outcomes. Local dogfood builds start with it on; an
   explicit off switch and **Clear Now** remain available at any time. Each
   retained request can be rated independently for transcript accuracy and
-  action correctness.
+  action correctness. Failed action ratings can also carry a fixed issue tag,
+  and insertion/capture failures carry typed reasons without framework errors.
+- A checked-in sanitized manual dogfood corpus plus an explicit private export
+  for recent observed commands. The private dataset is gitignored, bounded,
+  owner-readable, excludes dictation by default, and is never written by the
+  app automatically.
 - XCTest coverage for parsing, policy, native capabilities, audio conversion,
   permission/assets, transcription, cancellation, and push-to-talk races.
 - Dependency-free Node extension tests and Ruby native-host registration tests.
 
 ## Current interaction boundary
 
-Topher's global shortcut already works while another application is focused;
-the menu does not need to be open. The current hold is a **push-to-talk assistant
-command**: release sends the finalized transcript through Topher's typed command
-resolver and policy.
+Topher's two global shortcuts work while another application is focused; the
+menu does not need to be open. The **assistant command** hold sends finalized
+speech through the typed resolver and policy. The **dictation** hold sends it
+through conservative formatting and a narrow Accessibility capability that
+replaces the captured selection without submitting. A setter result alone is
+never reported as success; Topher verifies the resulting text and exposes an
+explicit pending review when the host app cannot be observed reliably.
 
-It is not yet general-purpose text dictation into the focused field. Always-on
-wake listening, remote chat requests, conversational follow-ups, browser-page/DOM
-reading, Accessibility context, and visual screen understanding are also not
-implemented. They are separate modes and trust boundaries rather than flags on
-the current command path.
+This is a safer cross-app dictation foundation, not yet a claim of broad
+Wispr-style editor compatibility or benchmarked transcription quality. Live
+Build 19 acceptance in ChatGPT/Codex, Notion, Chrome, and rich editors remains
+pending. Build 19 keeps frontmost-application focus recovery strictly process-bound and
+adds two bounded compatibility adapters. A Codex/ChatGPT caret-at-start value
+may replace the exact observed app suggestion, or a value whose independent
+text-marker or suggestion metadata proves logical emptiness; every fixed signal
+is revalidated before one whole-value write. A short, single-line, uniformly
+formatted Notion value may use verified whole-value insertion at its start or
+middle caret as well as its end. Authored Codex text and multiline, styled,
+linked, listed, mentioned, or object-bearing Notion content still fail closed.
+After exact content readback, a bounded whole-value path reasserts only the
+captured caret and confirms it remains stable before reporting caret verification.
+Search-command payloads use the same narrow strong-token slash normalization as
+dictation, without rewriting the retained raw transcript. Terminal remains a
+review/copy fallback rather than a keystroke or paste target.
+Live cross-app acceptance is still required.
+Filler removal, grammar/tone rewriting, general context-aware punctuation,
+general spoken-punctuation commands, multi-paragraph editing,
+always-on wake listening, remote chat, conversational follow-ups, browser-page
+reading, broader Accessibility context, and visual screen understanding remain
+separate future work.
+The implemented Chrome context boundary is metadata-only; it does not add DOM
+or page-body understanding. These remain separate modes and trust boundaries,
+not flags on the command or dictation paths.
 
 See [Interaction modes](docs/product/interaction-modes.md) and
 [Request lifecycle and context](docs/architecture/request-lifecycle.md) for the
@@ -171,6 +256,19 @@ After producing a signed Release bundle, install it through the checked helper:
 scripts/install_local_build.sh /path/to/Build/Products/Release/Topher.app
 ```
 
+Ad-hoc local rebuilds receive a new code requirement. If Accessibility appears
+enabled but Topher still reports it unavailable, explicitly reset only Topher's
+stale grant while installing the new build:
+
+```sh
+scripts/install_local_build.sh --reset-accessibility \
+  /path/to/Build/Products/Release/Topher.app
+```
+
+This removes only Topher's Accessibility decision; macOS must ask for explicit
+approval again. The helper never resets it without the flag. A stable Apple
+Development signature is the durable development fix.
+
 The helper verifies the source and installed signatures, stops the previous
 local build, launches once, and fails unless exactly one Topher process remains.
 
@@ -193,8 +291,11 @@ user's `/Applications` build.
 
 For an interactive smoke test:
 
-1. Click Topher's sparkles icon in the menu bar.
-2. Record a normal modified shortcut.
+1. Click Topher's sparkles icon in the menu bar. Confirm the compact panel shows
+   both interaction modes, readiness, the diagnostics indicator, and up to three
+   recent requests with transcript and action/insertion ratings.
+2. Open **Settings** and verify the General, Personalization, and Developer
+   sections. Record a normal modified assistant shortcut under General.
 3. Hold it once. Grant microphone access if macOS asks, then let Topher prepare
    the local English speech asset. Release and hold again after Topher says it
    is ready.
@@ -202,34 +303,66 @@ For an interactive smoke test:
    finalizing before Safari opens exactly once.
 5. Try “Notion,” “Open Figma” (or another installed app), “Open Netflix,”
    “Open Netflix app,” “What app am I using?”, “Open Chrome extensions,”
+   “YouTube dining with Derek,” “Go to YouTube, look for dining with Derek,”
+   “Go to eBay,” “eBay.com,” “Go to tnc.com,” “Search Crunchyroll,”
    “What is this Chrome tab?”, “What tabs do I have open?”, “Switch to the
-   Chrome tab titled Example Domain,” “YouTube for dining with Derek,” “Go to
-   tnc.com,” and “Search Crunchyroll.” Chrome context commands require the
-   separate setup above and an exact current tab title.
+   Chrome tab titled Example Domain,” and “YouTube for dining with Derek.”
+   Chrome context commands require the separate setup above and an exact
+   current tab title.
 6. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
    fallback. Say a malformed address or an explicitly missing app and confirm
    it fails closed.
-7. Use the manual transcript field and **Run** as a development fallback.
+7. Open **Settings → Developer**, enter a manual command, and use **Run
+   Command** as a development fallback. Confirm blank input cannot run.
+8. Record a different hold-to-dictate shortcut, explicitly allow Topher under
+   **Privacy & Security → Accessibility**, focus a normal editable field in
+   another app, hold the dictation shortcut, say a sentence, and release.
+   Confirm text is inserted once without Return being pressed. Repeat in an
+   empty and nonempty ChatGPT/Codex composer, an existing plain single-line
+   Notion block with the caret at its start, middle, and end, a Chrome search
+   field, and Notes; then repeat with a
+   mid-draft web caret, a visible editor suggestion/placeholder, a selection, a
+   rich web draft, and a password field. Proven empty/end-append drafts should
+   insert exactly once; ambiguous or rich drafts must remain unchanged and fall
+   back for review. Use **Undo
+   Dictation** before moving the caret only when Topher offers it. If an editor is not
+   supported, review the pending text in Topher and press **Copy** explicitly.
+   If Settings shows Topher enabled while the app still reports denial, quit
+   Topher, select its stale row and click **−**, relaunch, and allow it again.
+9. For a bounded-duration recovery check, keep holding dictation past its
+   configured maximum. Confirm Topher finalizes and inserts or previews the
+   best available text once, then does not start another request until the
+   physical shortcut is released.
 
 No default shortcut is claimed. This avoids silently overriding an existing
 system or application shortcut.
 
 ## Voice privacy and permissions
 
-Topher asks for microphone access only from an explicit voice action. Its app
-bundle contains `NSMicrophoneUsageDescription`; the Release signature contains
-only the `com.apple.security.device.audio-input` entitlement needed for capture.
-The direct `SpeechAnalyzer` path does not request legacy `SFSpeechRecognizer`
-authorization, Accessibility, Automation/Apple Events, or Screen Recording
-access.
+Topher asks for microphone access only from an explicit voice action and asks
+for Accessibility only from an explicit dictation action or **Enable** button.
+Its app bundle contains `NSMicrophoneUsageDescription`; the Release signature
+contains only the `com.apple.security.device.audio-input` entitlement needed
+for capture. The direct `SpeechAnalyzer` path does not request legacy
+`SFSpeechRecognizer` authorization. Topher does not request Automation/Apple
+Events or Screen Recording access. Accessibility is used only for the focused
+text element, selection, immediate text boundary, a bounded plain value and its
+attributed representation when the safe web adapter needs structural evidence,
+insertion, verification, and guarded undo. A plain value is limited to 16,384
+UTF-16 units, and the web-composer path is limited to 4,096. Both exist
+transiently in memory and are never separately logged or persisted.
 
 Audio buffers are streamed from `AVAudioEngine` to the local analyzer and are
 not written to disk. Partial transcripts exist transiently in process memory
-and UI so the requested command can run. Ordinary logging never includes
-transcript text. During local dogfooding, **Record final command transcripts**
-defaults on and retains the bounded final voice or manual text described below;
-it can be turned off or cleared at any time. Audio and partial transcripts are
-still never retained. Denied
+and UI so the request can complete. A recoverable partial may remain in the
+in-process manual field or dictation preview, but is never written to the
+developer trace as transcript content. Ordinary logging never includes transcript
+text. During local dogfooding, **Record final commands and dictation** defaults
+on and retains the bounded final voice/manual command or non-secure dictation
+described below; it can be turned off or cleared at any time. Dictation aimed
+at a secure field is refused before capture, and a field that becomes secure
+during a hold causes the transcript to be discarded without a preview or
+developer record. Audio and partial transcripts are still never retained. Denied
 microphone access links to the macOS Microphone privacy pane and is rechecked
 when Topher becomes active again.
 
@@ -252,10 +385,11 @@ extension requests exactly `tabs` and `nativeMessaging`, excludes incognito,
 and returns only bounded regular-tab titles/URLs on demand. It has no host
 permissions, content scripts, scripting, DOM/page-body extraction, screenshots,
 cookies, history, form data, file-URL access, or browser snapshot persistence.
-The bundled host relays bounded JSON only; it cannot execute commands. Topher
-still has no Accessibility provider or screen-capture implementation. The
-browser performs the external request and maintains its normal history when the
-user explicitly runs a search or navigation command.
+The bundled host relays bounded JSON only; it cannot execute commands. Topher's
+Accessibility surface is limited to focused-field dictation; it has no general
+Accessibility context provider or screen-capture implementation. The browser
+performs external requests and maintains its normal history when the user
+explicitly runs a search, navigation, or permitted tab-activation command.
 
 Before Topher adds direct networking, browser-content adapters, broader local
 data access, or distribution to other Macs, revisit the App Sandbox decision,
@@ -271,20 +405,30 @@ signpost intervals for voice preparation, capture, and finalization. Unified
 Logging never receives the manual transcript, search query, browser-returned
 tab title/URL, raw audio, application name, or detailed error text.
 
-For local dogfooding, the menu's **Developer diagnostics** section can retain a
-separate command trace. Recording starts on for the current local-development
-phase, preserves an explicit opt-out, and adds an orange dot to the menu-bar
-icon while enabled. Re-enabling after an opt-out requires confirmation. Each
-record contains the exact finalized voice or manual command, the interpreted
-command and correction reason when Topher safely selected a different reading,
+For local dogfooding, **Settings → Developer → Local diagnostics** can retain a
+separate request trace, while the menu exposes the latest three records and
+their ratings. Recording starts on for the current local-development phase,
+preserves an explicit opt-out, and adds an orange dot to the menu-bar icon while
+enabled. Re-enabling after an opt-out requires confirmation. Each
+record contains the exact finalized voice/manual command or non-secure
+dictation, the interpreted or inserted text when Topher used different text,
 an available confidence summary, its source, an ephemeral launch-session ID, a
-fixed typed outcome, fixed command/capability metadata, a typed unsupported
-reason, optional local transcript/action ratings, capture-stage and processing
-durations, and app version/build. It never contains raw audio, partials, or
-content Topher separately captures from a browser, page, screen, message, or
-document. Topher does not append constructed destination URLs, Keychain/config
-values, or detailed framework errors. The user-authored command itself can
-contain a query, URL, pasted content, or secret.
+fixed typed outcome, fixed command/capability metadata, typed unsupported,
+dictation-fallback, capture-failure, and conservative-cleanup reasons, the
+fixed dictation insertion method, verification result, bounded application
+family, selection/placeholder/attribute classification, content-free target
+role/capability profile, and fixed whole-value eligibility or refusal reason,
+plus fixed semantic suggestion-attribute, character-count, text-marker,
+known-suggestion, and final-decision states when the Codex adapter is evaluated,
+whether
+the maximum duration auto-finalized the request, optional local
+transcript/action ratings and fixed action-issue tags, capture-stage and
+processing durations, and app version/build. It never contains raw audio,
+partials, or content Topher separately captures from a page, screen, message,
+or document. Topher does not
+append constructed destination URLs, Keychain/config values, or detailed
+framework errors. Secure-field dictation is deliberately excluded, but other
+user-authored text can itself contain a query, URL, pasted content, or secret.
 
 The trace is stored at
 `~/Library/Caches/dev.topher.app/TranscriptDiagnostics/transcript-diagnostics.json`.
@@ -301,6 +445,27 @@ without reviewing and redacting it.
 `scripts/summarize_dogfood_diagnostics.rb` prints metadata-only results for the
 latest launch session first, then the full retained history, so an older build
 does not obscure the current dogfood run.
+
+The sanitized manual corpus lives at `dogfood/manual-corpus.json`. Validate or
+list it without speaking:
+
+```sh
+ruby scripts/check_dogfood_corpus.rb
+ruby scripts/check_dogfood_corpus.rb --list --mode assistant
+```
+
+To build a private local dataset from recent retained commands, run the export
+explicitly:
+
+```sh
+ruby scripts/export_observed_queries.rb
+```
+
+The exporter writes `.topher-local/dogfood/observed-queries.json`, never runs
+inside Topher, excludes dictation unless `--include-dictation` is supplied, and
+keeps the result out of Git. The dataset is plaintext user content: review it
+locally, clear it intentionally when no longer useful, and never attach it to a
+public issue or pull request. See [Dogfood datasets](dogfood/README.md).
 
 Stream new events while testing:
 
@@ -326,9 +491,32 @@ mental model.
 - [Documentation map](docs/README.md)
 - [Product vision](docs/product/vision.md)
 - [Build 8 application-awareness verification](docs/evidence/2026-07-15-build-8-application-awareness.md)
+- [Build 9 global-dictation verification](docs/evidence/2026-07-15-build-9-global-dictation-foundation.md)
+- [Build 10 dictation-resilience and dogfood-corpus verification](docs/evidence/2026-07-16-build-10-dictation-resilience-and-dogfood-corpus.md)
+- [Build 11 fast dictation-polish verification](docs/evidence/2026-07-16-build-11-fast-dictation-polish.md)
+- [Build 12 Accessibility-identity recovery verification](docs/evidence/2026-07-16-build-12-accessibility-identity-recovery.md)
+- [Build 13 verified cross-app dictation verification](docs/evidence/2026-07-16-build-13-verified-cross-app-dictation.md)
+- [UI/UX interaction-shell verification](docs/evidence/2026-07-16-ui-ux-interaction-shell.md)
+- [Build 14 contextual dictation follow-up](docs/evidence/2026-07-16-build-14-contextual-dictation-followup.md)
+- [Build 15 menu and web-composer recovery](docs/evidence/2026-07-16-build-15-menu-and-web-composer-recovery.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
 - [Structured Chrome tab-context decision](docs/decisions/0013-structured-chrome-tab-context.md)
+- [Safe focused-field dictation decision](docs/decisions/0014-safe-focused-field-dictation.md)
+- [Bounded dictation recovery and dogfood-corpus decision](docs/decisions/0015-bounded-dictation-recovery-and-dogfood-corpora.md)
+- [Latency-budgeted dictation-polish decision](docs/decisions/0016-layer-dictation-polish-under-a-latency-budget.md)
+- [Verified Accessibility mutation decision](docs/decisions/0017-verify-accessibility-dictation-mutations.md)
+- [Bounded contextual dictation follow-up decision](docs/decisions/0018-bounded-contextual-dictation-followup.md)
+- [Bounded uniform web-composer insertion decision](docs/decisions/0019-bounded-uniform-web-composer-insertion.md)
+- [Semantic web-append evidence decision](docs/decisions/0020-require-semantic-web-append-evidence.md)
+- [Focus recovery and semantic empty-composer decision](docs/decisions/0021-recover-focus-and-require-semantic-empty-composer-proof.md)
+- [Combined semantic-signal and Notion caret decision](docs/decisions/0022-combine-semantic-signals-and-bound-notion-caret-insertion.md)
+- [Stable caret and shared technical-notation decision](docs/decisions/0023-stabilize-caret-and-share-technical-notation.md)
+- [Build 16 verification evidence](docs/evidence/2026-07-16-build-16-semantic-web-append-and-menu-feedback.md)
+- [Build 17 verification evidence](docs/evidence/2026-07-18-build-17-focus-and-semantic-composer.md)
+- [Build 18 verification evidence](docs/evidence/2026-07-18-build-18-semantic-signals-and-notion-caret.md)
+- [Build 19 verification evidence](docs/evidence/2026-07-19-build-19-caret-composition-and-query-formatting.md)
+- [Build 19 dictation and Chrome integration evidence](docs/evidence/2026-07-19-build-19-dictation-chrome-integration.md)
 - [Chrome extension setup and manual acceptance](ChromeExtension/README.md)
 - [Chrome context foundation verification](docs/evidence/2026-07-18-chrome-context-foundation.md)
 - [Interaction modes](docs/product/interaction-modes.md)

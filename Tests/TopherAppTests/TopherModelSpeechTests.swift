@@ -84,6 +84,619 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.voiceFeedback, .success("Opened Safari."))
   }
 
+  func testGlobalDictationUsesSeparateRouteAndInsertsWithoutExecutingACommand() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "hello",
+      selection: FocusedTextRange(location: 5, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    XCTAssertEqual(model.voiceFeedback, .dictationListening(""))
+
+    voice.yield(.final("world"))
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(field.content, "hello world")
+    XCTAssertTrue(model.canUndoDictation)
+    XCTAssertNil(model.pendingDictationText)
+    XCTAssertEqual(model.voiceFeedback, .success("Inserted dictation."))
+  }
+
+  func testDisabledDictationPolishPreservesRepeatedSpeech() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      dictationPolishEnabled: false,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("I I think this should stay raw"))
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(field.content, "I I think this should stay raw")
+    XCTAssertFalse(model.isDictationPolishEnabled)
+  }
+
+  func testUnverifiedDictationMutationNeverReportsSuccessfulInsertion() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherUnverifiedMutationDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.selectedTextMutationSucceeds = false
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL: temporaryRoot.appendingPathComponent(
+          "TranscriptDiagnostics",
+          isDirectory: true
+        ),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("keep this pending"))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "keep this pending" }
+    await waitUntil { diagnostics.records.count == 1 }
+    XCTAssertEqual(field.content, "")
+    XCTAssertEqual(diagnostics.records[0].outcome, .dictationFallback)
+    XCTAssertEqual(diagnostics.records[0].dictationFailureReason, .mutationUnverified)
+    XCTAssertEqual(
+      diagnostics.records[0].dictationInsertionEvidence,
+      FocusedTextInsertionEvidence(
+        method: .selectedText,
+        verification: .unavailable,
+        target: field.profile,
+        wholeValueDecision: .rejectedValueNotSettable,
+        selectionRelation: .emptyValue,
+        placeholderState: .absent,
+        attributeDecision: .notEvaluated
+      )
+    )
+  }
+
+  func testAuthoredCodexFallbackExplainsThatContentWasLeftUnchanged() async {
+    let voice = VoiceHarness()
+    let original = "- Existing bullet"
+    let field = ModelFocusedTextHarness(
+      content: original,
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.targetApplication = .codexOrChatGPT
+    field.exposesValue = true
+    field.canSetValue = true
+    field.webAreaAncestorDepth = 8
+    field.selectedTextMutationSucceeds = false
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("Add to the second bullet."))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "Add to the second bullet." }
+    XCTAssertEqual(field.content, original)
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Codex doesn’t expose a verifiable insertion point for that authored content. Topher left it unchanged; open Topher to review or copy the dictation."
+      )
+    )
+  }
+
+  func testWholeValueAdapterInsertsIntoEmptyCompatibleSurface() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherWholeValueDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.selectedTextMutationSucceeds = false
+    field.exposesValue = true
+    field.canSetValue = true
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL: temporaryRoot.appendingPathComponent(
+          "TranscriptDiagnostics",
+          isDirectory: true
+        ),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("verified value insertion"))
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    await waitUntil { diagnostics.records.count == 1 }
+    XCTAssertEqual(field.content, "verified value insertion")
+    XCTAssertFalse(model.canUndoDictation)
+    XCTAssertEqual(diagnostics.records[0].outcome, .dictationInserted)
+    XCTAssertEqual(diagnostics.records[0].dictationInsertionEvidence?.method, .wholeValue)
+    XCTAssertEqual(
+      diagnostics.records[0].dictationInsertionEvidence?.verification,
+      .contentAndCaret
+    )
+  }
+
+  func testDictationPermissionPromptIsExplicitAndStopsBeforeMicrophoneCapture() async {
+    var promptCount = 0
+    let accessibility = AccessibilityPermissionClient(
+      environment: AccessibilityPermissionEnvironment(
+        isProcessTrusted: { false },
+        promptForTrust: {
+          promptCount += 1
+          return false
+        }
+      )
+    )
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: accessibility
+    )
+
+    XCTAssertEqual(promptCount, 0)
+    model.beginDictation()
+    await Task.yield()
+
+    XCTAssertEqual(promptCount, 1)
+    XCTAssertEqual(model.accessibilityPermissionState, .notAuthorized)
+    guard case .failure(let message) = model.phase else {
+      return XCTFail("Expected Accessibility recovery guidance")
+    }
+    XCTAssertTrue(message.contains("remove the existing Topher row with the − button"))
+    XCTAssertEqual(voice.prepareCount, 0)
+    XCTAssertEqual(voice.startCount, 0)
+  }
+
+  func testSecureFieldRefusesDictationBeforeCaptureOrTextRead() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "secret",
+      selection: FocusedTextRange(location: 6, length: 0)
+    )
+    field.isSecure = true
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await Task.yield()
+
+    XCTAssertEqual(model.phase, .failure("Dictation is disabled in secure text fields."))
+    XCTAssertEqual(field.selectedTextReadCount, 0)
+    XCTAssertEqual(voice.prepareCount, 0)
+    XCTAssertEqual(voice.startCount, 0)
+  }
+
+  func testUnsupportedTargetKeepsPreviewUntilExplicitCopy() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.canSetSelectedText = false
+    var clipboardWrites: [String] = []
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment),
+      dictationClipboard: DictationClipboardCapability(
+        environment: DictationClipboardEnvironment(writeString: {
+          clipboardWrites.append($0)
+          return true
+        })
+      )
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("GraphQL   URLSession"))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "GraphQL URLSession" }
+    XCTAssertTrue(clipboardWrites.isEmpty)
+    XCTAssertEqual(field.content, "")
+
+    model.copyPendingDictation()
+    XCTAssertEqual(clipboardWrites, ["GraphQL URLSession"])
+    XCTAssertEqual(model.phase, .success("Copied dictation. Paste it where you want it."))
+  }
+
+  func testTerminalFallbackIsExplicitAndPreservesDictationForReview() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.targetApplication = .terminal
+    field.canSetSelectedText = false
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("git status"))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "git status" }
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Terminal doesn’t expose a writable focused field. Open Topher to review or copy the dictation."
+      )
+    )
+    XCTAssertEqual(field.content, "")
+  }
+
+  func testDictationStreamFailurePreservesPartialForReviewWithoutInsertion() async throws {
+    struct StreamFailure: Error {}
+
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherDictationRecoveryDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "Before",
+      selection: FocusedTextRange(location: 6, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.partial("I I need to recover this unfinished dictation"))
+    await waitUntil {
+      model.phase == .listening("I I need to recover this unfinished dictation")
+    }
+    voice.fail(StreamFailure())
+
+    await waitUntil {
+      model.pendingDictationText == "I I need to recover this unfinished dictation"
+    }
+    XCTAssertEqual(field.content, "Before")
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Transcription stopped before finalizing. Open Topher to review or copy the recovered text."
+      )
+    )
+    await waitUntil { diagnostics.records.count == 1 }
+    XCTAssertEqual(diagnostics.records[0].transcript, "")
+    XCTAssertEqual(diagnostics.records[0].source, .dictation)
+    XCTAssertEqual(diagnostics.records[0].outcome, .captureFailed)
+    XCTAssertEqual(diagnostics.records[0].captureFailureReason, .resultStreamFailed)
+  }
+
+  func testAssistantStreamFailureReturnsPartialToManualFieldWithoutExecution() async {
+    struct StreamFailure: Error {}
+
+    let voice = VoiceHarness()
+    var applicationOpenCount = 0
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      applicationOpener: ApplicationOpenCapability(
+        workspace: ApplicationWorkspace(
+          applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+          openApplication: { _ in applicationOpenCount += 1 }
+        )
+      )
+    )
+
+    model.beginPushToTalk()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.partial("Open Safari"))
+    await waitUntil { model.phase == .listening("Open Safari") }
+    voice.fail(StreamFailure())
+
+    await waitUntil { model.manualTranscript == "Open Safari" }
+    XCTAssertEqual(applicationOpenCount, 0)
+    XCTAssertEqual(voice.finishCount, 0)
+    XCTAssertEqual(voice.cancelCount, 1)
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Transcription stopped before finalizing. Open Topher to review the recovered text; it was not executed."
+      )
+    )
+  }
+
+  func testDictationDiagnosticsSeparateRawSpeechFromInsertedText() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherDictationDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("I I use GraphQL   URLSession"))
+    model.endDictation()
+
+    await waitUntil { diagnostics.records.count == 1 }
+    let record = try XCTUnwrap(diagnostics.records.first)
+    XCTAssertEqual(record.source, .dictation)
+    XCTAssertEqual(record.transcript, "I I use GraphQL   URLSession")
+    XCTAssertEqual(record.interpretedTranscript, "I use GraphQL URLSession")
+    XCTAssertEqual(record.interpretationReason, .dictationDisfluencyCleanup)
+    XCTAssertEqual(field.content, "I use GraphQL URLSession")
+    XCTAssertEqual(record.outcome, .dictationInserted)
+    XCTAssertEqual(
+      record.capabilityIdentifier,
+      FocusedTextInsertionCapability.descriptor.identifier
+    )
+  }
+
+  func testDictationUsesKnownVocabularyAlternativeWithoutCommandInterpretation() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(
+      .finalWithEvidence(
+        FinalTranscription(
+          text: "I pushed this to gidhub today",
+          alternatives: [TranscriptHypothesis(text: "I pushed this to GitHub today")],
+          confidence: 0.8
+        )
+      )
+    )
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(field.content, "I pushed this to GitHub today")
+  }
+
+  func testDictationUsesShortPauseEvidenceForConservativeSentenceJoin() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+    let firstClause = "I wish I could type my code out."
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(
+      .finalWithEvidence(
+        FinalTranscription(
+          text: firstClause + " And dictate everything sometimes.",
+          confidence: 0.9,
+          pauses: [
+            .init(
+              boundaryUTF16Offset: (firstClause as NSString).length,
+              durationMilliseconds: 400
+            )
+          ]
+        )
+      )
+    )
+    model.endDictation()
+
+    await waitUntil { model.phase == .success("Inserted dictation.") }
+    XCTAssertEqual(
+      field.content,
+      "I wish I could type my code out and dictate everything sometimes."
+    )
+  }
+
+  func testDictationBecomingSecureIsDiscardedWithoutDiagnosticRetention() async throws {
+    let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TopherSecureDictationDiagnosticsTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+    let diagnostics = DeveloperDiagnosticsController(
+      store: DeveloperDiagnosticsStore(
+        storageDirectoryURL:
+          temporaryRoot
+          .appendingPathComponent("dev.topher.app", isDirectory: true)
+          .appendingPathComponent("TranscriptDiagnostics", isDirectory: true),
+        initialEnabled: true
+      ),
+      appVersion: "test",
+      appBuild: "1",
+      maintenanceInterval: nil
+    )
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      developerDiagnostics: diagnostics,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    field.isSecure = true
+    voice.yield(.final("sensitive secret"))
+    model.endDictation()
+
+    await waitUntil {
+      model.phase
+        == .failure("The target became secure, so Topher discarded the dictation.")
+    }
+    try? await Task.sleep(for: .milliseconds(20))
+    XCTAssertNil(model.pendingDictationText)
+    XCTAssertTrue(diagnostics.records.isEmpty)
+  }
+
+  func testMismatchedShortcutReleaseCannotEndAnotherShortcutsCapture() async {
+    let voice = VoiceHarness(finishBehavior: .keepStreamOpen)
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission()
+    )
+
+    model.handleShortcutDown(.assistantCommand)
+    await waitUntil { model.phase == .listening("") }
+
+    model.handleShortcutDown(.dictation)
+    model.handleShortcutUp(.dictation)
+    await Task.yield()
+
+    XCTAssertEqual(model.phase, .listening(""))
+    XCTAssertEqual(voice.finishCount, 0)
+
+    model.handleShortcutUp(.assistantCommand)
+    await waitUntil { voice.finishCount == 1 }
+    voice.completeStream()
+  }
+
   func testCanonicalInstalledLocaleStartsOnFirstAuthorizedHold() async {
     let voice = VoiceHarness()
     let model = makeModel(
@@ -301,6 +914,7 @@ final class TopherModelSpeechTests: XCTestCase {
         )
       )
     )
+    model.manualTranscript = "Open Safari"
 
     model.runManually()
     await waitUntil { model.phase == .success("Opened Safari.") }
@@ -311,6 +925,31 @@ final class TopherModelSpeechTests: XCTestCase {
       model.phase == .success("Voice input is ready. Hold your shortcut again to speak.")
     }
     XCTAssertEqual(model.voiceFeedback, .hidden)
+  }
+
+  func testManualCommandStartsEmptyAndBlankInputCannotRun() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice
+    )
+
+    XCTAssertEqual(model.manualTranscript, "")
+    XCTAssertFalse(model.canRunManualCommand)
+
+    model.runManually()
+    await Task.yield()
+    XCTAssertEqual(model.phase, .idle)
+
+    model.manualTranscript = "  \n  "
+    XCTAssertFalse(model.canRunManualCommand)
+    model.runManually()
+    await Task.yield()
+    XCTAssertEqual(model.phase, .idle)
+
+    model.manualTranscript = "Open Safari"
+    XCTAssertTrue(model.canRunManualCommand)
   }
 
   func testInFlightCommandBlocksDuplicateManualAndVoiceExecution() async {
@@ -331,6 +970,7 @@ final class TopherModelSpeechTests: XCTestCase {
         )
       )
     )
+    model.manualTranscript = "Open Safari"
 
     model.runManually()
     await waitUntil { model.phase == .executing && openContinuation != nil }
@@ -552,7 +1192,7 @@ final class TopherModelSpeechTests: XCTestCase {
     await waitUntil {
       model.phase == .success("Opened Safari.")
         && diagnostics.errorMessage
-          == "Couldn’t save the latest transcript diagnostic. The command still ran; Clear Now can retry cleanup."
+          == "Couldn’t save the latest transcript diagnostic. The request still completed; Clear Now can retry cleanup."
         && diagnostics.hasPendingStorageMaintenance
     }
     XCTAssertEqual(openCount, 1)
@@ -711,25 +1351,37 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(model.voiceReadiness, .denied)
   }
 
-  func testListeningTimeoutCancelsTranscription() async {
+  func testDictationMaximumDurationFinalizesAndInsertsInsteadOfDiscarding() async {
     let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "Before ",
+      selection: FocusedTextRange(location: 7, length: 0)
+    )
     let model = makeModel(
       microphonePermission: permission(.authorized),
       speechAssets: readySpeechAssets(),
       voice: voice,
-      listeningTimeout: .milliseconds(20)
+      listeningTimeout: .seconds(1),
+      dictationListeningTimeout: .milliseconds(20),
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
     )
 
-    model.beginPushToTalk()
+    model.beginDictation()
     await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("preserved text"))
 
     await waitUntil {
-      model.phase == .failure("Listening timed out. Try the shortcut again.")
+      model.phase == .success("Inserted dictation.")
     }
+    model.endDictation()
+    await Task.yield()
+
+    XCTAssertEqual(field.content, "Before preserved text")
     XCTAssertEqual(voice.prepareCount, 1)
     XCTAssertEqual(voice.startCount, 1)
-    XCTAssertEqual(voice.finishCount, 0)
-    XCTAssertEqual(voice.cancelCount, 1)
+    XCTAssertEqual(voice.finishCount, 1)
+    XCTAssertEqual(voice.cancelCount, 0)
   }
 
   func testResultStreamFailureWhileListeningFailsAndCancelsImmediately() async {
@@ -794,8 +1446,8 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(voice.finishCount, 1)
   }
 
-  func testKeyUpDuringSuspendedTimeoutCleanupDoesNotFinishOrOverwriteFailure() async {
-    let voice = VoiceHarness(suspendCancel: true)
+  func testLateKeyUpAfterAutomaticFinalizationDoesNotDuplicateCompletion() async {
+    let voice = VoiceHarness()
     let model = makeModel(
       microphonePermission: permission(.authorized),
       speechAssets: readySpeechAssets(),
@@ -805,21 +1457,25 @@ final class TopherModelSpeechTests: XCTestCase {
 
     model.beginPushToTalk()
     await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("Unsupported recovered phrase"))
     await waitUntil {
-      model.phase == .failure("Listening timed out. Try the shortcut again.")
-        && voice.cancelCount == 1
+      model.phase
+        == .failure(
+          "Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”"
+        )
     }
 
     model.endPushToTalk()
-    model.runManually()
-    model.beginPushToTalk()
     await Task.yield()
 
-    XCTAssertEqual(model.phase, .failure("Listening timed out. Try the shortcut again."))
+    XCTAssertEqual(
+      model.phase,
+      .failure("Unsupported command. Try “Open Safari.” or “Search YouTube for local AI.”")
+    )
     XCTAssertEqual(voice.prepareCount, 1)
     XCTAssertEqual(voice.startCount, 1)
-    XCTAssertEqual(voice.finishCount, 0)
-    voice.resumeCancel()
+    XCTAssertEqual(voice.finishCount, 1)
+    XCTAssertEqual(voice.cancelCount, 0)
   }
 
   private func makeModel(
@@ -829,9 +1485,17 @@ final class TopherModelSpeechTests: XCTestCase {
     applicationOpener: ApplicationOpenCapability? = nil,
     webOpener: WebOpenCapability? = nil,
     listeningTimeout: Duration = .seconds(1),
+    dictationListeningTimeout: Duration? = nil,
+    dictationPolishEnabled: Bool = true,
     finalizationTimeout: Duration = .seconds(1),
     voiceFeedbackResultDuration: Duration = .seconds(1),
-    developerDiagnostics: DeveloperDiagnosticsController? = nil
+    developerDiagnostics: DeveloperDiagnosticsController? = nil,
+    accessibilityPermission: AccessibilityPermissionClient? = nil,
+    focusedTextInsertion: FocusedTextInsertionCapability? = nil,
+    dictationClipboard: DictationClipboardCapability? = nil,
+    vocabularyProvider: @escaping @MainActor () -> TranscriptVocabulary = {
+      .developerDefaults
+    }
   ) -> TopherModel {
     TopherModel(
       applicationOpener: applicationOpener ?? inertApplicationOpener(),
@@ -840,9 +1504,15 @@ final class TopherModelSpeechTests: XCTestCase {
       speechAssets: speechAssets,
       voiceTranscription: voice.client,
       listeningTimeout: listeningTimeout,
+      dictationListeningTimeout: dictationListeningTimeout ?? listeningTimeout,
+      dictationPolishEnabled: dictationPolishEnabled,
       finalizationTimeout: finalizationTimeout,
       voiceFeedbackResultDuration: voiceFeedbackResultDuration,
       developerDiagnostics: developerDiagnostics,
+      accessibilityPermission: accessibilityPermission,
+      focusedTextInsertion: focusedTextInsertion,
+      dictationClipboard: dictationClipboard,
+      vocabularyProvider: vocabularyProvider,
       listenForShortcutEvents: false
     )
   }
@@ -853,6 +1523,18 @@ final class TopherModelSpeechTests: XCTestCase {
         authorizationStatus: { status },
         requestAccess: {
           XCTFail("A recorded permission decision must not display a prompt")
+          return false
+        }
+      )
+    )
+  }
+
+  private func authorizedAccessibilityPermission() -> AccessibilityPermissionClient {
+    AccessibilityPermissionClient(
+      environment: AccessibilityPermissionEnvironment(
+        isProcessTrusted: { true },
+        promptForTrust: {
+          XCTFail("An authorized accessibility state must not prompt")
           return false
         }
       )
@@ -907,6 +1589,113 @@ final class TopherModelSpeechTests: XCTestCase {
     }
 
     XCTAssertTrue(condition(), "Condition was not satisfied before timeout", file: file, line: line)
+  }
+}
+
+@MainActor
+private final class ModelFocusedTextHarness {
+  let element = FocusedTextElementID()
+  var content: String
+  var selection: FocusedTextRange
+  var isSecure = false
+  var role: FocusedTextTargetRole = .textArea
+  var targetApplication: FocusedTextTargetApplication = .other
+  var webAreaAncestorDepth: Int?
+  var canSetSelectedText = true
+  var canSetValue = false
+  var exposesValue = false
+  var selectedTextMutationSucceeds = true
+  var valueMutationSucceeds = true
+  var selectedTextReadCount = 0
+
+  init(content: String, selection: FocusedTextRange) {
+    self.content = content
+    self.selection = selection
+  }
+
+  var profile: FocusedTextTargetProfile {
+    FocusedTextTargetProfile(
+      role: role,
+      canSetSelectedText: canSetSelectedText,
+      canSetSelectedRange: true,
+      canSetValue: canSetValue,
+      application: targetApplication
+    )
+  }
+
+  var environment: FocusedTextInsertionEnvironment {
+    FocusedTextInsertionEnvironment(
+      focusedElement: { [weak self] in self?.element },
+      sameElement: { $0 == $1 },
+      processIdentifier: { _ in 1001 },
+      targetApplication: { [weak self] _ in self?.targetApplication ?? .unknown },
+      isSecure: { [weak self] _ in self?.isSecure ?? true },
+      role: { [weak self] _ in self?.role ?? .other },
+      webAreaAncestorDepth: { [weak self] _ in self?.webAreaAncestorDepth },
+      textAttributeDecision: { _, _ in .eligibleFontOnly },
+      placeholderValue: { _ in nil },
+      selectedText: { [weak self] _ in
+        guard let self else { return nil }
+        selectedTextReadCount += 1
+        return (content as NSString).substring(
+          with: NSRange(location: selection.location, length: selection.length)
+        )
+      },
+      selectedRange: { [weak self] _ in self?.selection },
+      value: { [weak self] _ in
+        guard let self, exposesValue else { return nil }
+        return content
+      },
+      text: { [weak self] _, range in
+        guard let self else { return nil }
+        let value = content as NSString
+        guard range.endLocation <= value.length else { return nil }
+        return value.substring(with: range.nsRange)
+      },
+      textContext: { [weak self] _, range in
+        guard let self else { return FocusedTextContext() }
+        let value = content as NSString
+        let precedingLocation = max(0, range.location - 2)
+        let followingLength = min(2, max(0, value.length - range.endLocation))
+        return FocusedTextContext(
+          precedingText: value.substring(
+            with: NSRange(
+              location: precedingLocation,
+              length: range.location - precedingLocation
+            )
+          ),
+          followingText: value.substring(
+            with: NSRange(location: range.endLocation, length: followingLength)
+          )
+        )
+      },
+      canSetSelectedText: { [weak self] _ in self?.canSetSelectedText ?? false },
+      canSetSelectedRange: { _ in true },
+      canSetValue: { [weak self] _ in self?.canSetValue ?? false },
+      setSelectedText: { [weak self] _, text in
+        guard let self, canSetSelectedText else { return false }
+        if selectedTextMutationSucceeds {
+          content = (content as NSString).replacingCharacters(
+            in: NSRange(location: selection.location, length: selection.length),
+            with: text
+          )
+        }
+        return true
+      },
+      setSelectedRange: { [weak self] _, range in
+        self?.selection = range
+        return self != nil
+      },
+      setValue: { [weak self] _, value in
+        guard let self, canSetValue else { return false }
+        if valueMutationSucceeds {
+          content = value
+        }
+        return true
+      },
+      waitForMutation: { _ in },
+      release: { _ in }
+    )
   }
 }
 

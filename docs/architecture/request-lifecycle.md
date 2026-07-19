@@ -28,10 +28,10 @@ Ingress adapter
   -> originating response channel
 ```
 
-The current push-to-talk implementation already covers a subset:
+The current two-shortcut implementation covers these subsets:
 
 ```text
-global shortcut
+global assistant shortcut
   -> single-instance runtime ownership
   -> PushToTalkCaptureController
   -> raw finalized local transcript plus bounded recognition hypotheses
@@ -43,6 +43,25 @@ global shortcut
      -> CommandPolicy
      -> exactly one registered native capability
   -> visible result
+
+global dictation shortcut
+  -> single-instance runtime and per-shortcut ownership
+  -> explicit Accessibility trust check
+  -> secure focused-field refusal before capture
+  -> PushToTalkCaptureController
+  -> raw finalized local transcript, including automatic finalization at the
+     dictation maximum
+  -> TopherModel request-kind routing
+  -> DictationText bounded presentation normalization
+     plus optional fast conservative adjacent-restart cleanup
+  -> process + focus + selection + nearby-text + secure-state revalidation
+  -> FocusedTextInsertionCapability chooses one bounded mutation method
+     -> standard whole value for a small compatible plain surface
+     -> selected-text compatibility path for other safely exposed selections
+  -> bounded content/caret readback
+  -> verified inserted result, with guarded one-step undo when supported
+     or typed uncertain/failed result plus pending local preview
+     and explicit Copy
 ```
 
 The Chrome foundation extends that same processor with three registered
@@ -57,10 +76,29 @@ fingerprint immediately before one non-retried activation attempt.
 `PushToTalkCaptureController` owns microphone permission, speech assets,
 capture, partial/final transcript state, bounded alternative hypotheses,
 confidence evidence, timeouts, generation guards, and cleanup. It returns the
-raw finalized result and has no command resolver,
-dictation formatter, capability, or user-facing outcome policy. `TopherModel`
-currently routes that result to assistant commands; a future dictation shortcut
-will select a dictation processor at this boundary instead.
+raw finalized result and has no command resolver, dictation formatter,
+capability, or user-facing outcome policy. `TopherModel` records which shortcut
+owns the hold and routes the result to either assistant processing or dictation
+processing. A key-up from the other shortcut cannot finalize the active hold.
+
+Maximum duration is a finalization boundary, not a destructive timeout. The
+assistant maximum remains 30 seconds and dictation uses 120 seconds. Automatic
+finalization preserves the physical-key ownership gate until key-up, preventing
+a held shortcut from starting a second request. If the result stream or
+finalization fails after a usable partial, `TopherModel` may expose it for local
+review only: assistant text returns to the manual field and dictation text to
+the pending preview. It never resolves, executes, or inserts that partial. A
+secure or newly secure dictation target discards it. Diagnostics record only a
+fixed content-free failure reason for this path. Because a partial is incomplete
+and may still be revised, recovery applies presentation normalization only and
+never disfluency cleanup.
+
+An Accessibility setter result is an attempted mutation, not completion
+evidence. Topher verifies content immediately and with at most 30 ms of bounded
+retry. A readable unchanged target and an unreadable target have different
+typed outcomes; neither is shown as successful insertion. It never follows an
+ambiguous first mutation with a second method, which prevents late host-app
+updates from duplicating text.
 
 `AssistantCommandProcessor` owns the deterministic resolver-to-policy-to-
 capability transaction. Unsupported input is a `CommandResolution`, not an
@@ -359,14 +397,16 @@ Ordinary diagnostic events should identify lifecycle stage, fixed
 capability/provider kind, timing, and outcome without storing transcript, query,
 message, URL, page, screen, or document content. A content-bearing developer
 trace is a separate, explicit exception. During local dogfooding it defaults on
-to preserve recent failed or unsupported commands, must preserve an explicit
+to preserve recent failed/unsupported commands and dictation outcomes, must preserve an explicit
 opt-out and require informed confirmation when re-enabled, show persistent
-enabled state, accept only the finalized user-authored command, enforce short
+enabled state, accept only finalized user-authored request text, enforce short
 age/count/size bounds, and never include audio, partial speech, retrieved
 context, constructed URLs, detailed errors, or app-sourced credentials. When
-interpretation changes a command, the trace may additionally retain the
-bounded interpreted text, fixed correction reason, and confidence summary; it
-does not retain the complete hypothesis list.
+interpretation or dictation formatting changes text, the trace may additionally
+retain bounded final text, a fixed correction reason when applicable, and a
+confidence summary; it does not retain the complete hypothesis list. Dictation
+that targets a secure field is excluded, including when a target becomes secure
+during the hold.
 Disable and clear must invalidate previously issued trace tokens
 and prevent their queued late records. The user-authored command can itself
 contain a query, URL, pasted content, or secret and must be treated accordingly.
@@ -376,18 +416,21 @@ contain a query, URL, pasted content, or secret and must be treated accordingly.
 1. Preserve the current deterministic local command path.
 2. Complete in build 8: add a read-only frontmost-application capability; do
    not build a general broker for one provider.
-3. Complete for the Chrome tab foundation: add a second structured provider
+3. Complete in build 9: add focused-field dictation as a separate request kind,
+   Accessibility boundary, and narrowly revalidated mutation capability.
+4. Complete in build 11: add a bounded synchronous restart-cleanup tier with a
+   persisted raw/presentation-only switch and raw-versus-polished diagnostics.
+5. Complete for the Chrome tab foundation: add a second structured provider
    with typed freshness, cancellation, timeout, and staleness behavior; keep its
    coordinator scoped to the browser bridge rather than generalizing every
    provider prematurely.
-4. Add focused-field dictation as a separate mode and permission boundary.
-5. Complete for tab metadata: add a Chrome adapter that returns typed active and
+6. Complete for tab metadata: add a Chrome adapter that returns typed active and
    bounded tab records without arbitrary JavaScript. DOM/page data remains a
    separate future slice.
-6. Add capability-specific confirmation before any message send or remote
+7. Add capability-specific confirmation before any message send or remote
    mutation.
-7. Normalize one read-only chat adapter into the shared request envelope.
-8. Evaluate wake-phrase activation after reliability and idle-energy gates.
+8. Normalize one read-only chat adapter into the shared request envelope.
+9. Evaluate wake-phrase activation after reliability and idle-energy gates.
 
 See [Interaction modes](../product/interaction-modes.md) for the user-facing
 contracts and delivery order.

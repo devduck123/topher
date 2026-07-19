@@ -41,21 +41,81 @@ development build. There is not yet a notarized public binary release.
   navigate, close, reload, submit, or bypass policy.
 - No arbitrary shell, AppleScript, browser JavaScript, or generated code runs.
 - Permissions are requested incrementally for implemented features.
+- Accessibility is requested only from an explicit dictation action. Focus,
+  selection, immediate surrounding text, and secure-field state are revalidated
+  before insertion; a mismatch fails to a local preview instead of mutating a
+  guessed target.
+- Accessibility mutation success is verified by bounded text readback instead
+  of trusting the framework setter result. The plain-value adapter may
+  transiently read at most 16,384 UTF-16 units and is restricted to writable
+  text fields, empty text areas, full-value text-area replacement, or an
+  object-free web-descendant text area whose existing value is at most 4,096
+  UTF-16 units and whose caret is exactly at the value end, except for the
+  separately proven Codex/ChatGPT semantic-empty case and bounded Notion
+  single-line caret case below. The bounded web
+  ancestor, placeholder state, and attributed-value classification must be
+  observed before capture and revalidated immediately before mutation. Uniform
+  presentation and varying spellcheck metadata are permitted; placeholder-
+  backed values, unproven start/middle/partial selections outside that Notion
+  case, attributes exposing links,
+  attachments, or list markers, styled/mixed/unknown attributes,
+  oversized/cyclic/structurally changing web
+  composers, native partially selected nonempty text areas, and protected
+  content fail closed. Captured values and attributes are never logged or
+  persisted separately. A Notion start/middle caret may use whole-value
+  insertion only when the value is single-line, object-free, length-bounded,
+  uniformly presented, unchanged, and exactly verified afterward.
+- Dictation never synthesizes Return, submits, sends, or mutates the clipboard
+  automatically. Copy is a separate explicit action, and guarded undo refuses
+  to run after the focus, caret, or inserted content changes.
+- Current dictation polish is an in-process bounded transform of finalized
+  user-authored text. It acquires no screen/app content, uses no network or
+  model, preserves the raw diagnostic form when recording is enabled, and has
+  a persisted presentation-only switch. Transient word timing may authorize
+  only the fixed short-pause allowlisted-continuation rule and is never
+  retained. An Apple alternative may replace dictation only when it uniquely
+  equals a configured vocabulary correction; unrelated prose changes are
+  rejected. Recovered partials are never polished.
+- When the system-wide focused element is unavailable, dictation may query only
+  the current frontmost application's focused element and must preserve that
+  process identity through mutation verification. Codex/ChatGPT suggestion text
+  may be replaced only when bounded semantic Accessibility evidence proves the
+  logical composer is empty or the entire bounded value exactly equals the
+  observed app-owned suggestion. Suggestion attributes, character count,
+  text-marker state, and the exact compatibility classification are evaluated
+  independently and revalidated; missing, mixed, marked, changed, or ordinary
+  authored evidence fails closed. Terminal input never falls back to synthesized
+  keys, paste, or command execution.
 - Raw audio and screen captures are not persisted beyond the active request by
   default.
 - Sensitive content is excluded from ordinary logs.
+- During the local dogfood phase, final voice/manual command text and non-secure
+  dictation are retained by the bounded developer trace by default unless the
+  user explicitly opts out.
 - The Chrome extension requests only `tabs` and `nativeMessaging`, cannot run in
   incognito, and has no host permissions, content scripts, scripting, DOM/page
   extraction, screenshots, cookies, history, forms, file-URL access, or stored
   browser snapshots. Native-host registration binds one exact extension origin
   to an absolute checked helper inside the current Topher bundle. Only the
   primary Topher process may construct the app-side relay.
-- During the local dogfood phase, final voice/manual command text is retained by
-  the bounded developer trace by default unless the user explicitly opts out.
   Recording is visibly indicated, stored with restrictive POSIX modes,
   automatically pruned, and immediately clearable. The command can itself
   contain a spoken or pasted credential; Topher never separately appends
-  Keychain or configuration values. Revisit the default before distribution.
+  Keychain or configuration values. Dictation aimed at a secure field is
+  refused before capture; if the target becomes secure during the hold, Topher
+  discards the final text without a preview or developer record. Revisit the
+  default before distribution.
+  Preparation and insertion evidence may retain one fixed application family,
+  focus source, failure reason, and structural/semantic enums for local
+  compatibility testing; it never retains a raw bundle ID, process ID, window
+  title, URL, selected text, suggestion text, or additional field content.
+- A developer may explicitly copy recent trace records into the bounded,
+  gitignored `.topher-local/dogfood/observed-queries.json` corpus. Topher never
+  creates this second sink automatically, the exporter excludes dictation
+  unless explicitly requested, and owner-only modes reduce accidental local
+  exposure. It remains durable plaintext until deliberately deleted; never
+  commit or publish it. Public regression cases belong in the sanitized
+  `dogfood/manual-corpus.json` corpus.
 - Credentials belong in macOS Keychain and never in source control.
 - Every effect requires capability-specific policy. An explicit, present-user
   request may itself confirm a capability-defined, bounded deterministic local

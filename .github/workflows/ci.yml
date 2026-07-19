@@ -28,6 +28,12 @@ jobs:
       - name: Check Swift package dependency parity
         run: ruby scripts/check_dependency_parity.rb
 
+      - name: Validate manual dogfood corpus
+        run: ruby scripts/check_dogfood_corpus.rb
+
+      - name: Test private observed-query exporter
+        run: ruby scripts/test_observed_query_export.rb
+
       - name: Select Xcode 26.6
         run: sudo xcode-select --switch /Applications/Xcode_26.6.app/Contents/Developer
 

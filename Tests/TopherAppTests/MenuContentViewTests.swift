@@ -1,0 +1,20 @@
+import XCTest
+
+@testable import TopherApp
+
+@MainActor
+final class MenuContentViewTests: XCTestCase {
+  func testMenuPanelHasDeterministicReadableSize() {
+    XCTAssertEqual(MenuContentView.panelSize.width, 380)
+    XCTAssertEqual(MenuContentView.panelSize.height, 460)
+  }
+
+  func testMenuKeepsThreeRecentDogfoodRecordsVisible() {
+    XCTAssertEqual(DeveloperDiagnosticsController.latestRecordLimit, 3)
+  }
+
+  func testDeveloperSettingsSelectionHasStablePersistedIdentity() {
+    XCTAssertEqual(TopherSettingsSection.developer.rawValue, "developer")
+    XCTAssertFalse(TopherSettingsSection.preferenceKey.isEmpty)
+  }
+}

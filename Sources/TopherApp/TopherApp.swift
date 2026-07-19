@@ -58,6 +58,7 @@ struct TopherApp: App {
             defaults: TranscriptVocabulary.developerDefaults.contextualStrings
           )
         }),
+        dictationPolishEnabled: DictationPolishSettings.currentValue(),
         developerDiagnostics: diagnostics,
         vocabularyProvider: { vocabulary.vocabulary },
         listenForShortcutEvents: isPrimary
@@ -85,7 +86,7 @@ struct TopherApp: App {
 
   var body: some Scene {
     MenuBarExtra {
-      MenuContentView(model: model, diagnostics: diagnostics, vocabulary: vocabulary)
+      MenuContentView(model: model, diagnostics: diagnostics)
     } label: {
       ZStack(alignment: .topTrailing) {
         Image(systemName: model.phase.symbolName)
@@ -111,5 +112,9 @@ struct TopherApp: App {
       }
     }
     .menuBarExtraStyle(.window)
+
+    Settings {
+      TopherSettingsView(model: model, diagnostics: diagnostics, vocabulary: vocabulary)
+    }
   }
 }

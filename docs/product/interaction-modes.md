@@ -35,7 +35,7 @@ that mode new authority over the Mac.
 |---|---|---|---|
 | Global push-to-talk command | Hold a configured shortcut while any app is focused, speak a Topher request, then release to resolve and execute it. | Implemented | Microphone and local speech assets |
 | Manual panel command | Type a would-be transcript into Topher and run the same command path. | Implemented development fallback | None beyond the selected capability |
-| Global text dictation | Hold a distinct shortcut and insert polished text into the focused editable field. | Near-term design; not implemented | Likely Accessibility plus focused-element validation |
+| Global text dictation | Hold a distinct shortcut and insert conservatively formatted text into the focused editable field. | Safe foundation implemented; app-compatibility acceptance pending | Accessibility plus focused-element validation |
 | Local wake phrase | Opt in to local “Topher” detection, then capture one request without a keyboard hold. | Research only | Persistent microphone use, energy, false activation, visible ambient-state controls |
 | Remote chat message | Send Topher a request from another device through Discord, Slack, WhatsApp, or another adapter. | Planned investigation | Provider network, account identity, credentials, replay and remote-presence policy |
 | Conversational follow-up | Keep a short, visible interaction window for references such as “the second one.” | Future | Bounded local state, expiry, provenance, and clear reset behavior |
@@ -59,34 +59,111 @@ policy, unique matching, and freshness revalidation. It does not grant page or
 DOM understanding.
 
 The menu does not need to be open and Topher does not need to be the focused
-application. The microphone is active only for the hold, subject to the
-30-second safety timeout.
+application. The microphone is active only for the hold. At 30 seconds Topher
+automatically finalizes the best command transcript, but will not execute a
+recoverable partial after a capture failure; that text returns to the manual
+field for review. The physical key must still be released before another
+request can start.
 
-This is **not yet Wispr-style general dictation**. Current transcripts can open
-allowlisted apps, open allowlisted sites, or run typed searches. They are not
-inserted into whichever text field happens to be focused.
+This shortcut remains command-only. Dictated prose uses the distinct global
+dictation shortcut below, so speech cannot accidentally switch between typing
+and executing an assistant action.
 
 ## Global text dictation
 
-Text dictation is a separate capability and must not be implemented as a flag
-inside command execution. It should have a distinct shortcut or an unmistakable
-mode switch so dictated prose cannot accidentally become a Topher action.
+Text dictation is a separate capability, not a flag inside command execution.
+Build 9 implements a distinct shortcut so dictated prose cannot accidentally
+become a Topher action.
 
-The first safe contract should be:
+The implemented foundation contract is:
 
 - Capture and transcribe locally using the same replaceable speech boundary.
-- Transform only presentation details that can be evaluated, such as
-  punctuation, capitalization, and explicit spoken formatting commands.
+- Always normalize bounded presentation details: trim outer whitespace,
+  normalize horizontal spacing and line endings, remove spaces before closing
+  punctuation, and add a boundary space only when insertion would weld words.
+- By default, synchronously remove only a clear adjacent spoken restart of up
+  to three words when another word follows. Punctuation/newline boundaries,
+  terminal repetition, acronyms, numbers, and common intentional repetition
+  fail closed. **Clean repeated speech** persists an explicit off switch.
+- Do not invent terminal punctuation or capitalization, remove filler words,
+  or rewrite grammar, tone, vocabulary, or meaning in the current fast tier.
 - Identify and revalidate the focused editable element before insertion.
+- Prefer the system-wide focused element, but when it is unavailable query only
+  the current frontmost application's focused element and bind the target to
+  that process through mutation verification and undo.
 - Insert text without pressing Return, submitting a form, or sending a message.
 - Refuse secure/password fields and other excluded surfaces.
 - Preserve a preview/copy fallback when direct insertion is unsupported.
 - Define one-step undo behavior before broad app support is claimed.
-- Request Accessibility only when the user explicitly enables this feature.
+- Request Accessibility only from an explicit dictation hold or enable action.
+- Revalidate focus, selection, surrounding text, and secure-field state after
+  transcription and before mutation. A mismatch produces a preview, not a guess.
+- Treat native setter completion as an attempt and report insertion only after
+  bounded content readback. Use one preselected method so a late host-app update
+  cannot cause a second insertion.
+- For a verified whole-value mutation whose host leaves or restores the old
+  caret, retry only the captured caret position under the same focus and secure
+  checks. Require delayed stable caret readback; never repeat the value mutation.
+- Permit a whole-value mutation only for a bounded plain text field, an empty
+  text area, full-value text-area replacement, or a bounded web-descendant end
+  append with absent/mismatched placeholder state and uniformly safe attributed
+  presentation. A Notion-only exception admits an unchanged start/middle caret
+  in the same bounded plain profile only when the value is single-line. Keep
+  multiline, rich, semantic, unknown, partially selected, and other ambiguous
+  surfaces on the narrower compatibility/fallback path.
+- For Codex/ChatGPT only, treat a nonempty-looking caret-at-start web composer
+  as empty when every attributed character is explicitly suggestion-only, the
+  full web text-marker range is empty, or the entire bounded value exactly
+  matches the observed app-owned suggestion. Evaluate and retain only the fixed
+  state of every semantic signal, then replace the suggestion with the
+  transcript alone after revalidating the same bundle. Never apply this
+  exception to partial matches or ordinary authored text.
+- Keep Terminal prompts on an explicit review/copy fallback; dictation never
+  pastes automatically or executes a terminal command. VS Code requires a
+  standard writable Accessibility field and may need screen-reader optimized
+  mode enabled.
+- Never mutate the clipboard automatically; copying a fallback is explicit.
+- Apply strong-token spoken notation such as `UI slash UX` consistently to
+  dictation and extracted web-search payloads, while retaining the raw request
+  in the bounded developer trace. Do not generalize this to lowercase prose.
+- Exclude secure-field dictation from the content-bearing developer trace.
+- Automatically finalize at the 120-second dictation maximum instead of
+  discarding the whole utterance. A late physical key-up cannot insert twice.
+- Preserve a usable partial after a non-secure capture failure only in the
+  review/copy preview; never insert, persist, or disfluency-polish that partial
+  automatically.
+
+The foundation uses Accessibility value, selected-text, and selected-range
+attributes behind a fixed target profile. Editors that do not expose a safely
+verifiable mutation are intentionally routed to the pending preview. Broad app
+compatibility, spoken formatting commands, punctuation quality, and multi-
+paragraph behavior remain measured acceptance work rather than implied
+guarantees.
 
 Dictation quality is a system-level result. The benchmark must cover recognition
 accuracy, partial stability, endpoint latency, punctuation, application-specific
 insertion, undo behavior, and recovery—not only word error rate.
+
+### Speed and polish strategy
+
+Topher separates dictation quality into two measurable tiers:
+
+1. The implemented fast tier is deterministic, local, synchronous, bounded by
+   utterance length and restart size, and has a presentation-only escape hatch.
+   It sees the finalized utterance but no app or screen context.
+2. A future smart tier may use full-utterance context and the destination app's
+   typed identity for punctuation, filler, correction, and formatting. It must
+   be optional, preserve raw text, meet an explicit deadline with fast-tier
+   fallback, expose its typed changes in diagnostics, and never acquire screen
+   content merely to format prose.
+
+This mirrors the useful product shape of modern dictation tools without copying
+their authority boundary. [Wispr documents](https://docs.wisprflow.ai/articles/5373093536-how-do-i-use-smart-formatting-and-backtrack)
+full-dictation smart formatting, a raw-mode switch, and conservative
+self-correction removal. [Willow publicly describes](https://willowvoice.com/blog/automatic-punctuation-dictation)
+app-aware formatting and roughly 200 ms latency, but that timing is a vendor
+claim, not Topher evidence. Topher will benchmark its own end-to-end and
+polish-only latency before selecting a smarter engine or processing layer.
 
 ## Local wake phrase and ambient operation
 
@@ -183,7 +260,8 @@ Keep one reliable loop at every checkpoint:
 1. Finish push-to-talk accuracy, latency, permissions, sleep/wake, and repeated
    session validation.
 2. Add the read-only active-application provider as the smallest context slice.
-3. Build global text dictation as an explicitly separate mode and permission.
+3. Complete in build 9: build global text dictation as an explicitly separate
+   mode and permission; continue its app-compatibility and speech-quality gate.
 4. Complete for tab metadata: add structured Chrome active-tab/list context and
    exact-title activation before screenshot-based context. Page/DOM context
    remains a separate future gate.

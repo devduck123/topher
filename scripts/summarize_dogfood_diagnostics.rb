@@ -57,6 +57,13 @@ def print_summary(title, records)
   print_counts("Outcomes:", counts(records, "outcome"))
   unsupported_records = records.select { |record| record["unsupportedReason"] }
   print_counts("Unsupported reasons:", counts(unsupported_records, "unsupportedReason"))
+  dictation_failure_records = records.select { |record| record["dictationFailureReason"] }
+  print_counts(
+    "Dictation fallback reasons:",
+    counts(dictation_failure_records, "dictationFailureReason")
+  )
+  capture_failure_records = records.select { |record| record["captureFailureReason"] }
+  print_counts("Capture failure reasons:", counts(capture_failure_records, "captureFailureReason"))
 
   transcript_ratings = records
     .select { |record| !record["transcriptWasAccurate"].nil? }
@@ -68,16 +75,123 @@ def print_summary(title, records)
   transcript_accuracy = percentage(transcript_ratings.count(true), transcript_ratings.length)
   action_correctness = percentage(action_ratings.count(true), action_ratings.length)
   puts "  transcript accurate: #{transcript_accuracy}"
-  puts "  action correct: #{action_correctness}"
+  puts "  action/insertion correct: #{action_correctness}"
+  issue_records = records.select { |record| record["actionIssueReason"] }
+  print_counts("Action/insertion issue reasons:", counts(issue_records, "actionIssueReason"))
+
+  automatic_finalizations = records.count { |record| record["maximumDurationReached"] == true }
+  puts "Automatic maximum-duration finalizations: #{automatic_finalizations}"
 
   interpreted = records.count { |record| record["interpretedTranscript"] }
-  puts "Interpretation changes: #{interpreted}/#{records.length}"
+  puts "Interpreted/formatted text changes: #{interpreted}/#{records.length}"
+  interpretation_records = records.select { |record| record["interpretationReason"] }
+  print_counts(
+    "Interpretation/polish reasons:",
+    counts(interpretation_records, "interpretationReason")
+  )
+  preparation_records = records.select { |record| record["dictationPreparationEvidence"] }
+  print_counts(
+    "Dictation focus sources:",
+    preparation_records.each_with_object(Hash.new(0)) do |record, result|
+      value = record.dig("dictationPreparationEvidence", "focusSource")
+      result[value || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation preparation applications:",
+    preparation_records.each_with_object(Hash.new(0)) do |record, result|
+      value = record.dig("dictationPreparationEvidence", "targetApplication")
+      result[value || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation preparation failures:",
+    preparation_records.each_with_object(Hash.new(0)) do |record, result|
+      value = record.dig("dictationPreparationEvidence", "failureReason")
+      result[value || "ready"] += 1
+    end
+  )
+  insertion_records = records.select { |record| record["dictationInsertionEvidence"] }
+  print_counts(
+    "Dictation insertion methods:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      result[record.dig("dictationInsertionEvidence", "method")] += 1
+    end
+  )
+  print_counts(
+    "Dictation verification results:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      result[record.dig("dictationInsertionEvidence", "verification")] += 1
+    end
+  )
+  print_counts(
+    "Dictation target roles:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      result[record.dig("dictationInsertionEvidence", "target", "role")] += 1
+    end
+  )
+  print_counts(
+    "Dictation target applications:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      application = record.dig("dictationInsertionEvidence", "target", "application")
+      result[application || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation selection relations:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      relation = record.dig("dictationInsertionEvidence", "selectionRelation")
+      result[relation || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation placeholder states:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      state = record.dig("dictationInsertionEvidence", "placeholderState")
+      result[state || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation attribute decisions:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      decision = record.dig("dictationInsertionEvidence", "attributeDecision")
+      result[decision || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Whole-value adapter decisions:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      decision = record.dig("dictationInsertionEvidence", "wholeValueDecision")
+      result[decision || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Semantic composer decisions:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      decision = record.dig("dictationInsertionEvidence", "semanticContentDecision")
+      result[decision || "not recorded"] += 1
+    end
+  )
+  {
+    "Semantic suggestion-attribute states:" => "semanticSuggestionAttributeState",
+    "Semantic character-count states:" => "semanticCharacterCountState",
+    "Semantic text-marker states:" => "semanticTextMarkerState",
+    "Semantic known-suggestion states:" => "semanticKnownSuggestionState",
+  }.each do |label, key|
+    print_counts(
+      label,
+      insertion_records.each_with_object(Hash.new(0)) do |record, result|
+        state = record.dig("dictationInsertionEvidence", key)
+        result[state || "not recorded"] += 1
+      end
+    )
+  end
 
   timings = {
     "hold to listening" => "holdToListeningMilliseconds",
     "listening to first text" => "listeningToFirstTranscriptMilliseconds",
-    "key-up to final" => "keyUpToFinalMilliseconds",
-    "command processing" => "processingDurationMilliseconds",
+    "stop to final" => "keyUpToFinalMilliseconds",
+    "request processing" => "processingDurationMilliseconds",
   }
   puts "Timing (milliseconds):"
   timings.each do |label, key|

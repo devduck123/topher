@@ -7,6 +7,25 @@ import XCTest
 
 @MainActor
 final class SpeechTranscriptionSessionTests: XCTestCase {
+  func testExtractsTransientPauseEvidenceFromAppleAttributedText() throws {
+    var text = AttributedString("code out. And")
+    let firstRange = try XCTUnwrap(text.range(of: "code out."))
+    let secondRange = try XCTUnwrap(text.range(of: "And"))
+    text[firstRange].audioTimeRange = CMTimeRange(
+      start: CMTime(seconds: 0, preferredTimescale: 1_000),
+      duration: CMTime(seconds: 1, preferredTimescale: 1_000)
+    )
+    text[secondRange].audioTimeRange = CMTimeRange(
+      start: CMTime(seconds: 1.4, preferredTimescale: 1_000),
+      duration: CMTime(seconds: 0.3, preferredTimescale: 1_000)
+    )
+
+    XCTAssertEqual(
+      SpeechAnalysisRuntime.pauseEvidence(in: text),
+      [.init(boundaryUTF16Offset: 10, durationMilliseconds: 400)]
+    )
+  }
+
   func testPublishesCompletePartialAndFinalTranscripts() async throws {
     let runtime = RuntimeProbe()
     let capture = CaptureProbe()
@@ -92,6 +111,45 @@ final class SpeechTranscriptionSessionTests: XCTestCase {
           confidence: 0.42
         )
       )
+    )
+  }
+
+  func testCarriesPauseEvidenceAcrossFinalizedSegments() async throws {
+    let runtime = RuntimeProbe()
+    let session = makeSession(runtime: runtime, capture: CaptureProbe())
+
+    try await session.prepare()
+    let stream = try await session.start()
+    let collected = Task { try await collect(stream) }
+
+    runtime.yield(
+      .init(
+        text: "I finished.",
+        audioStartMilliseconds: 0,
+        audioEndMilliseconds: 1_000,
+        isFinal: true
+      )
+    )
+    runtime.yield(
+      .init(
+        text: "And continued.",
+        confidence: 0.9,
+        audioStartMilliseconds: 1_350,
+        audioEndMilliseconds: 2_000,
+        isFinal: true
+      )
+    )
+    try await session.finish()
+
+    let events = try await collected.value
+    let final = try XCTUnwrap(events.last)
+    guard case .finalWithEvidence(let transcription) = final else {
+      return XCTFail("Expected evidence-bearing final transcription")
+    }
+    XCTAssertEqual(transcription.primary.text, "I finished. And continued.")
+    XCTAssertEqual(
+      transcription.pauses,
+      [.init(boundaryUTF16Offset: 12, durationMilliseconds: 350)]
     )
   }
 

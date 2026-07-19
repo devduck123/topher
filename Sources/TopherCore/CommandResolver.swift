@@ -52,6 +52,10 @@ public struct CommandResolver: Sendable {
       return .resolved(.identifyFrontmostApplication)
     }
 
+    if requiresDictationMode(request) {
+      return .unsupported(reason: .dictationModeRequired)
+    }
+
     if requiresContext(request) {
       return .unsupported(reason: .contextRequired)
     }
@@ -237,6 +241,12 @@ public struct CommandResolver: Sendable {
     ].contains(request)
   }
 
+  private func requiresDictationMode(_ request: String) -> Bool {
+    ["dictate", "input", "insert", "type", "write"].contains { prefix in
+      request == prefix || request.hasPrefix(prefix + " ")
+    }
+  }
+
   private func isActiveChromeTabRequest(_ request: String) -> Bool {
     [
       "what is this chrome tab", "what is the active chrome tab",
@@ -304,7 +314,8 @@ public struct CommandResolver: Sendable {
       (
         .google,
         [
-          "search google for", "google search for", "search the web for", "search for",
+          "search google for", "google search for", "search the web for",
+          "search chrome for", "search in chrome for", "chrome search for", "search for",
           "google", "search",
         ]
       ),
@@ -341,7 +352,17 @@ public struct CommandResolver: Sendable {
     for target in WebsiteTarget.allCases {
       guard let provider = target.queryProvider else { continue }
       for alias in target.aliases.sorted(by: { $0.count > $1.count }) {
-        let prefixes = verbs.map { "\($0) \(alias) for" }
+        let prefixes = verbs.flatMap { verb in
+          [
+            "\(verb) \(alias) for",
+            "\(verb) \(alias) look for",
+            "\(verb) \(alias), look for",
+            "\(verb) \(alias) and look for",
+            "\(verb) \(alias) search for",
+            "\(verb) \(alias), search for",
+            "\(verb) \(alias) and search for",
+          ]
+        }
         guard let queryText = removingRawPrefix(from: request, candidates: prefixes) else {
           continue
         }
@@ -375,6 +396,13 @@ public struct CommandResolver: Sendable {
           }
           return .resolved(.searchWeb(provider: provider, query: query))
         }
+
+        if let queryText = removingRawPrefix(from: request, candidates: [alias]),
+          !queryText.isEmpty,
+          let query = commandSearchQuery(queryText)
+        {
+          return .resolved(.searchWeb(provider: provider, query: query))
+        }
       }
     }
 
@@ -404,7 +432,8 @@ public struct CommandResolver: Sendable {
   }
 
   private func commandSearchQuery(_ text: String) -> SearchQuery? {
-    SearchQuery(removingLikelySentencePunctuation(from: text))
+    let payload = removingLikelySentencePunctuation(from: text)
+    return SearchQuery(SpokenTechnicalNotation.normalizing(in: payload).text)
   }
 
   private func removingLikelySentencePunctuation(from text: String) -> String {

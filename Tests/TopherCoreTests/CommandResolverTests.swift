@@ -270,6 +270,14 @@ final class CommandResolverTests: XCTestCase {
       ("Search for tnc.com", .google, "tnc.com"),
       ("Search Crunchyroll anime releases", .google, "Crunchyroll anime releases"),
       ("Search Chrome extensions", .google, "Chrome extensions"),
+      ("Search Chrome for Ball is Life", .google, "Ball is Life"),
+      ("Search in Chrome for Swift concurrency", .google, "Swift concurrency"),
+      ("Chrome search for GPT 5", .google, "GPT 5"),
+      (
+        "Search Chrome for what are some good UI slash UX principles?",
+        .google,
+        "what are some good UI/UX principles"
+      ),
     ]
 
     for (transcript, provider, queryText) in cases {
@@ -280,6 +288,27 @@ final class CommandResolverTests: XCTestCase {
         query.map { .resolved(.searchWeb(provider: provider, query: $0)) }
       )
     }
+  }
+
+  func testSearchTechnicalNotationNormalizationRemainsConservative() throws {
+    XCTAssertEqual(
+      resolver.resolve("Search Chrome for UI slash UX principles"),
+      .resolved(
+        .searchWeb(
+          provider: .google,
+          query: try XCTUnwrap(SearchQuery("UI/UX principles"))
+        )
+      )
+    )
+    XCTAssertEqual(
+      resolver.resolve("Search Chrome for turn left slash right at the fork"),
+      .resolved(
+        .searchWeb(
+          provider: .google,
+          query: try XCTUnwrap(SearchQuery("turn left slash right at the fork"))
+        )
+      )
+    )
   }
 
   func testSearchWithoutAQueryFailsClosed() {
@@ -446,5 +475,38 @@ final class CommandResolverTests: XCTestCase {
         .unsupported(reason: .contextRequired)
       )
     }
+  }
+
+  func testObservedYouTubeQueriesDoNotDependOnSpokenPunctuation() throws {
+    let query = try XCTUnwrap(SearchQuery("dining with Derek"))
+    let expected = CommandResolution.resolved(.searchWeb(provider: .youtube, query: query))
+
+    for transcript in [
+      "YouTube dining with Derek.",
+      "Go to YouTube, look for dining with Derek.",
+      "Go to YouTube and look for dining with Derek.",
+    ] {
+      XCTAssertEqual(resolver.resolve(transcript), expected)
+    }
+  }
+
+  func testEBayIsAKnownCanonicalWebsite() {
+    for transcript in ["eBay", "eBay.com", "Go to eBay", "Go to eBay.com"] {
+      XCTAssertEqual(resolver.resolve(transcript), .resolved(.openWebsite(.ebay)))
+    }
+  }
+
+  func testExplicitTypingPhrasesDirectTheUserToDictationMode() {
+    for transcript in ["Type LeBron James", "Input LeBron James", "Dictate hello"] {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .unsupported(reason: .dictationModeRequired)
+      )
+    }
+
+    XCTAssertEqual(
+      resolver.resolve("LeBron James"),
+      .unsupported(reason: .unsupportedPhrasing)
+    )
   }
 }

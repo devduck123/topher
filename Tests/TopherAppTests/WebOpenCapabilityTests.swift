@@ -44,13 +44,14 @@ final class WebOpenCapabilityTests: XCTestCase {
     _ = await capability.execute(.hulu)
     _ = await capability.execute(.amazon)
     _ = await capability.execute(.ballislife)
+    _ = await capability.execute(.ebay)
 
     XCTAssertEqual(
       openedURLs.map(\.absoluteString),
       [
         "https://github.com/", "https://www.crunchyroll.com/", "https://mail.google.com/",
         "https://www.netflix.com/", "https://www.hulu.com/", "https://www.amazon.com/",
-        "https://ballislife.com/",
+        "https://ballislife.com/", "https://www.ebay.com/",
       ]
     )
   }

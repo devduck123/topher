@@ -48,12 +48,12 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-At this investigation's 0.3.0 snapshot, the development tree defined 110 tests
-and added only the Release audio-input entitlement required for microphone
-capture. The latest complete local normal and Thread Sanitizer runs then had
-passed all 109 tests present before the final transcript-reload regression; that
-new bounded-reload path separately passed compiler and executable-smoke
-validation and awaited the next full CI run.
+The current 0.4.0 development tree still adds only the Release audio-input
+entitlement required for microphone capture. Global dictation also
+adds an explicit Accessibility TCC boundary for narrow focused-field dictation;
+Accessibility does not add a code-signing entitlement. See the latest dated
+evidence for normal, sanitizer, Xcode, and bundle results rather than treating
+this evolving investigation as verification.
 See the dated
 [speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
 installed bundle and live callback verification, and the
@@ -137,9 +137,10 @@ The Xcode target explicitly enables Hardened Runtime and disables App Sandbox.
 Those settings are independent: Hardened Runtime constrains the signed process,
 but the current application is not sandboxed. The Release signature is local
 and ad hoc, with only `com.apple.security.device.audio-input`; Debug also has
-Xcode's development-only `com.apple.security.get-task-allow`. The only current
-TCC request is microphone access. There is no Accessibility, Automation/Apple
-Events, Screen Recording, or legacy `SFSpeechRecognizer` authorization request.
+Xcode's development-only `com.apple.security.get-task-allow`. Current TCC
+requests are microphone access for held speech and Accessibility for explicitly
+invoked focused-field dictation. There is no Automation/Apple Events, Screen
+Recording, or legacy `SFSpeechRecognizer` authorization request.
 
 Google/YouTube navigation uses validated fixed HTTPS destinations and delegates
 them to the default browser through `NSWorkspace`. Topher has no direct network
@@ -236,8 +237,9 @@ not require `SFSpeechRecognizer` server authorization according to Apple's
 [speech permission guidance](https://developer.apple.com/documentation/speech/asking-permission-to-use-speech-recognition).
 Accordingly, the current target has no `NSSpeechRecognitionUsageDescription`.
 Add it only if a future selected implementation actually invokes
-`SFSpeechRecognizer`. Do not add Accessibility or Screen Recording usage
-descriptions before those capabilities exist.
+`SFSpeechRecognizer`. Focused-field dictation now requests Accessibility from
+an explicit action and revalidates a narrow selected-text boundary. Do not add
+Screen Recording usage descriptions before a corresponding capability exists.
 
 ## Context and browser path
 
@@ -301,8 +303,9 @@ Authored, tested, and built now:
 - Direct `SpeechAnalyzer`/`SpeechTranscriber`, `AVAudioEngine` capture,
   `AVAudioConverter`, runtime asset preparation, and microphone permission
   boundaries.
-- Real push-to-talk start/partial/finalize/cancel behavior with listening and
-  finalization watchdogs, generation guards, and immediate stream recovery.
+- Real push-to-talk start/partial/finalize/cancel behavior with mode-specific
+  maximum-duration finalization, a finalization watchdog, generation guards,
+  and preview-only recovery of usable partials.
 - Payload-free preparation, capture, and finalization signpost intervals for
   local latency investigation.
 - Menu-bar UI, transient non-activating voice HUD, manual transcript fallback,

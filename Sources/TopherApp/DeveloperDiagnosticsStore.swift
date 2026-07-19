@@ -4,11 +4,14 @@ import OSLog
 import TopherCore
 
 enum DeveloperTranscriptSource: String, Codable, Equatable, Sendable {
+  case dictation
   case manual
   case voice
 
   var displayName: String {
     switch self {
+    case .dictation:
+      "Dictation"
     case .manual:
       "Manual"
     case .voice:
@@ -32,18 +35,30 @@ enum AssistantCommandKind: String, Codable, Equatable, Sendable {
 }
 
 enum AssistantCommandTraceOutcome: String, Codable, Equatable, Sendable {
+  case captureFailed
   case capabilityFailed
   case capabilitySucceeded
+  case dictationFailed
+  case dictationFallback
+  case dictationInserted
   case noUsableSpeech
   case policyDenied
   case unsupported
 
   var displayName: String {
     switch self {
+    case .captureFailed:
+      "Capture failed"
     case .capabilityFailed:
       "Capability failed"
     case .capabilitySucceeded:
       "Succeeded"
+    case .dictationFailed:
+      "Dictation failed"
+    case .dictationFallback:
+      "Needs copy"
+    case .dictationInserted:
+      "Inserted"
     case .noUsableSpeech:
       "No usable speech"
     case .policyDenied:
@@ -54,22 +69,54 @@ enum AssistantCommandTraceOutcome: String, Codable, Equatable, Sendable {
   }
 }
 
+enum DictationFailureReason: String, Codable, Equatable, Sendable {
+  case focusChanged
+  case mutationFailed
+  case mutationNotObserved
+  case mutationUnverified
+  case noFocusedElement
+  case noPreparedTarget
+  case selectionChanged
+  case tooLong
+  case unsupportedField
+}
+
+enum DeveloperActionIssueReason: String, CaseIterable, Codable, Equatable, Sendable {
+  case duplicatedText
+  case missingText
+  case other
+  case spacingOrPunctuation
+  case unremovedDisfluency
+  case wrongDestination
+  case wrongField
+  case wrongPosition
+}
+
 struct AssistantCommandTrace: Equatable, Sendable {
   let outcome: AssistantCommandTraceOutcome
   let commandKind: AssistantCommandKind?
   let capabilityIdentifier: String?
   let unsupportedReason: UnsupportedCommandReason?
+  let dictationFailureReason: DictationFailureReason?
+  let dictationPreparationEvidence: FocusedTextPreparationEvidence?
+  let dictationInsertionEvidence: FocusedTextInsertionEvidence?
 
   init(
     outcome: AssistantCommandTraceOutcome,
     commandKind: AssistantCommandKind?,
     capabilityIdentifier: String?,
-    unsupportedReason: UnsupportedCommandReason? = nil
+    unsupportedReason: UnsupportedCommandReason? = nil,
+    dictationFailureReason: DictationFailureReason? = nil,
+    dictationPreparationEvidence: FocusedTextPreparationEvidence? = nil,
+    dictationInsertionEvidence: FocusedTextInsertionEvidence? = nil
   ) {
     self.outcome = outcome
     self.commandKind = commandKind
     self.capabilityIdentifier = capabilityIdentifier
     self.unsupportedReason = unsupportedReason
+    self.dictationFailureReason = dictationFailureReason
+    self.dictationPreparationEvidence = dictationPreparationEvidence
+    self.dictationInsertionEvidence = dictationInsertionEvidence
   }
 }
 
@@ -94,12 +141,18 @@ struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
   let holdToListeningMilliseconds: UInt64?
   let listeningToFirstTranscriptMilliseconds: UInt64?
   let keyUpToFinalMilliseconds: UInt64?
+  let maximumDurationReached: Bool?
   let outcome: AssistantCommandTraceOutcome
   let commandKind: AssistantCommandKind?
   let capabilityIdentifier: String?
   let unsupportedReason: UnsupportedCommandReason?
+  let dictationFailureReason: DictationFailureReason?
+  let dictationPreparationEvidence: FocusedTextPreparationEvidence?
+  let dictationInsertionEvidence: FocusedTextInsertionEvidence?
+  let captureFailureReason: PushToTalkCaptureFailure?
   var transcriptWasAccurate: Bool?
   var actionWasCorrect: Bool?
+  var actionIssueReason: DeveloperActionIssueReason?
   let processingDurationMilliseconds: UInt64
   let appVersion: String
   let appBuild: String
@@ -116,6 +169,8 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
   let holdToListeningMilliseconds: UInt64?
   let listeningToFirstTranscriptMilliseconds: UInt64?
   let keyUpToFinalMilliseconds: UInt64?
+  let maximumDurationReached: Bool?
+  let captureFailureReason: PushToTalkCaptureFailure?
   let trace: AssistantCommandTrace
   let processingDurationMilliseconds: UInt64
   let appVersion: String
@@ -132,6 +187,8 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
     holdToListeningMilliseconds: UInt64? = nil,
     listeningToFirstTranscriptMilliseconds: UInt64? = nil,
     keyUpToFinalMilliseconds: UInt64? = nil,
+    maximumDurationReached: Bool? = nil,
+    captureFailureReason: PushToTalkCaptureFailure? = nil,
     trace: AssistantCommandTrace,
     processingDurationMilliseconds: UInt64,
     appVersion: String,
@@ -147,6 +204,8 @@ struct DeveloperTranscriptRecordDraft: Equatable, Sendable {
     self.holdToListeningMilliseconds = holdToListeningMilliseconds
     self.listeningToFirstTranscriptMilliseconds = listeningToFirstTranscriptMilliseconds
     self.keyUpToFinalMilliseconds = keyUpToFinalMilliseconds
+    self.maximumDurationReached = maximumDurationReached
+    self.captureFailureReason = captureFailureReason
     self.trace = trace
     self.processingDurationMilliseconds = processingDurationMilliseconds
     self.appVersion = appVersion
@@ -315,12 +374,18 @@ actor DeveloperDiagnosticsStore {
         draft.listeningToFirstTranscriptMilliseconds
       ),
       keyUpToFinalMilliseconds: Self.validatedTiming(draft.keyUpToFinalMilliseconds),
+      maximumDurationReached: draft.maximumDurationReached,
       outcome: draft.trace.outcome,
       commandKind: draft.trace.commandKind,
       capabilityIdentifier: draft.trace.capabilityIdentifier,
       unsupportedReason: draft.trace.unsupportedReason,
+      dictationFailureReason: draft.trace.dictationFailureReason,
+      dictationPreparationEvidence: draft.trace.dictationPreparationEvidence,
+      dictationInsertionEvidence: draft.trace.dictationInsertionEvidence,
+      captureFailureReason: draft.captureFailureReason,
       transcriptWasAccurate: nil,
       actionWasCorrect: nil,
+      actionIssueReason: nil,
       processingDurationMilliseconds: draft.processingDurationMilliseconds,
       appVersion: draft.appVersion,
       appBuild: draft.appBuild
@@ -364,8 +429,43 @@ actor DeveloperDiagnosticsStore {
         return currentSnapshot()
       }
       records?[index].actionWasCorrect = value
+      if value != false {
+        records?[index].actionIssueReason = nil
+      }
     }
 
+    needsPersistence = true
+    do {
+      try applyRetentionBounds()
+      try persistPendingRecords()
+    } catch {
+      let writeError = error
+      records = previousRecords
+      needsPersistence = true
+      try? persistPendingRecords()
+      throw writeError
+    }
+    revision &+= 1
+    return currentSnapshot()
+  }
+
+  func setActionIssueReason(
+    recordID: UUID,
+    reason: DeveloperActionIssueReason?
+  ) throws -> DeveloperDiagnosticsSnapshot {
+    try loadIfNeeded()
+    guard let index = records?.firstIndex(where: { $0.id == recordID }) else {
+      return currentSnapshot()
+    }
+    guard records?[index].actionWasCorrect == false else {
+      return currentSnapshot()
+    }
+    guard records?[index].actionIssueReason != reason else {
+      return currentSnapshot()
+    }
+
+    let previousRecords = records ?? []
+    records?[index].actionIssueReason = reason
     needsPersistence = true
     do {
       try applyRetentionBounds()
@@ -507,7 +607,11 @@ actor DeveloperDiagnosticsStore {
       holdToListeningMilliseconds != record.holdToListeningMilliseconds
       || listeningToFirstTranscriptMilliseconds != record.listeningToFirstTranscriptMilliseconds
       || keyUpToFinalMilliseconds != record.keyUpToFinalMilliseconds
-    guard contentWasTruncated || timingWasInvalid else { return record }
+    let issueReasonWasInvalid =
+      record.actionWasCorrect != false && record.actionIssueReason != nil
+    guard contentWasTruncated || timingWasInvalid || issueReasonWasInvalid else {
+      return record
+    }
 
     return DeveloperTranscriptRecord(
       schemaVersion: record.schemaVersion,
@@ -523,12 +627,18 @@ actor DeveloperDiagnosticsStore {
       holdToListeningMilliseconds: holdToListeningMilliseconds,
       listeningToFirstTranscriptMilliseconds: listeningToFirstTranscriptMilliseconds,
       keyUpToFinalMilliseconds: keyUpToFinalMilliseconds,
+      maximumDurationReached: record.maximumDurationReached,
       outcome: record.outcome,
       commandKind: record.commandKind,
       capabilityIdentifier: record.capabilityIdentifier,
       unsupportedReason: record.unsupportedReason,
+      dictationFailureReason: record.dictationFailureReason,
+      dictationPreparationEvidence: record.dictationPreparationEvidence,
+      dictationInsertionEvidence: record.dictationInsertionEvidence,
+      captureFailureReason: record.captureFailureReason,
       transcriptWasAccurate: record.transcriptWasAccurate,
       actionWasCorrect: record.actionWasCorrect,
+      actionIssueReason: record.actionWasCorrect == false ? record.actionIssueReason : nil,
       processingDurationMilliseconds: record.processingDurationMilliseconds,
       appVersion: record.appVersion,
       appBuild: record.appBuild

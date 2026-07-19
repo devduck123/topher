@@ -10,7 +10,23 @@ percentiles without printing command text. These subjective ratings help find
 regressions but do not replace the controlled corpus below: Apple confidence,
 capability success, and intent success are not proxies for word error rate.
 
+Dictation records use the same transcript rating plus a separate insertion
+rating, and retain raw versus formatted/inserted text when those differ. A good
+insertion rating is not an accuracy claim: the controlled corpus must evaluate
+recognition, formatting, and focused-field behavior separately.
+
+Measure recognition and polish independently. Score recognition against the
+raw final transcript; score polish against the inserted text and the recorded
+typed reason. Otherwise a cleanup improvement can hide an ASR regression.
+
 ## Corpus
+
+The checked-in [`dogfood/manual-corpus.json`](../dogfood/manual-corpus.json) is
+the human acceptance menu for current commands, negative cases, dictation, and
+future context requests. The private gitignored observed-query corpus records
+what the user actually tried and is an input for expanding that checklist. It
+does not replace this controlled audio benchmark: sanitize and choose expected
+behavior before promoting any observed phrase.
 
 Use five natural takes of each phrase in a quiet room and five with typical room
 noise. Do not coach identical cadence between takes.
@@ -37,6 +53,18 @@ corpus must also include “Close the Chrome tab,” “What’s on my YouTube f
 two regular tabs with the same example title, one incognito tab, and a file URL.
 Those cases must refuse, remain unsupported, or be explicitly excluded without
 capturing page bodies or broadening permissions.
+
+Add a distinct prose/dictation corpus with developer terminology and natural
+punctuation, including `GraphQL`, `URLSession`, `pnpm`, repository names,
+domains, selected-text replacement, text adjacent to an existing word, two
+short paragraphs, and an utterance that should not receive terminal
+punctuation. Test the exact same audio independently from assistant commands so
+intent correction cannot hide recognition errors.
+
+Include clear one- to three-word restarts, repeated stutters, terminal repeated
+words, rhetorical repetition, repeated acronyms/numbers, punctuation and
+newline boundaries, and real user stutters. Preserve the user's actual intended
+repetition even when the raw transcript contains duplicate words.
 
 Expand this into 40–60 phrases covering supported navigation/search, developer
 terms, personal sites/apps, ambiguous negatives that must not execute, and
@@ -79,10 +107,26 @@ For every clip capture:
 - Idle CPU after warm-up, ten-minute energy impact, thermal-state changes, and
   battery delta under the same brightness/power conditions.
 - Partial-result revisions and early truncation.
+- Raw-to-formatted dictation diff, invented punctuation/capitalization count,
+  missing/extra boundary spaces, and semantic text changes (acceptance: zero).
+- Disfluency-removal precision and recall, intentional-repetition preservation,
+  and polish-only CPU latency. Report the fast tier separately from any future
+  context-aware tier and include timeout/fallback counts.
+- Focused-field insertion success by AppKit field, Chrome form control and
+  contenteditable surface, code editor, chat composer, and multiline editor.
+- Visible insertion success versus Topher's typed outcome, split by fixed
+  insertion method, verification level, and target role. False-positive success
+  acceptance is zero; report unverifiable and not-observed results separately.
+- Selection replacement, guarded undo, focus-change fallback, secure-field
+  refusal, and proof that no path synthesizes Return or writes the clipboard
+  without the explicit Copy action.
 - Failure and recovery after 100 sessions, sleep/wake, and microphone changes.
 
-Key-up is the end-of-utterance signal for push-to-talk. VAD may skip silence but
-must not delay or override explicit finalization.
+Key-up is the normal end-of-utterance signal for push-to-talk. VAD may skip
+silence but must not delay or override explicit finalization. The mode-specific
+maximum is a second bounded finalization signal—30 seconds for assistant
+commands and 120 seconds for dictation—and must preserve rather than discard
+the best transcript exactly once.
 
 ## Precommitted acceptance thresholds
 
@@ -98,6 +142,11 @@ with a written reason recorded before comparing candidates.
 - Warm speech-onset-to-first-partial latency: p50 at most 300 ms and p95 at most
   600 ms.
 - Warm key-up-to-final latency: p50 at most 350 ms and p95 at most 800 ms.
+- Fast deterministic polish latency: p95 at most 10 ms for a maximum-length
+  accepted utterance on the target Mac, with no asynchronous or network wait.
+- Polish safety: 100% preservation of intentional/ambiguous repetition and zero
+  semantic rewrites in the frozen corpus. Report recall rather than widening
+  rules to chase every stutter.
 - Cold start to first usable partial: p95 at most 2 seconds.
 - Reliability: 100 consecutive sessions complete or fail visibly, with zero
   wedged sessions; sleep/wake and microphone changes recover within one retry.

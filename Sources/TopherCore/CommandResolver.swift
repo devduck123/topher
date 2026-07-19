@@ -386,7 +386,8 @@ public struct CommandResolver: Sendable {
   }
 
   private func commandSearchQuery(_ text: String) -> SearchQuery? {
-    SearchQuery(removingLikelySentencePunctuation(from: text))
+    let payload = removingLikelySentencePunctuation(from: text)
+    return SearchQuery(SpokenTechnicalNotation.normalizing(in: payload).text)
   }
 
   private func removingLikelySentencePunctuation(from text: String) -> String {

@@ -89,6 +89,28 @@ def print_summary(title, records)
     "Interpretation/polish reasons:",
     counts(interpretation_records, "interpretationReason")
   )
+  preparation_records = records.select { |record| record["dictationPreparationEvidence"] }
+  print_counts(
+    "Dictation focus sources:",
+    preparation_records.each_with_object(Hash.new(0)) do |record, result|
+      value = record.dig("dictationPreparationEvidence", "focusSource")
+      result[value || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation preparation applications:",
+    preparation_records.each_with_object(Hash.new(0)) do |record, result|
+      value = record.dig("dictationPreparationEvidence", "targetApplication")
+      result[value || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation preparation failures:",
+    preparation_records.each_with_object(Hash.new(0)) do |record, result|
+      value = record.dig("dictationPreparationEvidence", "failureReason")
+      result[value || "ready"] += 1
+    end
+  )
   insertion_records = records.select { |record| record["dictationInsertionEvidence"] }
   print_counts(
     "Dictation insertion methods:",
@@ -109,12 +131,61 @@ def print_summary(title, records)
     end
   )
   print_counts(
+    "Dictation target applications:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      application = record.dig("dictationInsertionEvidence", "target", "application")
+      result[application || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation selection relations:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      relation = record.dig("dictationInsertionEvidence", "selectionRelation")
+      result[relation || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation placeholder states:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      state = record.dig("dictationInsertionEvidence", "placeholderState")
+      result[state || "not recorded"] += 1
+    end
+  )
+  print_counts(
+    "Dictation attribute decisions:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      decision = record.dig("dictationInsertionEvidence", "attributeDecision")
+      result[decision || "not recorded"] += 1
+    end
+  )
+  print_counts(
     "Whole-value adapter decisions:",
     insertion_records.each_with_object(Hash.new(0)) do |record, result|
       decision = record.dig("dictationInsertionEvidence", "wholeValueDecision")
       result[decision || "not recorded"] += 1
     end
   )
+  print_counts(
+    "Semantic composer decisions:",
+    insertion_records.each_with_object(Hash.new(0)) do |record, result|
+      decision = record.dig("dictationInsertionEvidence", "semanticContentDecision")
+      result[decision || "not recorded"] += 1
+    end
+  )
+  {
+    "Semantic suggestion-attribute states:" => "semanticSuggestionAttributeState",
+    "Semantic character-count states:" => "semanticCharacterCountState",
+    "Semantic text-marker states:" => "semanticTextMarkerState",
+    "Semantic known-suggestion states:" => "semanticKnownSuggestionState",
+  }.each do |label, key|
+    print_counts(
+      label,
+      insertion_records.each_with_object(Hash.new(0)) do |record, result|
+        state = record.dig("dictationInsertionEvidence", key)
+        result[state || "not recorded"] += 1
+      end
+    )
+  end
 
   timings = {
     "hold to listening" => "holdToListeningMilliseconds",

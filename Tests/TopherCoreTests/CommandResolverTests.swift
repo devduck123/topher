@@ -233,6 +233,11 @@ final class CommandResolverTests: XCTestCase {
       ("Search Chrome for Ball is Life", .google, "Ball is Life"),
       ("Search in Chrome for Swift concurrency", .google, "Swift concurrency"),
       ("Chrome search for GPT 5", .google, "GPT 5"),
+      (
+        "Search Chrome for what are some good UI slash UX principles?",
+        .google,
+        "what are some good UI/UX principles"
+      ),
     ]
 
     for (transcript, provider, queryText) in cases {
@@ -243,6 +248,27 @@ final class CommandResolverTests: XCTestCase {
         query.map { .resolved(.searchWeb(provider: provider, query: $0)) }
       )
     }
+  }
+
+  func testSearchTechnicalNotationNormalizationRemainsConservative() throws {
+    XCTAssertEqual(
+      resolver.resolve("Search Chrome for UI slash UX principles"),
+      .resolved(
+        .searchWeb(
+          provider: .google,
+          query: try XCTUnwrap(SearchQuery("UI/UX principles"))
+        )
+      )
+    )
+    XCTAssertEqual(
+      resolver.resolve("Search Chrome for turn left slash right at the fork"),
+      .resolved(
+        .searchWeb(
+          provider: .google,
+          query: try XCTUnwrap(SearchQuery("turn left slash right at the fork"))
+        )
+      )
+    )
   }
 
   func testSearchWithoutAQueryFailsClosed() {

@@ -95,6 +95,7 @@ struct AssistantCommandTrace: Equatable, Sendable {
   let capabilityIdentifier: String?
   let unsupportedReason: UnsupportedCommandReason?
   let dictationFailureReason: DictationFailureReason?
+  let dictationPreparationEvidence: FocusedTextPreparationEvidence?
   let dictationInsertionEvidence: FocusedTextInsertionEvidence?
 
   init(
@@ -103,6 +104,7 @@ struct AssistantCommandTrace: Equatable, Sendable {
     capabilityIdentifier: String?,
     unsupportedReason: UnsupportedCommandReason? = nil,
     dictationFailureReason: DictationFailureReason? = nil,
+    dictationPreparationEvidence: FocusedTextPreparationEvidence? = nil,
     dictationInsertionEvidence: FocusedTextInsertionEvidence? = nil
   ) {
     self.outcome = outcome
@@ -110,6 +112,7 @@ struct AssistantCommandTrace: Equatable, Sendable {
     self.capabilityIdentifier = capabilityIdentifier
     self.unsupportedReason = unsupportedReason
     self.dictationFailureReason = dictationFailureReason
+    self.dictationPreparationEvidence = dictationPreparationEvidence
     self.dictationInsertionEvidence = dictationInsertionEvidence
   }
 }
@@ -141,6 +144,7 @@ struct DeveloperTranscriptRecord: Codable, Equatable, Identifiable, Sendable {
   let capabilityIdentifier: String?
   let unsupportedReason: UnsupportedCommandReason?
   let dictationFailureReason: DictationFailureReason?
+  let dictationPreparationEvidence: FocusedTextPreparationEvidence?
   let dictationInsertionEvidence: FocusedTextInsertionEvidence?
   let captureFailureReason: PushToTalkCaptureFailure?
   var transcriptWasAccurate: Bool?
@@ -373,6 +377,7 @@ actor DeveloperDiagnosticsStore {
       capabilityIdentifier: draft.trace.capabilityIdentifier,
       unsupportedReason: draft.trace.unsupportedReason,
       dictationFailureReason: draft.trace.dictationFailureReason,
+      dictationPreparationEvidence: draft.trace.dictationPreparationEvidence,
       dictationInsertionEvidence: draft.trace.dictationInsertionEvidence,
       captureFailureReason: draft.captureFailureReason,
       transcriptWasAccurate: nil,
@@ -625,6 +630,7 @@ actor DeveloperDiagnosticsStore {
       capabilityIdentifier: record.capabilityIdentifier,
       unsupportedReason: record.unsupportedReason,
       dictationFailureReason: record.dictationFailureReason,
+      dictationPreparationEvidence: record.dictationPreparationEvidence,
       dictationInsertionEvidence: record.dictationInsertionEvidence,
       captureFailureReason: record.captureFailureReason,
       transcriptWasAccurate: record.transcriptWasAccurate,

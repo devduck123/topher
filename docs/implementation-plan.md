@@ -285,6 +285,48 @@ not parallel implementation projects. The canonical contracts are
   write; keep native and rich surfaces fail-closed; expose the fixed adapter
   decision in local diagnostics; and give the menu popover a deterministic
   readable height instead of allowing its scroll content to collapse.
+- Complete in build 16 source: close the live Codex suggestion-text corruption
+  path by refusing placeholder-backed values and non-end selections before any
+  web whole-value write. Replace font-only classification with a bounded
+  attributed-run classifier that accepts uniform presentation and transient
+  spellcheck differences but rejects semantic, unknown, styled, linked, listed,
+  attached, or mixed content. Retain only a fixed app family plus structural
+  selection/placeholder/attribute evidence, and restore the latest three
+  requests with transcript/action ratings in the menu. Live Codex/ChatGPT and
+  Notion acceptance remains pending.
+- Complete in build 17 source: recover a focused element from the frontmost
+  application only when the system-wide Accessibility lookup is unavailable,
+  with process identity revalidated before every mutation and undo. Recognize
+  Terminal and Visual Studio Code as fixed app families and retain content-free
+  preparation source/failure evidence. For Codex/ChatGPT only, replace a
+  nonempty-looking caret-at-start value with the transcript alone when the full
+  value is proven suggestion-only or independent character-count and web
+  text-marker evidence both prove an empty logical editor. Re-read that proof
+  before exactly one whole-value write; keep authored, mixed, marked, missing,
+  or inconsistent evidence fail-closed. Extend the dictation alternative
+  selector to correct multiple uniquely corroborated known developer terms in
+  one utterance without exposing their risky spoken forms to command routing.
+  Terminal remains an explicit non-mutating review/copy fallback. Live app
+  acceptance remains pending.
+- Complete in build 18 source: evaluate Codex/ChatGPT suggestion attributes,
+  character count, full web text-marker state, and the exact observed
+  app-owned suggestion as separate content-free signals instead of treating a
+  positive character count as an early authored-content verdict. Revalidate
+  the identical signal bundle before replacing the suggestion and require
+  authored-content evidence after the write. Extend the Notion adapter only to
+  unchanged start/middle carets in bounded, single-line, object-free, uniformly
+  presented text; multiline and rich blocks remain fail-closed. Allow `get` to
+  become `git` only from one exact Apple alternative, and retain the new fixed
+  semantic states in local diagnostics. Live app acceptance remains pending.
+- Complete in build 19 source: address Build 18 dogfood findings by adding
+  punctuation-aware insertion-boundary spacing; after exact whole-value content
+  readback, retry only caret placement and confirm it after a bounded delay;
+  share the existing strong-token spoken-slash formatter with web-search query
+  payloads while retaining the raw transcript; and admit `Kodex` → `Codex` and
+  `impending` → `prepending` only when one Apple alternative corroborates the
+  entire lexical change. Keep authored Codex start/middle content unchanged and
+  explain its review/copy fallback instead of widening whole-value mutation to
+  ambiguous or rich content. Live Build 19 acceptance remains pending.
 - Pending: benchmark a separately optional smart-formatting tier using the full
   finalized utterance and typed destination-app identity. Precommit a deadline,
   fall back to the fast tier on timeout or uncertainty, retain raw text and

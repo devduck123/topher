@@ -8,6 +8,8 @@ struct MenuContentView: View {
   @ObservedObject var model: TopherModel
   @ObservedObject var diagnostics: DeveloperDiagnosticsController
 
+  @Environment(\.openSettings) private var openSettings
+
   @State private var isAssistantShortcutConfigured =
     KeyboardShortcuts.getShortcut(for: .pushToTalk) != nil
   @State private var isDictationShortcutConfigured =
@@ -18,6 +20,13 @@ struct MenuContentView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 14) {
           phaseHeader
+
+          if !diagnostics.latestRecords.isEmpty {
+            MenuRecentActivityView(
+              diagnostics: diagnostics,
+              viewAll: openDeveloperSettings
+            )
+          }
 
           VStack(spacing: 8) {
             ShortcutModeRow(
@@ -249,6 +258,177 @@ struct MenuContentView: View {
     isDictationShortcutConfigured = KeyboardShortcuts.getShortcut(for: .dictation) != nil
     model.refreshVoiceReadiness()
     model.refreshAccessibilityPermission()
+  }
+
+  private func openDeveloperSettings() {
+    UserDefaults.standard.set(
+      TopherSettingsSection.developer.rawValue,
+      forKey: TopherSettingsSection.preferenceKey
+    )
+    openSettings()
+  }
+}
+
+private struct MenuRecentActivityView: View {
+  @ObservedObject var diagnostics: DeveloperDiagnosticsController
+  let viewAll: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Label("Recent activity", systemImage: "clock.arrow.circlepath")
+          .font(.caption.weight(.semibold))
+
+        Spacer()
+
+        Button("View all", action: viewAll)
+          .buttonStyle(.plain)
+          .font(.caption2)
+          .foregroundStyle(Color.accentColor)
+      }
+
+      ForEach(diagnostics.latestRecords) { record in
+        MenuRecentActivityRow(record: record, diagnostics: diagnostics)
+      }
+    }
+    .padding(10)
+    .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
+  }
+}
+
+private struct MenuRecentActivityRow: View {
+  let record: DeveloperTranscriptRecord
+  @ObservedObject var diagnostics: DeveloperDiagnosticsController
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 5) {
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
+        Text(record.transcript.isEmpty ? "(No usable speech)" : record.transcript)
+          .font(.caption)
+          .lineLimit(2)
+          .help(record.transcript)
+
+        Spacer(minLength: 4)
+
+        Text(record.outcome.displayName)
+          .font(.caption2.weight(.medium))
+          .foregroundStyle(outcomeTint)
+      }
+
+      HStack(spacing: 10) {
+        if record.source == .voice || record.source == .dictation {
+          feedbackControl(
+            label: "Transcript",
+            value: record.transcriptWasAccurate,
+            dimension: .transcriptAccuracy
+          )
+        }
+
+        feedbackControl(
+          label: record.source == .dictation ? "Insertion" : "Action",
+          value: record.actionWasCorrect,
+          dimension: .actionCorrectness
+        )
+
+        if record.actionWasCorrect == false {
+          issueMenu
+        }
+
+        Spacer(minLength: 0)
+
+        Text(record.recordedAt, style: .time)
+          .font(.caption2)
+          .foregroundStyle(.tertiary)
+      }
+    }
+    .padding(.vertical, 2)
+    .accessibilityElement(children: .contain)
+  }
+
+  private func feedbackControl(
+    label: String,
+    value: Bool?,
+    dimension: DeveloperDiagnosticFeedbackDimension
+  ) -> some View {
+    HStack(spacing: 3) {
+      Text(label)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+
+      feedbackButton(
+        systemImage: value == true ? "hand.thumbsup.fill" : "hand.thumbsup",
+        accessibilityLabel: "\(label) correct",
+        isSelected: value == true
+      ) {
+        diagnostics.setFeedback(
+          for: record,
+          dimension: dimension,
+          value: value == true ? nil : true
+        )
+      }
+
+      feedbackButton(
+        systemImage: value == false ? "hand.thumbsdown.fill" : "hand.thumbsdown",
+        accessibilityLabel: "\(label) incorrect",
+        isSelected: value == false
+      ) {
+        diagnostics.setFeedback(
+          for: record,
+          dimension: dimension,
+          value: value == false ? nil : false
+        )
+      }
+    }
+  }
+
+  private func feedbackButton(
+    systemImage: String,
+    accessibilityLabel: String,
+    isSelected: Bool,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .font(.caption2)
+        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+    }
+    .buttonStyle(.plain)
+    .disabled(diagnostics.isUpdating)
+    .accessibilityLabel(accessibilityLabel)
+    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+  }
+
+  private var issueMenu: some View {
+    Menu {
+      ForEach(DeveloperActionIssueReason.allCases, id: \.self) { reason in
+        Button {
+          diagnostics.setActionIssueReason(for: record, reason: reason)
+        } label: {
+          if record.actionIssueReason == reason {
+            Label(reason.displayName, systemImage: "checkmark")
+          } else {
+            Text(reason.displayName)
+          }
+        }
+      }
+    } label: {
+      Image(systemName: record.actionIssueReason == nil ? "tag" : "tag.fill")
+        .font(.caption2)
+    }
+    .menuStyle(.borderlessButton)
+    .disabled(diagnostics.isUpdating)
+    .accessibilityLabel("Incorrect action reason")
+  }
+
+  private var outcomeTint: Color {
+    switch record.outcome {
+    case .capabilitySucceeded, .dictationInserted:
+      .green
+    case .dictationFallback, .unsupported, .policyDenied, .noUsableSpeech:
+      .orange
+    case .captureFailed, .capabilityFailed, .dictationFailed:
+      .red
+    }
   }
 }
 

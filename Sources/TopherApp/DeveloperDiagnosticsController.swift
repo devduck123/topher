@@ -5,6 +5,8 @@ import TopherCore
 
 @MainActor
 final class DeveloperDiagnosticsController: ObservableObject {
+  static let latestRecordLimit = 3
+
   @Published private(set) var isEnabled: Bool
   @Published private(set) var records: [DeveloperTranscriptRecord] = []
   @Published private(set) var isUpdating = false
@@ -14,7 +16,7 @@ final class DeveloperDiagnosticsController: ObservableObject {
   let storageFileURL: URL
 
   var latestRecords: [DeveloperTranscriptRecord] {
-    Array(records.suffix(3).reversed())
+    Array(records.suffix(Self.latestRecordLimit).reversed())
   }
 
   var retentionSummary: String {

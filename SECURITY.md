@@ -45,14 +45,22 @@ development build. There is not yet a notarized public binary release.
   of trusting the framework setter result. The plain-value adapter may
   transiently read at most 16,384 UTF-16 units and is restricted to writable
   text fields, empty text areas, full-value text-area replacement, or an
-  object-free, uniformly plain web-descendant text area whose existing value is
-  at most 4,096 UTF-16 units. The bounded web ancestor and uniform attributed
-  value must be observed both before capture and immediately before mutation;
-  the selection may be mid-value and the plain value may contain newlines. It
-  is not used for rich, mixed-format, object-bearing, oversized, cyclic, or
-  structurally changing web composers, native partially selected nonempty text
-  areas, or protected content, and the captured value and attributes are never
-  logged or persisted separately.
+  object-free web-descendant text area whose existing value is at most 4,096
+  UTF-16 units and whose caret is exactly at the value end, except for the
+  separately proven Codex/ChatGPT semantic-empty case and bounded Notion
+  single-line caret case below. The bounded web
+  ancestor, placeholder state, and attributed-value classification must be
+  observed before capture and revalidated immediately before mutation. Uniform
+  presentation and varying spellcheck metadata are permitted; placeholder-
+  backed values, unproven start/middle/partial selections outside that Notion
+  case, attributes exposing links,
+  attachments, or list markers, styled/mixed/unknown attributes,
+  oversized/cyclic/structurally changing web
+  composers, native partially selected nonempty text areas, and protected
+  content fail closed. Captured values and attributes are never logged or
+  persisted separately. A Notion start/middle caret may use whole-value
+  insertion only when the value is single-line, object-free, length-bounded,
+  uniformly presented, unchanged, and exactly verified afterward.
 - Dictation never synthesizes Return, submits, sends, or mutates the clipboard
   automatically. Copy is a separate explicit action, and guarded undo refuses
   to run after the focus, caret, or inserted content changes.
@@ -64,6 +72,16 @@ development build. There is not yet a notarized public binary release.
   retained. An Apple alternative may replace dictation only when it uniquely
   equals a configured vocabulary correction; unrelated prose changes are
   rejected. Recovered partials are never polished.
+- When the system-wide focused element is unavailable, dictation may query only
+  the current frontmost application's focused element and must preserve that
+  process identity through mutation verification. Codex/ChatGPT suggestion text
+  may be replaced only when bounded semantic Accessibility evidence proves the
+  logical composer is empty or the entire bounded value exactly equals the
+  observed app-owned suggestion. Suggestion attributes, character count,
+  text-marker state, and the exact compatibility classification are evaluated
+  independently and revalidated; missing, mixed, marked, changed, or ordinary
+  authored evidence fails closed. Terminal input never falls back to synthesized
+  keys, paste, or command execution.
 - Raw audio and screen captures are not persisted beyond the active request by
   default.
 - Sensitive content is excluded from ordinary logs.
@@ -77,6 +95,10 @@ development build. There is not yet a notarized public binary release.
   refused before capture; if the target becomes secure during the hold, Topher
   discards the final text without a preview or developer record. Revisit the
   default before distribution.
+  Preparation and insertion evidence may retain one fixed application family,
+  focus source, failure reason, and structural/semantic enums for local
+  compatibility testing; it never retains a raw bundle ID, process ID, window
+  title, URL, selected text, suggestion text, or additional field content.
 - A developer may explicitly copy recent trace records into the bounded,
   gitignored `.topher-local/dogfood/observed-queries.json` corpus. Topher never
   creates this second sink automatically, the exporter excludes dictation

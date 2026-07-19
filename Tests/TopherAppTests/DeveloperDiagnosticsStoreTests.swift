@@ -266,6 +266,11 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
           commandKind: nil,
           capabilityIdentifier: nil,
           dictationFailureReason: .mutationUnverified,
+          dictationPreparationEvidence: FocusedTextPreparationEvidence(
+            failureReason: .textMutationSetterUnavailable,
+            focusSource: .frontmostApplication,
+            targetApplication: .terminal
+          ),
           dictationInsertionEvidence: FocusedTextInsertionEvidence(
             method: .selectedText,
             verification: .unavailable,
@@ -273,9 +278,18 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
               role: .textArea,
               canSetSelectedText: true,
               canSetSelectedRange: true,
-              canSetValue: false
+              canSetValue: false,
+              application: .notion
             ),
-            wholeValueDecision: .rejectedValueNotSettable
+            wholeValueDecision: .rejectedValueNotSettable,
+            selectionRelation: .caretAtEnd,
+            placeholderState: .present,
+            attributeDecision: .rejectedSemanticOrUnknownAttribute,
+            semanticContentDecision: .knownApplicationSuggestion,
+            semanticSuggestionAttributeState: .notSuggestion,
+            semanticCharacterCountState: .positive,
+            semanticTextMarkerState: .nonempty,
+            semanticKnownSuggestionState: .recognized
           )
         ),
         processingDurationMilliseconds: 0,
@@ -289,13 +303,39 @@ final class DeveloperDiagnosticsStoreTests: XCTestCase {
     XCTAssertEqual(record.maximumDurationReached, true)
     XCTAssertEqual(record.captureFailureReason, .finalizationTimedOut)
     XCTAssertEqual(record.dictationFailureReason, .mutationUnverified)
+    XCTAssertEqual(
+      record.dictationPreparationEvidence,
+      FocusedTextPreparationEvidence(
+        failureReason: .textMutationSetterUnavailable,
+        focusSource: .frontmostApplication,
+        targetApplication: .terminal
+      )
+    )
     XCTAssertEqual(record.dictationInsertionEvidence?.method, .selectedText)
     XCTAssertEqual(record.dictationInsertionEvidence?.verification, .unavailable)
     XCTAssertEqual(record.dictationInsertionEvidence?.target.role, .textArea)
+    XCTAssertEqual(record.dictationInsertionEvidence?.target.application, .notion)
+    XCTAssertEqual(record.dictationInsertionEvidence?.selectionRelation, .caretAtEnd)
+    XCTAssertEqual(record.dictationInsertionEvidence?.placeholderState, .present)
+    XCTAssertEqual(
+      record.dictationInsertionEvidence?.attributeDecision,
+      .rejectedSemanticOrUnknownAttribute
+    )
     XCTAssertEqual(
       record.dictationInsertionEvidence?.wholeValueDecision,
       .rejectedValueNotSettable
     )
+    XCTAssertEqual(
+      record.dictationInsertionEvidence?.semanticContentDecision,
+      .knownApplicationSuggestion
+    )
+    XCTAssertEqual(
+      record.dictationInsertionEvidence?.semanticSuggestionAttributeState,
+      .notSuggestion
+    )
+    XCTAssertEqual(record.dictationInsertionEvidence?.semanticCharacterCountState, .positive)
+    XCTAssertEqual(record.dictationInsertionEvidence?.semanticTextMarkerState, .nonempty)
+    XCTAssertEqual(record.dictationInsertionEvidence?.semanticKnownSuggestionState, .recognized)
 
     let reloaded = try await makeStore(initialEnabled: false).snapshot()
     XCTAssertEqual(reloaded.records.first, record)

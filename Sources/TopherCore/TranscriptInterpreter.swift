@@ -41,6 +41,7 @@ public struct TranscriptVocabulary: Equatable, Sendable {
       .init(canonicalTerm: "Node.js", spokenForms: ["node js"]),
       .init(canonicalTerm: "npm"),
       .init(canonicalTerm: "pnpm"),
+      .init(canonicalTerm: "git"),
       .init(canonicalTerm: "React"),
       .init(canonicalTerm: "Next.js", spokenForms: ["next js"]),
       .init(canonicalTerm: "Vercel"),
@@ -52,6 +53,7 @@ public struct TranscriptVocabulary: Equatable, Sendable {
       .init(canonicalTerm: "CI/CD", spokenForms: ["CI CD"]),
       .init(canonicalTerm: "OpenAI", spokenForms: ["open AI"]),
       .init(canonicalTerm: "Codex"),
+      .init(canonicalTerm: "prepending"),
       .init(canonicalTerm: "Xcode", spokenForms: ["X code"]),
       .init(canonicalTerm: "SwiftUI", spokenForms: ["Swift UI"]),
     ]
@@ -121,9 +123,24 @@ public enum TranscriptInterpretationReason: String, Codable, Equatable, Sendable
 }
 
 /// Selects an alternative for dictation only when it is uniquely equivalent to
-/// replacing a known spoken form with its canonical personal-vocabulary term.
-/// It never performs general hypothesis ranking or rewrites unrelated prose.
+/// replacing one or more known spoken forms with their canonical
+/// personal-vocabulary terms. Every lexical difference must be explained by a
+/// whole-phrase vocabulary mapping, so this never performs general hypothesis
+/// ranking or rewrites unrelated prose.
 public struct DictationTranscriptSelector: Sendable {
+  // These observed ASR forms are intentionally available only while proving
+  // an Apple dictation alternative. In particular, teaching the shared
+  // command vocabulary that "for sale" means "Vercel" could silently alter a
+  // legitimate web search without alternative corroboration.
+  private static let alternativeOnlySpokenForms: [String: [String]] = [
+    TranscriptVocabulary.normalized("React"): ["react js"],
+    TranscriptVocabulary.normalized("Vercel"): ["for sale"],
+    TranscriptVocabulary.normalized("Kubernetes"): ["kubernetti's"],
+    TranscriptVocabulary.normalized("git"): ["get"],
+    TranscriptVocabulary.normalized("Codex"): ["kodex"],
+    TranscriptVocabulary.normalized("prepending"): ["impending"],
+  ]
+
   private let vocabulary: TranscriptVocabulary
 
   public init(vocabulary: TranscriptVocabulary = .developerDefaults) {
@@ -135,24 +152,16 @@ public struct DictationTranscriptSelector: Sendable {
     alternatives: [TranscriptHypothesis] = []
   ) -> TranscriptInterpretation {
     let raw = primary.text.trimmingCharacters(in: .whitespacesAndNewlines)
-    var candidates: [String] = []
-
-    for entry in vocabulary.entries {
-      for spokenForm in entry.spokenForms {
-        let corrected = Self.replacingPhrase(
-          spokenForm,
-          with: entry.canonicalTerm,
-          in: raw
+    let candidates = alternatives.compactMap { alternative -> String? in
+      let candidate = alternative.text.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard
+        Self.isVocabularyCanonicalization(
+          from: raw,
+          to: candidate,
+          vocabulary: vocabulary
         )
-        guard corrected != raw else { continue }
-        let correctedKey = TranscriptVocabulary.normalized(corrected)
-        guard
-          alternatives.contains(where: {
-            TranscriptVocabulary.normalized($0.text) == correctedKey
-          })
-        else { continue }
-        candidates.append(corrected)
-      }
+      else { return nil }
+      return candidate
     }
 
     let unique = Dictionary(
@@ -176,37 +185,86 @@ public struct DictationTranscriptSelector: Sendable {
     )
   }
 
-  private static func replacingPhrase(
-    _ phrase: String,
-    with replacement: String,
-    in text: String
-  ) -> String {
-    guard
-      let range = text.range(
-        of: phrase,
-        options: [.caseInsensitive, .diacriticInsensitive]
-      ),
-      isPhraseBoundary(range.lowerBound, in: text, preceding: true),
-      isPhraseBoundary(range.upperBound, in: text, preceding: false)
-    else { return text }
-    return text.replacingCharacters(in: range, with: replacement)
+  private static func isVocabularyCanonicalization(
+    from primary: String,
+    to alternative: String,
+    vocabulary: TranscriptVocabulary
+  ) -> Bool {
+    let primaryTokens = normalizedTokens(primary)
+    let alternativeTokens = normalizedTokens(alternative)
+    guard !primaryTokens.isEmpty, !alternativeTokens.isEmpty else { return false }
+
+    let replacements = vocabulary.entries.flatMap { entry -> [TokenReplacement] in
+      let canonicalTokens = normalizedTokens(entry.canonicalTerm)
+      guard !canonicalTokens.isEmpty else { return [] }
+      let alternativeOnlyForms = alternativeOnlySpokenForms[
+        TranscriptVocabulary.normalized(entry.canonicalTerm),
+        default: []
+      ]
+      return (entry.spokenForms + alternativeOnlyForms).compactMap { spokenForm in
+        let spokenTokens = normalizedTokens(spokenForm)
+        guard !spokenTokens.isEmpty, spokenTokens != canonicalTokens else { return nil }
+        return TokenReplacement(spoken: spokenTokens, canonical: canonicalTokens)
+      }
+    }
+
+    // The alignment graph is acyclic: every transition consumes at least one
+    // token on both sides. `unchanged` tracks paths with no correction yet;
+    // `corrected` tracks paths containing at least one known canonicalization.
+    let columnCount = alternativeTokens.count + 1
+    let stateCount = (primaryTokens.count + 1) * columnCount
+    var unchanged = Array(repeating: false, count: stateCount)
+    var corrected = Array(repeating: false, count: stateCount)
+    unchanged[0] = true
+
+    for primaryIndex in 0...primaryTokens.count {
+      for alternativeIndex in 0...alternativeTokens.count {
+        let state = primaryIndex * columnCount + alternativeIndex
+        guard unchanged[state] || corrected[state] else { continue }
+
+        if primaryIndex < primaryTokens.count,
+          alternativeIndex < alternativeTokens.count,
+          primaryTokens[primaryIndex] == alternativeTokens[alternativeIndex]
+        {
+          let next = (primaryIndex + 1) * columnCount + alternativeIndex + 1
+          unchanged[next] = unchanged[next] || unchanged[state]
+          corrected[next] = corrected[next] || corrected[state]
+        }
+
+        for replacement in replacements
+        where tokens(primaryTokens, at: primaryIndex, havePrefix: replacement.spoken)
+          && tokens(
+            alternativeTokens,
+            at: alternativeIndex,
+            havePrefix: replacement.canonical
+          )
+        {
+          let nextPrimary = primaryIndex + replacement.spoken.count
+          let nextAlternative = alternativeIndex + replacement.canonical.count
+          corrected[nextPrimary * columnCount + nextAlternative] = true
+        }
+      }
+    }
+
+    return corrected[stateCount - 1]
   }
 
-  private static func isPhraseBoundary(
-    _ index: String.Index,
-    in text: String,
-    preceding: Bool
+  private static func normalizedTokens(_ text: String) -> [String] {
+    TranscriptVocabulary.normalized(text).split(separator: " ").map(String.init)
+  }
+
+  private static func tokens(
+    _ tokens: [String],
+    at index: Int,
+    havePrefix prefix: [String]
   ) -> Bool {
-    let adjacentIndex: String.Index
-    if preceding {
-      guard index != text.startIndex else { return true }
-      adjacentIndex = text.index(before: index)
-    } else {
-      guard index != text.endIndex else { return true }
-      adjacentIndex = index
-    }
-    let character = text[adjacentIndex]
-    return !character.isLetter && !character.isNumber
+    guard index + prefix.count <= tokens.count else { return false }
+    return tokens[index..<(index + prefix.count)].elementsEqual(prefix)
+  }
+
+  private struct TokenReplacement {
+    let spoken: [String]
+    let canonical: [String]
   }
 }
 

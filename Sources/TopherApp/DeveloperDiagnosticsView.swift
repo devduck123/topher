@@ -160,6 +160,13 @@ struct DeveloperDiagnosticsView: View {
           .foregroundStyle(.secondary)
       }
 
+      if let evidence = record.dictationPreparationEvidence {
+        Text(preparationEvidenceSummary(evidence))
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(2)
+      }
+
       if let evidence = record.dictationInsertionEvidence {
         Text(insertionEvidenceSummary(evidence))
           .font(.caption2)
@@ -333,10 +340,55 @@ struct DeveloperDiagnosticsView: View {
   private func insertionEvidenceSummary(_ evidence: FocusedTextInsertionEvidence) -> String {
     var summary =
       "Adapter: \(evidence.method.rawValue) · \(evidence.verification.rawValue) · \(evidence.target.role.rawValue)"
+    if let application = evidence.target.application {
+      summary += " · \(application.displayName)"
+    }
+    if let selectionRelation = evidence.selectionRelation {
+      summary += " · \(selectionRelation.displayName)"
+    }
     if let decision = evidence.wholeValueDecision {
       summary += " · \(decision.displayName)"
     }
+    if evidence.placeholderState == .matchesValue {
+      summary += " · Placeholder-backed value"
+    }
+    if let attributeDecision = evidence.attributeDecision,
+      attributeDecision != .notEvaluated
+    {
+      summary += " · \(attributeDecision.displayName)"
+    }
+    if let semanticDecision = evidence.semanticContentDecision,
+      semanticDecision != .notEvaluated
+    {
+      summary += " · \(semanticDecision.displayName)"
+      if let state = evidence.semanticSuggestionAttributeState {
+        summary += " · suggestion=\(state.rawValue)"
+      }
+      if let state = evidence.semanticCharacterCountState {
+        summary += " · characters=\(state.rawValue)"
+      }
+      if let state = evidence.semanticTextMarkerState {
+        summary += " · marker=\(state.rawValue)"
+      }
+      if let state = evidence.semanticKnownSuggestionState {
+        summary += " · known-suggestion=\(state.rawValue)"
+      }
+    }
     return summary
+  }
+
+  private func preparationEvidenceSummary(_ evidence: FocusedTextPreparationEvidence) -> String {
+    var parts = ["Target preparation"]
+    if let application = evidence.targetApplication {
+      parts.append(application.displayName)
+    }
+    if let source = evidence.focusSource {
+      parts.append(source == .systemWide ? "system focus" : "application focus")
+    }
+    if let reason = evidence.failureReason {
+      parts.append(reason.rawValue)
+    }
+    return parts.joined(separator: " · ")
   }
 
   private func confirmationAlert(_ confirmation: Confirmation) -> Alert {
@@ -393,6 +445,10 @@ extension FocusedTextWholeValueDecision {
       "Full selection eligible"
     case .eligiblePlainWebComposer:
       "Plain web composer eligible"
+    case .eligiblePlainWebSelection:
+      "Plain web caret insertion eligible"
+    case .eligibleSemanticallyEmptyWebComposer:
+      "Semantically empty web composer eligible"
     case .rejectedValueUnavailableOrInconsistent:
       "Value unavailable or inconsistent"
     case .rejectedValueNotSettable:
@@ -407,6 +463,100 @@ extension FocusedTextWholeValueDecision {
       "Web value contains an object"
     case .rejectedRichWebValue:
       "Web value has mixed formatting"
+    case .rejectedAmbiguousWebSelection:
+      "Web selection is ambiguous"
+    case .rejectedPlaceholderBackedValue:
+      "Value matches placeholder"
+    }
+  }
+}
+
+extension FocusedTextTargetApplication {
+  fileprivate var displayName: String {
+    switch self {
+    case .chrome:
+      "Chrome"
+    case .codexOrChatGPT:
+      "Codex/ChatGPT"
+    case .notion:
+      "Notion"
+    case .notes:
+      "Notes"
+    case .safari:
+      "Safari"
+    case .terminal:
+      "Terminal"
+    case .visualStudioCode:
+      "Visual Studio Code"
+    case .other:
+      "Other app"
+    case .unknown:
+      "Unknown app"
+    }
+  }
+}
+
+extension FocusedTextSemanticContentDecision {
+  fileprivate var displayName: String {
+    switch self {
+    case .notEvaluated:
+      "Semantic content not evaluated"
+    case .explicitSuggestionOnly:
+      "Suggestion-only content"
+    case .corroboratedLogicalEmpty:
+      "Logically empty editor"
+    case .knownApplicationSuggestion:
+      "Known application suggestion"
+    case .mixedSuggestionAndContent:
+      "Mixed suggestion and authored content"
+    case .logicalContentPresent:
+      "Authored content present"
+    case .markedTextActive:
+      "Marked text active"
+    case .evidenceUnavailable:
+      "Semantic evidence unavailable"
+    case .evidenceInconsistent:
+      "Semantic evidence inconsistent"
+    }
+  }
+}
+
+extension FocusedTextSelectionRelation {
+  fileprivate var displayName: String {
+    switch self {
+    case .emptyValue:
+      "Empty value"
+    case .caretAtStart:
+      "Caret at start"
+    case .caretAtEnd:
+      "Caret at end"
+    case .caretInMiddle:
+      "Caret in middle"
+    case .fullValue:
+      "Full selection"
+    case .partialSelection:
+      "Partial selection"
+    }
+  }
+}
+
+extension FocusedTextAttributeDecision {
+  fileprivate var displayName: String {
+    switch self {
+    case .notEvaluated:
+      "Attributes not evaluated"
+    case .eligibleFontOnly:
+      "Font-only plain text"
+    case .eligibleUniformPresentation:
+      "Uniform presentation"
+    case .rejectedUnavailableOrInconsistent:
+      "Attributed value unavailable"
+    case .rejectedMixedPresentation:
+      "Mixed presentation"
+    case .rejectedSemanticOrUnknownAttribute:
+      "Semantic or unknown attribute"
+    case .rejectedStyledFont:
+      "Styled font"
     }
   }
 }
@@ -466,7 +616,7 @@ extension DictationFailureReason {
 }
 
 extension DeveloperActionIssueReason {
-  fileprivate var displayName: String {
+  var displayName: String {
     switch self {
     case .duplicatedText:
       "Duplicated text"

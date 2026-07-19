@@ -55,6 +55,18 @@ follow-up is decision
 [`0017`](decisions/0017-bounded-contextual-dictation-followup.md).
 The deep, uniform web-composer insertion boundary is decision
 [`0018`](decisions/0018-bounded-uniform-web-composer-insertion.md).
+The semantic end-append, placeholder-refusal, and bounded app-family evidence
+boundary is decision
+[`0019`](decisions/0019-require-semantic-web-append-evidence.md).
+Application-scoped focus recovery and the Codex/ChatGPT semantic empty-composer
+exception are decision
+[`0020`](decisions/0020-recover-focus-and-require-semantic-empty-composer-proof.md).
+Combined semantic-signal resolution, the exact known Codex suggestion adapter,
+and bounded Notion start/middle caret insertion are decision
+[`0021`](decisions/0021-combine-semantic-signals-and-bound-notion-caret-insertion.md).
+Stable post-write caret placement, punctuation-boundary composition, and shared
+strong-token search-query notation are decision
+[`0022`](decisions/0022-stabilize-caret-and-share-technical-notation.md).
 
 ### Evidence
 

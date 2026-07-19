@@ -6,18 +6,19 @@ struct TopherSettingsView: View {
   @ObservedObject var diagnostics: DeveloperDiagnosticsController
   @ObservedObject var vocabulary: SpeechVocabularyController
 
-  @State private var selection: TopherSettingsSection? = .general
+  @AppStorage(TopherSettingsSection.preferenceKey) private var selectedSectionRawValue =
+    TopherSettingsSection.general.rawValue
 
   var body: some View {
     NavigationSplitView {
-      List(TopherSettingsSection.allCases, selection: $selection) { section in
+      List(TopherSettingsSection.allCases, selection: selectedSectionBinding) { section in
         Label(section.title, systemImage: section.systemImage)
           .tag(section)
       }
       .navigationTitle("Topher")
       .navigationSplitViewColumnWidth(min: 170, ideal: 185, max: 210)
     } detail: {
-      settingsPage(selection ?? .general)
+      settingsPage(selectedSection)
     }
     .frame(minWidth: 760, minHeight: 540)
     .onAppear(perform: refreshReadiness)
@@ -39,9 +40,22 @@ struct TopherSettingsView: View {
     model.refreshVoiceReadiness()
     model.refreshAccessibilityPermission()
   }
+
+  private var selectedSection: TopherSettingsSection {
+    TopherSettingsSection(rawValue: selectedSectionRawValue) ?? .general
+  }
+
+  private var selectedSectionBinding: Binding<TopherSettingsSection?> {
+    Binding(
+      get: { selectedSection },
+      set: { selectedSectionRawValue = ($0 ?? .general).rawValue }
+    )
+  }
 }
 
-private enum TopherSettingsSection: String, CaseIterable, Identifiable {
+enum TopherSettingsSection: String, CaseIterable, Identifiable {
+  static let preferenceKey = "settings.selectedSection"
+
   case general
   case personalization
   case developer

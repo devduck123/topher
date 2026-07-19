@@ -11,12 +11,18 @@ request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 248 Swift tests. Build 15
-passes all 248 normally and under Thread Sanitizer; Xcode Debug, universal
-Release, static analysis, and strict installed-bundle checks also pass. Direct Apple
+Status: the 0.4.0 development tree currently defines 289 Swift tests. Build 19
+passes all 289 normally and under Thread Sanitizer, plus Xcode Debug, universal
+Release, static analysis, and strict product-bundle checks. Build 18's exact
+Release artifact remains the installed dogfood bundle. Live Build 18 dogfooding
+confirmed empty/end-append Codex insertion and Notion start/middle/end insertion,
+then found unstable Codex caret placement, missing punctuation-boundary spacing,
+and command-query formatting drift. Build 19 addresses those findings; its
+replacement bundle and final live acceptance remain pending. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. Installation in `/Applications`, launch, and process liveness
-were verified for the strictly checked Release bundle. A live Core Audio
+were verified for the earlier strictly checked Build 17 Release bundle. A live
+Core Audio
 callback-isolation failure was captured, fixed, and covered by an off-main
 regression test. Accuracy, latency, permission-recovery, sleep/wake, and
 repeated-session acceptance remain explicit post-merge dogfood gates; this
@@ -28,7 +34,8 @@ The comparative speech benchmark is still open.
 - A compact SwiftUI `MenuBarExtra` with visible ready, listening, transcribing,
   executing, success, and failure states; quick access to both shortcuts and
   permission recovery; and a deterministic 380 × 460 point panel whose scroll
-  content cannot collapse behind the footer.
+  content cannot collapse behind the footer. Its latest three local dogfood
+  records expose transcript and action/insertion ratings without opening Settings.
 - A separate native settings window with General, Personalization, and
   Developer sections. Manual command execution, detailed local diagnostics,
   and vocabulary editing stay out of the everyday menu-bar surface.
@@ -44,11 +51,15 @@ The comparative speech benchmark is still open.
   disabled with **Clean repeated speech** for presentation-only transcription.
 - Transient Apple word timing can conservatively join a short-pause fragment
   such as “code out. And dictate” without retaining timing or audio. Strong
-  developer-token phrasing such as “UI slash UX” becomes `UI/UX`; broader
-  punctuation and grammar rewriting remain out of scope.
-- Dictation may select one Apple alternative only when it uniquely matches a
-  known built-in or personal-vocabulary spoken form, such as `gidhub` versus
-  `GitHub`. It does not generally rerank or rewrite prose.
+  developer-token phrasing such as “UI slash UX” becomes `UI/UX` in dictation
+  and bounded web-search payloads; broader punctuation and grammar rewriting
+  remain out of scope. The original transcript remains unchanged in diagnostics.
+- Dictation may use one Apple alternative to correct one or more known built-in
+  or personal-vocabulary terms only when every changed lexical span is uniquely
+  corroborated, such as `gidhub` versus `GitHub`, `Kodex` versus `Codex`, or
+  `impending` versus `prepending`. Risky developer spoken forms used for
+  dictation do not expand command vocabulary. Topher does not generally rerank
+  or rewrite prose.
 - An explicit Accessibility permission boundary for dictation. Topher rejects
   secure/protected fields before capture, revalidates focus, selection, nearby
   text, and secure state before insertion, never presses Return, and never
@@ -58,14 +69,21 @@ The comparative speech benchmark is still open.
   uses the standard value attribute only for a small plain text field, an empty
   text area, or full-value text-area replacement; rich and ambiguous surfaces
   fall back without a second mutation attempt.
-- A bounded web-composer adapter covers object-free, uniformly plain text areas
-  inside a web Accessibility tree, including the deeply nested composer shape
-  currently exposed by ChatGPT/Codex. It supports a valid caret or selection
-  anywhere in a short plain value, including newlines, while rich, mixed-format,
-  object-bearing, native nonempty, and oversized surfaces still fail closed.
-- Context-aware word spacing at the insertion boundary, one guarded undo for
-  the latest insertion, and a local review/copy fallback for editors Topher
-  cannot safely mutate. Clipboard writes happen only after pressing **Copy**.
+- A bounded web-composer adapter covers object-free plain text areas inside a
+  web Accessibility tree. For nonempty web values it generally permits only a
+  verified caret-at-end append; a Notion-only exception permits an unchanged
+  start/middle caret in a short, single-line, uniformly presented value. It
+  rejects placeholder-backed and other ambiguous selections and admits multiple
+  attributed runs only when they differ by spellcheck metadata while their
+  presentation remains uniform. Exposed links, mentions, attachments, list
+  markers, styled/mixed/unknown attributes, native nonempty, and oversized
+  surfaces still fail closed.
+- Context-aware word and sentence-punctuation spacing at the insertion boundary,
+  one guarded undo for the latest insertion, and a local review/copy fallback
+  for editors Topher cannot safely mutate. After a verified whole-value web
+  mutation, Topher may retry only caret placement and requires stable readback;
+  it never repeats the text write. Clipboard writes happen only after pressing
+  **Copy**.
 - Live partial text in Topher and a transient, non-activating cross-app voice
   HUD for preparation, listening, finalization, execution, and outcomes.
 - Mode-aware maximum holds: 30 seconds for assistant commands and 120 seconds
@@ -155,8 +173,21 @@ explicit pending review when the host app cannot be observed reliably.
 
 This is a safer cross-app dictation foundation, not yet a claim of broad
 Wispr-style editor compatibility or benchmarked transcription quality. Live
-acceptance in ChatGPT/Codex, Notion, Chrome, and rich editors remains pending;
-Build 15 is specifically prepared for another live Codex composer test.
+Build 19 acceptance in ChatGPT/Codex, Notion, Chrome, and rich editors remains
+pending. Build 19 keeps frontmost-application focus recovery strictly process-bound and
+adds two bounded compatibility adapters. A Codex/ChatGPT caret-at-start value
+may replace the exact observed app suggestion, or a value whose independent
+text-marker or suggestion metadata proves logical emptiness; every fixed signal
+is revalidated before one whole-value write. A short, single-line, uniformly
+formatted Notion value may use verified whole-value insertion at its start or
+middle caret as well as its end. Authored Codex text and multiline, styled,
+linked, listed, mentioned, or object-bearing Notion content still fail closed.
+After exact content readback, a bounded whole-value path reasserts only the
+captured caret and confirms it remains stable before reporting caret verification.
+Search-command payloads use the same narrow strong-token slash normalization as
+dictation, without rewriting the retained raw transcript. Terminal remains a
+review/copy fallback rather than a keystroke or paste target.
+Live cross-app acceptance is still required.
 Filler removal, grammar/tone rewriting, general context-aware punctuation,
 general spoken-punctuation commands, multi-paragraph editing,
 always-on wake listening, remote chat, conversational follow-ups, browser-page
@@ -236,8 +267,8 @@ rather than invoking `Contents/MacOS/Topher` directly.
 For an interactive smoke test:
 
 1. Click Topher's sparkles icon in the menu bar. Confirm the compact panel shows
-   both interaction modes, readiness, and the diagnostics indicator without
-   expanding the retained request history.
+   both interaction modes, readiness, the diagnostics indicator, and up to three
+   recent requests with transcript and action/insertion ratings.
 2. Open **Settings** and verify the General, Personalization, and Developer
    sections. Record a normal modified assistant shortcut under General.
 3. Hold it once. Grant microphone access if macOS asks, then let Topher prepare
@@ -258,11 +289,13 @@ For an interactive smoke test:
    **Privacy & Security → Accessibility**, focus a normal editable field in
    another app, hold the dictation shortcut, say a sentence, and release.
    Confirm text is inserted once without Return being pressed. Repeat in an
-   empty and nonempty ChatGPT/Codex composer, a short plain multiline Codex
-   draft, an empty Notion block, a Chrome search field, and Notes; then repeat
-   with a selection, with the caret next to an existing word, with a rich web
-   draft, and with a password field. Plain drafts should insert exactly once;
-   rich drafts must remain unchanged and fall back for review. Use **Undo
+   empty and nonempty ChatGPT/Codex composer, an existing plain single-line
+   Notion block with the caret at its start, middle, and end, a Chrome search
+   field, and Notes; then repeat with a
+   mid-draft web caret, a visible editor suggestion/placeholder, a selection, a
+   rich web draft, and a password field. Proven empty/end-append drafts should
+   insert exactly once; ambiguous or rich drafts must remain unchanged and fall
+   back for review. Use **Undo
    Dictation** before moving the caret only when Topher offers it. If an editor is not
    supported, review the pending text in Topher and press **Copy** explicitly.
    If Settings shows Topher enabled while the app still reports denial, quit
@@ -339,17 +372,21 @@ voice preparation, capture, and finalization. Unified Logging never receives
 the manual transcript, search query, URL, raw audio, application name, or
 detailed error text.
 
-For local dogfooding, the menu's **Developer diagnostics** section can retain a
-separate request trace. Recording starts on for the current local-development
-phase, preserves an explicit opt-out, and adds an orange dot to the menu-bar
-icon while enabled. Re-enabling after an opt-out requires confirmation. Each
+For local dogfooding, **Settings → Developer → Local diagnostics** can retain a
+separate request trace, while the menu exposes the latest three records and
+their ratings. Recording starts on for the current local-development phase,
+preserves an explicit opt-out, and adds an orange dot to the menu-bar icon while
+enabled. Re-enabling after an opt-out requires confirmation. Each
 record contains the exact finalized voice/manual command or non-secure
 dictation, the interpreted or inserted text when Topher used different text,
 an available confidence summary, its source, an ephemeral launch-session ID, a
 fixed typed outcome, fixed command/capability metadata, typed unsupported,
 dictation-fallback, capture-failure, and conservative-cleanup reasons, the
-fixed dictation insertion method, verification result, and content-free target
-role/capability profile plus a fixed whole-value eligibility or refusal reason,
+fixed dictation insertion method, verification result, bounded application
+family, selection/placeholder/attribute classification, content-free target
+role/capability profile, and fixed whole-value eligibility or refusal reason,
+plus fixed semantic suggestion-attribute, character-count, text-marker,
+known-suggestion, and final-decision states when the Codex adapter is evaluated,
 whether
 the maximum duration auto-finalized the request, optional local
 transcript/action ratings and fixed action-issue tags, capture-stage and
@@ -437,6 +474,14 @@ mental model.
 - [Verified Accessibility mutation decision](docs/decisions/0016-verify-accessibility-dictation-mutations.md)
 - [Bounded contextual dictation follow-up decision](docs/decisions/0017-bounded-contextual-dictation-followup.md)
 - [Bounded uniform web-composer insertion decision](docs/decisions/0018-bounded-uniform-web-composer-insertion.md)
+- [Semantic web-append evidence decision](docs/decisions/0019-require-semantic-web-append-evidence.md)
+- [Focus recovery and semantic empty-composer decision](docs/decisions/0020-recover-focus-and-require-semantic-empty-composer-proof.md)
+- [Combined semantic-signal and Notion caret decision](docs/decisions/0021-combine-semantic-signals-and-bound-notion-caret-insertion.md)
+- [Stable caret and shared technical-notation decision](docs/decisions/0022-stabilize-caret-and-share-technical-notation.md)
+- [Build 16 verification evidence](docs/evidence/2026-07-16-build-16-semantic-web-append-and-menu-feedback.md)
+- [Build 17 verification evidence](docs/evidence/2026-07-18-build-17-focus-and-semantic-composer.md)
+- [Build 18 verification evidence](docs/evidence/2026-07-18-build-18-semantic-signals-and-notion-caret.md)
+- [Build 19 verification evidence](docs/evidence/2026-07-19-build-19-caret-composition-and-query-formatting.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

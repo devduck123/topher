@@ -139,6 +139,7 @@ final class TopherModel: ObservableObject {
   private var activeVoicePresentation: VoicePresentation?
   private var activeVoiceMode: VoiceMode?
   private var activeDictationPreparation: FocusedTextPreparationOutcome?
+  private var activeDictationPreparationEvidence: FocusedTextPreparationEvidence?
   private var shortcutOwner: ShortcutOwner?
 
   init(
@@ -332,6 +333,7 @@ final class TopherModel: ObservableObject {
     }
 
     let preparation = focusedTextInsertion.prepareTarget()
+    activeDictationPreparationEvidence = focusedTextInsertion.latestPreparationEvidence
     if preparation == .secureField {
       let message = "Dictation is disabled in secure text fields."
       phase = .failure(message)
@@ -346,6 +348,7 @@ final class TopherModel: ObservableObject {
       activeVoicePresentation = nil
       activeVoiceMode = nil
       activeDictationPreparation = nil
+      activeDictationPreparationEvidence = nil
       focusedTextInsertion.discardPreparedTarget()
       return false
     }
@@ -497,6 +500,7 @@ final class TopherModel: ObservableObject {
       let presentsGlobally = activeVoicePresentation == .globalShortcut
       let mode = activeVoiceMode ?? .assistantCommand
       let dictationPreparation = activeDictationPreparation
+      let dictationPreparationEvidence = activeDictationPreparationEvidence
       clearActiveVoiceStateWithoutDiscardingTarget()
       let transcript = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !transcript.isEmpty else {
@@ -517,6 +521,7 @@ final class TopherModel: ObservableObject {
         startDictationProcessing(
           transcript,
           preparation: dictationPreparation,
+          preparationEvidence: dictationPreparationEvidence,
           presentsGlobally: presentsGlobally
         )
       }
@@ -525,6 +530,7 @@ final class TopherModel: ObservableObject {
       let presentsGlobally = activeVoicePresentation == .globalShortcut
       let mode = activeVoiceMode ?? .assistantCommand
       let dictationPreparation = activeDictationPreparation
+      let dictationPreparationEvidence = activeDictationPreparationEvidence
       clearActiveVoiceStateWithoutDiscardingTarget()
       let transcript = transcription.primary.text.trimmingCharacters(
         in: .whitespacesAndNewlines
@@ -563,6 +569,7 @@ final class TopherModel: ObservableObject {
           selection.selectedTranscript,
           rawTranscript: selection.rawTranscript,
           preparation: dictationPreparation,
+          preparationEvidence: dictationPreparationEvidence,
           confidence: selection.confidence,
           pauses: selection.reason == nil ? transcription.pauses : [],
           interpretationReason: selection.reason,
@@ -752,6 +759,7 @@ final class TopherModel: ObservableObject {
     _ transcript: String,
     rawTranscript: String? = nil,
     preparation: FocusedTextPreparationOutcome?,
+    preparationEvidence: FocusedTextPreparationEvidence?,
     confidence: Double? = nil,
     pauses: [DictationPause] = [],
     interpretationReason: TranscriptInterpretationReason? = nil,
@@ -768,6 +776,7 @@ final class TopherModel: ObservableObject {
         transcript,
         rawTranscript: rawTranscript ?? transcript,
         preparation: preparation,
+        preparationEvidence: preparationEvidence,
         confidence: confidence,
         pauses: pauses,
         interpretationReason: interpretationReason,
@@ -782,6 +791,7 @@ final class TopherModel: ObservableObject {
     _ transcript: String,
     rawTranscript: String,
     preparation: FocusedTextPreparationOutcome?,
+    preparationEvidence: FocusedTextPreparationEvidence?,
     confidence: Double? = nil,
     pauses: [DictationPause] = [],
     interpretationReason: TranscriptInterpretationReason? = nil,
@@ -815,6 +825,7 @@ final class TopherModel: ObservableObject {
         outcome: .dictationFailed,
         capabilityIdentifier: nil,
         failureReason: .tooLong,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now)
       )
       return
@@ -837,6 +848,7 @@ final class TopherModel: ObservableObject {
         failureReason: preparation == .noFocusedElement
           ? .noFocusedElement
           : .unsupportedField,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -859,6 +871,7 @@ final class TopherModel: ObservableObject {
         outcome: .dictationInserted,
         capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
         insertionEvidence: result.evidence,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now)
       )
 
@@ -870,6 +883,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         interpretationReason: interpretationReason,
         failureReason: .mutationNotObserved,
+        preparationEvidence: preparationEvidence,
         insertionEvidence: evidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
@@ -883,6 +897,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         interpretationReason: interpretationReason,
         insertionEvidence: evidence,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -903,6 +918,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         interpretationReason: interpretationReason,
         failureReason: .focusChanged,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -914,6 +930,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         interpretationReason: interpretationReason,
         failureReason: .selectionChanged,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -925,6 +942,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         interpretationReason: interpretationReason,
         failureReason: .unsupportedField,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -936,6 +954,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         interpretationReason: interpretationReason,
         failureReason: .mutationFailed,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -947,6 +966,7 @@ final class TopherModel: ObservableObject {
         captureMetrics: captureMetrics,
         interpretationReason: interpretationReason,
         failureReason: .noPreparedTarget,
+        preparationEvidence: preparationEvidence,
         processingDuration: startedAt.duration(to: clock.now),
         presentsGlobally: presentsGlobally
       )
@@ -960,12 +980,24 @@ final class TopherModel: ObservableObject {
     captureMetrics: VoiceCaptureMetrics?,
     interpretationReason: TranscriptInterpretationReason? = nil,
     failureReason: DictationFailureReason,
+    preparationEvidence: FocusedTextPreparationEvidence?,
     insertionEvidence: FocusedTextInsertionEvidence? = nil,
     processingDuration: Duration,
     presentsGlobally: Bool
   ) {
     pendingDictationText = dictationText.value
-    let message = "Couldn’t safely insert there. Open Topher to review or copy the dictation."
+    let message: String
+    if preparationEvidence?.targetApplication == .terminal {
+      message =
+        "Terminal doesn’t expose a writable focused field. Open Topher to review or copy the dictation."
+    } else if insertionEvidence?.target.application == .codexOrChatGPT,
+      insertionEvidence?.wholeValueDecision == .rejectedAmbiguousWebSelection
+    {
+      message =
+        "Codex doesn’t expose a verifiable insertion point for that authored content. Topher left it unchanged; open Topher to review or copy the dictation."
+    } else {
+      message = "Couldn’t safely insert there. Open Topher to review or copy the dictation."
+    }
     phase = .failure(message)
     if presentsGlobally { presentVoiceResult(.failure(message)) }
     recordDictationIfEnabled(
@@ -978,6 +1010,7 @@ final class TopherModel: ObservableObject {
       capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
       failureReason: failureReason,
       insertionEvidence: insertionEvidence,
+      preparationEvidence: preparationEvidence,
       processingDuration: processingDuration
     )
   }
@@ -989,6 +1022,7 @@ final class TopherModel: ObservableObject {
     captureMetrics: VoiceCaptureMetrics?,
     interpretationReason: TranscriptInterpretationReason? = nil,
     insertionEvidence: FocusedTextInsertionEvidence,
+    preparationEvidence: FocusedTextPreparationEvidence?,
     processingDuration: Duration,
     presentsGlobally: Bool
   ) {
@@ -1007,6 +1041,7 @@ final class TopherModel: ObservableObject {
       capabilityIdentifier: FocusedTextInsertionCapability.descriptor.identifier,
       failureReason: .mutationUnverified,
       insertionEvidence: insertionEvidence,
+      preparationEvidence: preparationEvidence,
       processingDuration: processingDuration
     )
   }
@@ -1021,6 +1056,7 @@ final class TopherModel: ObservableObject {
     capabilityIdentifier: String?,
     failureReason: DictationFailureReason? = nil,
     insertionEvidence: FocusedTextInsertionEvidence? = nil,
+    preparationEvidence: FocusedTextPreparationEvidence? = nil,
     processingDuration: Duration
   ) {
     guard let developerDiagnostics else { return }
@@ -1039,6 +1075,7 @@ final class TopherModel: ObservableObject {
           commandKind: nil,
           capabilityIdentifier: capabilityIdentifier,
           dictationFailureReason: failureReason,
+          dictationPreparationEvidence: preparationEvidence,
           dictationInsertionEvidence: insertionEvidence
         ),
         processingDurationMilliseconds: durationMilliseconds,
@@ -1056,6 +1093,7 @@ final class TopherModel: ObservableObject {
     activeVoicePresentation = nil
     activeVoiceMode = nil
     activeDictationPreparation = nil
+    activeDictationPreparationEvidence = nil
   }
 
   private func startCommandProcessing(

@@ -20,6 +20,33 @@ public struct DictationPause: Equatable, Sendable {
   }
 }
 
+/// Conservative presentation normalization shared by dictation and typed
+/// command payloads. It only rewrites an explicitly spoken slash between two
+/// short, uppercase technical tokens such as `UI slash UX`; ordinary prose and
+/// the original diagnostic transcript remain unchanged.
+enum SpokenTechnicalNotation {
+  static func normalizing(in transcript: String) -> (text: String, changed: Bool) {
+    let source = transcript as NSString
+    let expression = try? NSRegularExpression(
+      pattern: #"\b([A-Z][A-Z0-9]{0,11})\s+slash\s+([A-Z][A-Z0-9]{0,11})\b"#
+    )
+    let matches =
+      expression?.matches(
+        in: transcript,
+        range: NSRange(location: 0, length: source.length)
+      ) ?? []
+    guard !matches.isEmpty else { return (transcript, false) }
+
+    let output = NSMutableString(string: transcript)
+    for match in matches.reversed() {
+      let left = source.substring(with: match.range(at: 1))
+      let right = source.substring(with: match.range(at: 2))
+      output.replaceCharacters(in: match.range, with: "\(left)/\(right)")
+    }
+    return (output as String, true)
+  }
+}
+
 /// Text that is safe to hand to the focused-field insertion boundary.
 ///
 /// Presentation cleanup is always applied. The default conservative polish may
@@ -40,7 +67,7 @@ public struct DictationText: Equatable, Sendable {
     polishPolicy: DictationPolishPolicy = .conservative
   ) throws {
     let pauseResult = Self.joiningShortPauseContinuations(in: transcript, pauses: pauses)
-    let punctuationResult = Self.normalizingSpokenPunctuation(in: pauseResult.text)
+    let punctuationResult = SpokenTechnicalNotation.normalizing(in: pauseResult.text)
     let presentationText = Self.formatPresentation(punctuationResult.text)
     let polishResult =
       switch polishPolicy {
@@ -110,29 +137,6 @@ public struct DictationText: Equatable, Sendable {
     let output = NSMutableString(string: transcript)
     for range in replacements.sorted(by: { $0.location > $1.location }) {
       output.replaceCharacters(in: range, with: " and")
-    }
-    return (output as String, true)
-  }
-
-  private static func normalizingSpokenPunctuation(
-    in transcript: String
-  ) -> (text: String, changed: Bool) {
-    let source = transcript as NSString
-    let expression = try? NSRegularExpression(
-      pattern: #"\b([A-Z][A-Z0-9]{0,11})\s+slash\s+([A-Z][A-Z0-9]{0,11})\b"#
-    )
-    let matches =
-      expression?.matches(
-        in: transcript,
-        range: NSRange(location: 0, length: source.length)
-      ) ?? []
-    guard !matches.isEmpty else { return (transcript, false) }
-
-    let output = NSMutableString(string: transcript)
-    for match in matches.reversed() {
-      let left = source.substring(with: match.range(at: 1))
-      let right = source.substring(with: match.range(at: 2))
-      output.replaceCharacters(in: match.range, with: "\(left)/\(right)")
     }
     return (output as String, true)
   }

@@ -63,12 +63,25 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
         "recordedAt" => "2026-07-16T00:01:00Z",
         "outcome" => "dictationInserted",
         "dictationFailureReason" => "wrongField",
+        "dictationPreparationEvidence" => {
+          "focusSource" => "frontmostApplication",
+          "targetApplication" => "notion"
+        },
         "dictationInsertionEvidence" => {
           "method" => "wholeValue",
           "verification" => "contentAndCaret",
           "wholeValueDecision" => "eligiblePlainWebComposer",
+          "selectionRelation" => "caretAtEnd",
+          "placeholderState" => "absent",
+          "attributeDecision" => "eligibleUniformPresentation",
+          "semanticContentDecision" => "notEvaluated",
+          "semanticSuggestionAttributeState" => "unavailable",
+          "semanticCharacterCountState" => "positive",
+          "semanticTextMarkerState" => "nonempty",
+          "semanticKnownSuggestionState" => "notEvaluated",
           "target" => {
             "role" => "textArea",
+            "application" => "notion",
             "canSetSelectedText" => true,
             "canSetSelectedRange" => true,
             "canSetValue" => true
@@ -120,9 +133,44 @@ Dir.mktmpdir("topher-exporter-input-") do |input_directory|
     "insertion verification"
   )
   assert(dictation.dig("dictationTargetRoles", "textArea") == 1, "target role")
+  assert(dictation.dig("dictationTargetApplications", "notion") == 1, "target application")
+  assert(dictation.dig("dictationSelectionRelations", "caretAtEnd") == 1, "selection relation")
+  assert(dictation.dig("dictationPlaceholderStates", "absent") == 1, "placeholder state")
+  assert(
+    dictation.dig("dictationAttributeDecisions", "eligibleUniformPresentation") == 1,
+    "attribute decision"
+  )
   assert(
     dictation.dig("dictationWholeValueDecisions", "eligiblePlainWebComposer") == 1,
     "whole-value decision"
+  )
+  assert(
+    dictation.dig("dictationSemanticContentDecisions", "notEvaluated") == 1,
+    "semantic content decision"
+  )
+  assert(
+    dictation.dig("dictationSemanticSuggestionAttributeStates", "unavailable") == 1,
+    "semantic suggestion-attribute state"
+  )
+  assert(
+    dictation.dig("dictationSemanticCharacterCountStates", "positive") == 1,
+    "semantic character-count state"
+  )
+  assert(
+    dictation.dig("dictationSemanticTextMarkerStates", "nonempty") == 1,
+    "semantic text-marker state"
+  )
+  assert(
+    dictation.dig("dictationSemanticKnownSuggestionStates", "notEvaluated") == 1,
+    "semantic known-suggestion state"
+  )
+  assert(
+    dictation.dig("dictationFocusSources", "frontmostApplication") == 1,
+    "focus source"
+  )
+  assert(
+    dictation.dig("dictationPreparationApplications", "notion") == 1,
+    "preparation application"
   )
 
   outside = File.join(input_directory, "outside.json")

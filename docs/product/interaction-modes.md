@@ -82,6 +82,9 @@ The implemented foundation contract is:
 - Do not invent terminal punctuation or capitalization, remove filler words,
   or rewrite grammar, tone, vocabulary, or meaning in the current fast tier.
 - Identify and revalidate the focused editable element before insertion.
+- Prefer the system-wide focused element, but when it is unavailable query only
+  the current frontmost application's focused element and bind the target to
+  that process through mutation verification and undo.
 - Insert text without pressing Return, submitting a form, or sending a message.
 - Refuse secure/password fields and other excluded surfaces.
 - Preserve a preview/copy fallback when direct insertion is unsupported.
@@ -92,10 +95,31 @@ The implemented foundation contract is:
 - Treat native setter completion as an attempt and report insertion only after
   bounded content readback. Use one preselected method so a late host-app update
   cannot cause a second insertion.
+- For a verified whole-value mutation whose host leaves or restores the old
+  caret, retry only the captured caret position under the same focus and secure
+  checks. Require delayed stable caret readback; never repeat the value mutation.
 - Permit a whole-value mutation only for a bounded plain text field, an empty
-  text area, or full-value text-area replacement. Keep rich and ambiguous
+  text area, full-value text-area replacement, or a bounded web-descendant end
+  append with absent/mismatched placeholder state and uniformly safe attributed
+  presentation. A Notion-only exception admits an unchanged start/middle caret
+  in the same bounded plain profile only when the value is single-line. Keep
+  multiline, rich, semantic, unknown, partially selected, and other ambiguous
   surfaces on the narrower compatibility/fallback path.
+- For Codex/ChatGPT only, treat a nonempty-looking caret-at-start web composer
+  as empty when every attributed character is explicitly suggestion-only, the
+  full web text-marker range is empty, or the entire bounded value exactly
+  matches the observed app-owned suggestion. Evaluate and retain only the fixed
+  state of every semantic signal, then replace the suggestion with the
+  transcript alone after revalidating the same bundle. Never apply this
+  exception to partial matches or ordinary authored text.
+- Keep Terminal prompts on an explicit review/copy fallback; dictation never
+  pastes automatically or executes a terminal command. VS Code requires a
+  standard writable Accessibility field and may need screen-reader optimized
+  mode enabled.
 - Never mutate the clipboard automatically; copying a fallback is explicit.
+- Apply strong-token spoken notation such as `UI slash UX` consistently to
+  dictation and extracted web-search payloads, while retaining the raw request
+  in the bounded developer trace. Do not generalize this to lowercase prose.
 - Exclude secure-field dictation from the content-bearing developer trace.
 - Automatically finalize at the 120-second dictation maximum instead of
   discarding the whole utterance. A late physical key-up cannot insert twice.

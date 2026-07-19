@@ -187,7 +187,45 @@ final class TopherModelSpeechTests: XCTestCase {
         method: .selectedText,
         verification: .unavailable,
         target: field.profile,
-        wholeValueDecision: .rejectedValueNotSettable
+        wholeValueDecision: .rejectedValueNotSettable,
+        selectionRelation: .emptyValue,
+        placeholderState: .absent,
+        attributeDecision: .notEvaluated
+      )
+    )
+  }
+
+  func testAuthoredCodexFallbackExplainsThatContentWasLeftUnchanged() async {
+    let voice = VoiceHarness()
+    let original = "- Existing bullet"
+    let field = ModelFocusedTextHarness(
+      content: original,
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.targetApplication = .codexOrChatGPT
+    field.exposesValue = true
+    field.canSetValue = true
+    field.webAreaAncestorDepth = 8
+    field.selectedTextMutationSucceeds = false
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("Add to the second bullet."))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "Add to the second bullet." }
+    XCTAssertEqual(field.content, original)
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Codex doesn’t expose a verifiable insertion point for that authored content. Topher left it unchanged; open Topher to review or copy the dictation."
       )
     )
   }
@@ -336,6 +374,37 @@ final class TopherModelSpeechTests: XCTestCase {
     model.copyPendingDictation()
     XCTAssertEqual(clipboardWrites, ["GraphQL URLSession"])
     XCTAssertEqual(model.phase, .success("Copied dictation. Paste it where you want it."))
+  }
+
+  func testTerminalFallbackIsExplicitAndPreservesDictationForReview() async {
+    let voice = VoiceHarness()
+    let field = ModelFocusedTextHarness(
+      content: "",
+      selection: FocusedTextRange(location: 0, length: 0)
+    )
+    field.targetApplication = .terminal
+    field.canSetSelectedText = false
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      accessibilityPermission: authorizedAccessibilityPermission(),
+      focusedTextInsertion: FocusedTextInsertionCapability(environment: field.environment)
+    )
+
+    model.beginDictation()
+    await waitUntil { model.phase == .listening("") }
+    voice.yield(.final("git status"))
+    model.endDictation()
+
+    await waitUntil { model.pendingDictationText == "git status" }
+    XCTAssertEqual(
+      model.phase,
+      .failure(
+        "Terminal doesn’t expose a writable focused field. Open Topher to review or copy the dictation."
+      )
+    )
+    XCTAssertEqual(field.content, "")
   }
 
   func testDictationStreamFailurePreservesPartialForReviewWithoutInsertion() async throws {
@@ -1530,6 +1599,8 @@ private final class ModelFocusedTextHarness {
   var selection: FocusedTextRange
   var isSecure = false
   var role: FocusedTextTargetRole = .textArea
+  var targetApplication: FocusedTextTargetApplication = .other
+  var webAreaAncestorDepth: Int?
   var canSetSelectedText = true
   var canSetValue = false
   var exposesValue = false
@@ -1547,7 +1618,8 @@ private final class ModelFocusedTextHarness {
       role: role,
       canSetSelectedText: canSetSelectedText,
       canSetSelectedRange: true,
-      canSetValue: canSetValue
+      canSetValue: canSetValue,
+      application: targetApplication
     )
   }
 
@@ -1556,10 +1628,12 @@ private final class ModelFocusedTextHarness {
       focusedElement: { [weak self] in self?.element },
       sameElement: { $0 == $1 },
       processIdentifier: { _ in 1001 },
+      targetApplication: { [weak self] _ in self?.targetApplication ?? .unknown },
       isSecure: { [weak self] _ in self?.isSecure ?? true },
       role: { [weak self] _ in self?.role ?? .other },
-      webAreaAncestorDepth: { _ in nil },
-      hasUniformTextAttributes: { _, _ in true },
+      webAreaAncestorDepth: { [weak self] _ in self?.webAreaAncestorDepth },
+      textAttributeDecision: { _, _ in .eligibleFontOnly },
+      placeholderValue: { _ in nil },
       selectedText: { [weak self] _ in
         guard let self else { return nil }
         selectedTextReadCount += 1

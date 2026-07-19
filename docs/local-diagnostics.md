@@ -78,9 +78,10 @@ metadata-only messages; there is no transcript fallback into `Logger` or
 
 ## Bounded developer transcript trace
 
-The menu's **Developer diagnostics** section exposes **Record final commands
+**Settings → Developer → Local diagnostics** exposes **Record final commands
 and dictation**. During local dogfooding it defaults on so unsupported phrasing
-and dictation outcomes are captured without setup. Turning it off persists the
+and dictation outcomes are captured without setup. The menu shows the latest
+three retained requests and their ratings. Turning recording off persists the
 opt-out; re-enabling it
 presents a warning and requires confirmation. While enabled, an orange dot
 appears in both the diagnostics section and Topher's menu-bar icon.
@@ -104,14 +105,26 @@ Each record contains only:
 - A fixed unsupported reason when resolution rejects the command.
 - Fixed dictation-fallback and content-free capture-failure reasons when those
   paths occur, plus whether the maximum duration caused automatic finalization.
+- For every dictation target preparation, a fixed system-wide/application focus
+  source, known application family, and content-free failure reason when one
+  occurred. This identifies focus-discovery and field-contract failures without
+  storing a process identifier, element path, title, or field content.
 - For an insertion attempt, fixed content-free evidence: selected-text or
   whole-value method, content-and-caret/content-only/not-observed/unavailable
   verification, target role, and whether its three relevant attributes were
-  settable. It also records one fixed whole-value adapter decision, such as
-  eligible plain web composer, rejected non-web text area, rejected oversized
-  value, object-bearing value, or mixed formatting. This evidence never
-  includes the app name, process identifier, ancestor path, selected text,
-  full field value, attributed content, or native error.
+  settable. It also records a fixed known application family, selection
+  relationship, placeholder state, attributed-value classification, and one
+  fixed whole-value adapter decision. A Codex/ChatGPT semantic-empty attempt may
+  additionally record fixed suggestion-attribute, character-count, text-marker,
+  known-application-suggestion, and final decision states. These values describe
+  only whether each signal was absent, unavailable, empty/nonempty,
+  recognized/unrecognized, or inconsistent; they never retain the suggestion
+  or editor text. Application
+  families are limited to Chrome, Codex/ChatGPT, Notion, Notes, Safari,
+  Terminal, Visual Studio Code, other, or unknown; no raw bundle identifier is
+  retained. This evidence never includes the app or window title,
+  process identifier, ancestor path, selected text, full field value, attributed
+  content, URL, or native error.
 - Optional user-set judgments for whether the transcript text was accurate and
   whether Topher's action was correct. These are independent because correct
   transcription can still lead to the wrong intent, and vice versa.
@@ -157,8 +170,9 @@ never silently executed or inserted. If a prepared dictation target becomes
 secure, even that preview is discarded and no content-bearing record is made.
 
 Summarize retained outcomes, feedback rates, insertion methods, verification,
-target roles, whole-value decisions, interpretation/polish reasons, and timing
-percentiles without printing command text:
+target roles/application families, selection/placeholder/attribute decisions,
+whole-value and semantic signal decisions, interpretation/polish reasons, and timing percentiles
+without printing command text:
 
 ```sh
 scripts/summarize_dogfood_diagnostics.rb

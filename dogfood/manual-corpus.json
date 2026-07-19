@@ -195,12 +195,62 @@
     {
       "id": "dictation-codex-composer-multiline",
       "mode": "dictation",
-      "category": "focused-insertion",
+      "category": "security",
       "utterance": "This thought belongs in the middle.",
       "setup": "Create a short plain multiline draft in Codex or ChatGPT, place the caret in the middle of one line, and use the dictation shortcut.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Leave the ambiguous web draft unchanged and place the transcript in Topher's explicit review fallback.",
+      "checks": ["Existing lines remain exact", "No whole-value mutation", "No submission", "Diagnostics report an ambiguous web selection"]
+    },
+    {
+      "id": "dictation-codex-semantic-suggestion-replacement",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Hello, how are you doing today?",
+      "setup": "Focus a visually empty Codex or ChatGPT composer showing 'Ask for follow-up changes', then use the dictation shortcut. The host may expose suggestion attributes, an empty text-marker range, or the exact app-owned suggestion compatibility value.",
       "expectedStatus": "supported",
-      "expectedResult": "Insert once at the captured caret while preserving every other character and without sending.",
-      "checks": ["Existing lines remain exact", "One insertion at the captured caret", "No submission", "Verified whole-value evidence is visible"]
+      "expectedResult": "Replace the proven suggestion with only the transcript, exactly once, without sending.",
+      "checks": ["No suggestion text remains", "Exactly one whole-value mutation", "No selected-text mutation", "No submission", "Diagnostics report the semantic decision and each fixed signal state"]
+    },
+    {
+      "id": "dictation-codex-ambiguous-value-refusal",
+      "mode": "dictation",
+      "category": "security",
+      "utterance": "Keep authored content safe.",
+      "setup": "Focus a Codex or ChatGPT composer at the start of nonempty Accessibility text that is not fully suggestion-attributed and is not independently proven logically empty.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Leave the composer unchanged and offer the transcript for explicit review.",
+      "checks": ["Authored text remains exact", "No whole-value mutation", "No selected-text mutation", "No submission"]
+    },
+    {
+      "id": "dictation-notion-plain-append",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "This is appended to the same line.",
+      "setup": "Focus the caret at the end of an existing short, plain, non-secure Notion text block with no link, mention, attachment, list, or authored styling, then use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Append once with one separating space while preserving the existing block and without submitting.",
+      "checks": ["Existing text is preserved exactly", "One insertion", "No submission", "Diagnostics report Notion, caret at end, and eligible uniform presentation"]
+    },
+    {
+      "id": "dictation-notion-plain-caret-insertion",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "inserted thought",
+      "setup": "Focus the start or middle caret of one existing short, single-line, uniformly formatted Notion text block with no link, mention, attachment, list, or authored styling, then use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert once at the exact caret with contextual spacing while preserving all existing text and without submitting.",
+      "checks": ["Existing text is preserved exactly", "Correct caret location", "One whole-value insertion", "No submission", "Diagnostics report eligible plain web caret insertion"]
+    },
+    {
+      "id": "dictation-notion-unsafe-caret-refusal",
+      "mode": "dictation",
+      "category": "security",
+      "utterance": "do not flatten this block",
+      "setup": "Focus a middle caret in a multiline, styled, linked, mentioned, listed, or object-bearing Notion block and use the dictation shortcut.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Preserve the block exactly and keep the transcript in Topher's explicit review fallback.",
+      "checks": ["No whole-value mutation", "Formatting and objects remain intact", "No submission", "Diagnostics report ambiguous or rich content"]
     },
     {
       "id": "dictation-rich-web-editor-refusal",
@@ -241,6 +291,86 @@
       "expectedStatus": "supported",
       "expectedResult": "Insert once into the focused Notion block and report verified insertion without changing another block.",
       "checks": ["Correct block", "One insertion", "No submission", "Diagnostics include fixed insertion evidence"]
+    },
+    {
+      "id": "dictation-vscode-editor",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "const greeting equals hello",
+      "setup": "Enable VS Code screen-reader optimized mode, focus an empty plain editor line, and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert once into the focused VS Code editor without running, formatting, or saving the file.",
+      "checks": ["Correct editor and line", "One insertion", "No command execution", "Diagnostics report Visual Studio Code and the focus source"]
+    },
+    {
+      "id": "dictation-terminal-explicit-fallback",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "git status",
+      "setup": "Focus a Terminal prompt and use the dictation shortcut.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Do not mutate or execute the prompt; explain that Terminal does not expose a supported writable field and retain the transcript for explicit review or copy.",
+      "checks": ["No terminal mutation", "No command execution", "No automatic clipboard write", "Diagnostics report Terminal and the preparation failure"]
+    },
+    {
+      "id": "dictation-multiple-developer-vocabulary-terms",
+      "mode": "dictation",
+      "category": "dictation-accuracy",
+      "utterance": "I use React, Next.js, Vercel, and Kubernetes.",
+      "setup": "Focus an empty plain text field and speak the sentence naturally in one hold.",
+      "expectedStatus": "supported",
+      "expectedResult": "Use a uniquely corroborating Apple alternative to correct multiple known developer terms in the same utterance without rewriting surrounding prose.",
+      "checks": ["React, Next.js, Vercel, and Kubernetes are spelled correctly when uniquely corroborated", "Raw speech remains in diagnostics", "No correction occurs when alternatives disagree"]
+    },
+    {
+      "id": "dictation-git-alternative-corroboration",
+      "mode": "dictation",
+      "category": "dictation-accuracy",
+      "utterance": "git status",
+      "setup": "Focus an empty Notes field and speak 'git status' naturally in one hold.",
+      "expectedStatus": "supported",
+      "expectedResult": "Prefer an Apple alternative containing 'git status' when the primary says 'get status', but never rewrite get without that exact corroboration.",
+      "checks": ["git is lowercase", "Surrounding prose is unchanged", "No correction without a unique matching alternative"]
+    },
+    {
+      "id": "assistant-search-technical-spoken-slash",
+      "mode": "assistant",
+      "category": "web-search",
+      "utterance": "Search Chrome for what are some good UI slash UX principles?",
+      "setup": "Chrome is installed and the assistant shortcut is configured.",
+      "expectedStatus": "supported",
+      "expectedResult": "Open one Google search for 'what are some good UI/UX principles' while retaining the raw spoken transcript in diagnostics.",
+      "checks": ["The query contains UI/UX", "Exactly one search opens", "Lowercase literal uses of slash remain unchanged"]
+    },
+    {
+      "id": "dictation-codex-stable-caret",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Hello, Codex. How are you doing today?",
+      "setup": "Focus an empty Codex composer showing the known suggestion and use the dictation shortcut.",
+      "expectedStatus": "supported",
+      "expectedResult": "Replace only the suggestion, insert exactly once, and leave a stably verified caret at the end of the dictated text.",
+      "checks": ["No suggestion suffix", "Exactly one text mutation", "Caret remains at the end after verification", "No submission"]
+    },
+    {
+      "id": "dictation-notion-punctuated-prepend",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Went back to the start of the line and prepending text here now.",
+      "setup": "Focus the start of a short, single-line, uniformly formatted Notion block containing existing text.",
+      "expectedStatus": "supported",
+      "expectedResult": "Insert the punctuated transcript followed by one separator before the original first word.",
+      "checks": ["No concatenated period and word", "Exactly one value mutation", "Original content is preserved after the insertion"]
+    },
+    {
+      "id": "dictation-codex-authored-bullet-fallback",
+      "mode": "dictation",
+      "category": "focused-insertion",
+      "utterance": "Add this to the second bullet point.",
+      "setup": "Focus the start or middle of an authored Codex bullet and use the dictation shortcut.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Leave the authored Codex content unchanged and explain that no verifiable insertion point is exposed, with explicit review or copy available.",
+      "checks": ["No content or formatting mutation", "No automatic clipboard write", "Fallback explains that content was left unchanged"]
     },
     {
       "id": "dictation-secure-field",

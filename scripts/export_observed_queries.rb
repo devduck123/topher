@@ -138,6 +138,10 @@ eligible_records.each do |record|
     "dictationInsertionMethods" => {},
     "dictationInsertionVerifications" => {},
     "dictationTargetRoles" => {},
+    "dictationTargetApplications" => {},
+    "dictationSelectionRelations" => {},
+    "dictationPlaceholderStates" => {},
+    "dictationAttributeDecisions" => {},
     "dictationWholeValueDecisions" => {},
     "unsupportedReasons" => {},
     "dictationFailureReasons" => {},
@@ -165,8 +169,44 @@ eligible_records.each do |record|
       "dictationInsertionEvidence", "verification"
     ),
     "dictationTargetRoles" => record.dig("dictationInsertionEvidence", "target", "role"),
+    "dictationTargetApplications" => record.dig(
+      "dictationInsertionEvidence", "target", "application"
+    ),
+    "dictationSelectionRelations" => record.dig(
+      "dictationInsertionEvidence", "selectionRelation"
+    ),
+    "dictationPlaceholderStates" => record.dig(
+      "dictationInsertionEvidence", "placeholderState"
+    ),
+    "dictationAttributeDecisions" => record.dig(
+      "dictationInsertionEvidence", "attributeDecision"
+    ),
     "dictationWholeValueDecisions" => record.dig(
       "dictationInsertionEvidence", "wholeValueDecision"
+    ),
+    "dictationSemanticContentDecisions" => record.dig(
+      "dictationInsertionEvidence", "semanticContentDecision"
+    ),
+    "dictationSemanticSuggestionAttributeStates" => record.dig(
+      "dictationInsertionEvidence", "semanticSuggestionAttributeState"
+    ),
+    "dictationSemanticCharacterCountStates" => record.dig(
+      "dictationInsertionEvidence", "semanticCharacterCountState"
+    ),
+    "dictationSemanticTextMarkerStates" => record.dig(
+      "dictationInsertionEvidence", "semanticTextMarkerState"
+    ),
+    "dictationSemanticKnownSuggestionStates" => record.dig(
+      "dictationInsertionEvidence", "semanticKnownSuggestionState"
+    ),
+    "dictationFocusSources" => record.dig(
+      "dictationPreparationEvidence", "focusSource"
+    ),
+    "dictationPreparationApplications" => record.dig(
+      "dictationPreparationEvidence", "targetApplication"
+    ),
+    "dictationPreparationFailureReasons" => record.dig(
+      "dictationPreparationEvidence", "failureReason"
     ),
     "unsupportedReasons" => record["unsupportedReason"],
     "dictationFailureReasons" => record["dictationFailureReason"],

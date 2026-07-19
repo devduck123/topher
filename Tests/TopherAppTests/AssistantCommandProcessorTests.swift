@@ -159,6 +159,73 @@ final class AssistantCommandProcessorTests: XCTestCase {
     )
   }
 
+  func testActiveChromeTabQuestionUsesReadOnlyProviderExactlyOnce() async {
+    let stub = ProcessorChromeExchangeStub()
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            try await stub.send(request)
+          })
+        )
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    let result = await processor.process("What is this Chrome tab?")
+
+    XCTAssertEqual(
+      result.outcome,
+      .completed(.succeeded(message: "This Chrome tab is “Topher” on example.com."))
+    )
+    XCTAssertEqual(
+      result.trace,
+      AssistantCommandTrace(
+        outcome: .capabilitySucceeded,
+        commandKind: .identifyActiveChromeTab,
+        capabilityIdentifier: ChromeActiveTabCapability.descriptor.identifier
+      )
+    )
+    let operations = await stub.operations()
+    XCTAssertEqual(operations, [.getActiveTab])
+  }
+
+  func testChromeTabActivationCrossesPolicyThenExecutesOneRegisteredMutation() async throws {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(capturedAtMilliseconds: now)
+    var executionStartedCount = 0
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            try await stub.send(request)
+          })
+        ),
+        nowMilliseconds: { now }
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    let result = await processor.process("Switch to the Chrome tab titled Topher") {
+      executionStartedCount += 1
+    }
+
+    XCTAssertEqual(
+      result.outcome,
+      .completed(.succeeded(message: "Switched to the Chrome tab “Topher”."))
+    )
+    XCTAssertEqual(result.trace.commandKind, .activateChromeTab)
+    XCTAssertEqual(
+      result.trace.capabilityIdentifier,
+      ChromeTabActivationCapability.descriptor.identifier
+    )
+    XCTAssertEqual(executionStartedCount, 1)
+    let operations = await stub.operations()
+    XCTAssertEqual(operations, [.listTabs, .activateTab])
+  }
+
   func testBrowserRouteCommandExecutesExactlyOnce() async {
     let applicationURL = URL(fileURLWithPath: "/Applications/Google Chrome.app")
     var openCount = 0
@@ -469,5 +536,46 @@ final class AssistantCommandProcessorTests: XCTestCase {
         XCTFail("This command must not open a web URL")
       })
     )
+  }
+}
+
+private actor ProcessorChromeExchangeStub {
+  private let capturedAtMilliseconds: Int64
+  private var receivedOperations: [ChromeBridgeOperation] = []
+
+  init(capturedAtMilliseconds: Int64 = 1_721_000_000_000) {
+    self.capturedAtMilliseconds = capturedAtMilliseconds
+  }
+
+  func send(_ request: ChromeBridgeRequest) throws -> ChromeBridgeResponse {
+    receivedOperations.append(request.operation)
+    let tab = ChromeBridgeWireTab(
+      tabID: 7,
+      windowID: 3,
+      index: 1,
+      active: true,
+      title: "Topher",
+      url: "https://example.com/private/path",
+      fingerprint: String(repeating: "a", count: 64),
+      capturedAtMilliseconds: capturedAtMilliseconds
+    )
+    switch request.operation {
+    case .getActiveTab:
+      return ChromeBridgeResponse(requestID: request.requestID, status: .success, tab: tab)
+    case .listTabs:
+      return ChromeBridgeResponse(
+        requestID: request.requestID,
+        status: .success,
+        tabs: [tab],
+        excludedTabCount: 0,
+        observationWasTruncated: false
+      )
+    case .activateTab, .cancel:
+      return ChromeBridgeResponse(requestID: request.requestID, status: .success)
+    }
+  }
+
+  func operations() -> [ChromeBridgeOperation] {
+    receivedOperations
   }
 }

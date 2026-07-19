@@ -20,7 +20,7 @@ showed:
 - Apple selected `Kodex` and `impending` in two developer-context phrases.
 
 Build 19 keeps ambiguous Codex content fail-closed and addresses the remaining
-gaps with the boundary documented in decision 0022.
+gaps with the boundary documented in decision 0023.
 
 ## Change under verification
 

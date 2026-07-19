@@ -35,6 +35,10 @@ default.
   validation, and policy. Keep this layer independent of AppKit and SwiftUI.
 - `Sources/TopherApp/`: macOS integration, capture, capabilities, diagnostics,
   lifecycle, and UI.
+- `Sources/TopherChromeBridgeHost/`: bounded native-messaging relay executable;
+  it must not own resolution, policy, tab matching, or persistence.
+- `ChromeExtension/`: minimal unpacked Manifest V3 adapter and dependency-free
+  tests. Keep permissions at `tabs` plus `nativeMessaging` for the current slice.
 - `Tests/TopherCoreTests/` and `Tests/TopherAppTests/`: SwiftPM-owned XCTest
   targets with injected native seams.
 - `Topher.xcodeproj/`: deployable app target, signing, entitlements, privacy
@@ -43,7 +47,8 @@ default.
 - `docs/evidence/`: dated verification records for specific checkpoints.
 - `dogfood/`: sanitized, reviewable manual request cases. Private observed
   requests belong only under the gitignored `.topher-local/` tree.
-- `scripts/`: checked local build, dependency-parity, and diagnostics helpers.
+- `scripts/`: checked local build, dependency-parity, Chrome registration, and
+  diagnostics helpers.
 
 ## Working agreements
 

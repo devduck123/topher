@@ -1,4 +1,4 @@
-# 0015: Layer dictation polish under an explicit latency budget
+# 0016: Layer dictation polish under an explicit latency budget
 
 - Status: accepted
 - Date: 2026-07-16
@@ -45,7 +45,7 @@ Raw finalized text and polished text remain distinct in bounded dogfood
 diagnostics. An unremoved stutter/filler feedback reason is distinct from whole
 text being inserted more than once.
 
-This decision extends, rather than rewrites, decision 0013's safe insertion
+This decision extends, rather than rewrites, decision 0014's safe insertion
 boundary. It does not authorize command interpretation, submission, arbitrary
 input synthesis, or broader Accessibility context.
 

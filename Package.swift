@@ -10,6 +10,7 @@ let package = Package(
   products: [
     .library(name: "TopherCore", targets: ["TopherCore"]),
     .executable(name: "Topher", targets: ["TopherApp"]),
+    .executable(name: "TopherChromeBridgeHost", targets: ["TopherChromeBridgeHost"]),
   ],
   dependencies: [
     .package(
@@ -26,6 +27,10 @@ let package = Package(
         .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
       ],
       exclude: ["Topher.entitlements"]
+    ),
+    .executableTarget(
+      name: "TopherChromeBridgeHost",
+      dependencies: ["TopherCore"]
     ),
     .testTarget(
       name: "TopherCoreTests",

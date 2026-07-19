@@ -39,7 +39,7 @@ view and ratings for the latest local dogfood records.
   Notion end-append cases to the 28-case manual corpus.
 
 The safety and compatibility tradeoff is recorded in
-[decision 0019](../decisions/0019-require-semantic-web-append-evidence.md).
+[decision 0020](../decisions/0020-require-semantic-web-append-evidence.md).
 
 ## Automated verification
 

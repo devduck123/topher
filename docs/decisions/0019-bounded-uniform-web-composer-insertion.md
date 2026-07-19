@@ -1,10 +1,10 @@
-# 0018: Permit bounded whole-value insertion for uniform web composers
+# 0019: Permit bounded whole-value insertion for uniform web composers
 
 Date: 2026-07-16
 
 Status: Accepted; live third-party acceptance pending
 
-Supersedes the web-composer restriction in decisions 0016 and 0017. Their
+Supersedes the web-composer restriction in decisions 0017 and 0018. Their
 exactly-one-mutation and verified-readback requirements remain in force.
 
 ## Context

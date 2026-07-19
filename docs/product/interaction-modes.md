@@ -52,6 +52,12 @@ The current feature is a global **assistant command** mode:
    path.
 6. Unsupported text fails visibly and does not become an executable string.
 
+For the explicitly configured Chrome adapter, the same command mode can now
+acquire bounded regular-tab metadata on demand for an active-tab answer or tab
+list. Exact-title tab activation remains a separate registered mutation after
+policy, unique matching, and freshness revalidation. It does not grant page or
+DOM understanding.
+
 The menu does not need to be open and Topher does not need to be the focused
 application. The microphone is active only for the hold. At 30 seconds Topher
 automatically finalizes the best command transcript, but will not execute a
@@ -256,7 +262,9 @@ Keep one reliable loop at every checkpoint:
 2. Add the read-only active-application provider as the smallest context slice.
 3. Complete in build 9: build global text dictation as an explicitly separate
    mode and permission; continue its app-compatibility and speech-quality gate.
-4. Add structured browser tab/page context before screenshot-based context.
+4. Complete for tab metadata: add structured Chrome active-tab/list context and
+   exact-title activation before screenshot-based context. Page/DOM context
+   remains a separate future gate.
 5. Establish confirmation and bounded-session behavior before remote mutation.
 6. Spike one chat adapter with read-only authority.
 7. Evaluate a local wake phrase only after idle-resource and privacy gates exist.

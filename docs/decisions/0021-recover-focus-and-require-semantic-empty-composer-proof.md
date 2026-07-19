@@ -1,4 +1,4 @@
-# 0020: Recover app focus and require semantic empty-composer proof
+# 0021: Recover app focus and require semantic empty-composer proof
 
 - Status: accepted
 - Date: 2026-07-18

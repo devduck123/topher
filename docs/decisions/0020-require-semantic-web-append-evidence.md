@@ -1,10 +1,10 @@
-# 0019: Require semantic evidence for nonempty web-composer append
+# 0020: Require semantic evidence for nonempty web-composer append
 
 Date: 2026-07-16
 
 Status: Accepted; live third-party acceptance pending
 
-Supersedes decision 0018's permission to rewrite a nonempty web-composer value
+Supersedes decision 0019's permission to rewrite a nonempty web-composer value
 at any valid selection. Its exactly-one-mutation, bounded-readback, ancestry,
 size, and object-refusal requirements remain in force.
 

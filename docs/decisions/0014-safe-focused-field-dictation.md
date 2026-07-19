@@ -1,4 +1,4 @@
-# 0013: Keep global dictation separate and insert through revalidated Accessibility selection
+# 0014: Keep global dictation separate and insert through revalidated Accessibility selection
 
 - Status: accepted
 - Date: 2026-07-15

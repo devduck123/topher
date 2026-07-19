@@ -10,9 +10,11 @@ own measured safety and reliability gates.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The tree defines 217 Swift tests. Normal, Thread Sanitizer, Xcode Debug and
-   Release, static analysis, signature, entitlement, installation, and process
-   checks are rerun at each dogfood checkpoint.
+2. The integrated Build 19 tree defines 320 Swift tests. Normal and Thread
+   Sanitizer suites, Xcode Debug and universal Release builds, static analysis,
+   signature, entitlement, architecture, 13 extension tests, and 40
+   registration-helper assertions pass. Installation, process, live dictation,
+   and live Chrome checks remain separate manual gates.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
@@ -147,6 +149,24 @@ dependency, and installed-app denial/error recovery is verified.
   Accessibility or Screen Recording permission.
 - Complete in build 8: expand parser, policy, catalog, symlink-boundary,
   capability, exactly-once dispatch, and fallback URL tests.
+- Complete in build 9: add deterministic active-Chrome-tab and bounded-tab-list
+  questions plus explicit “Switch to the Chrome tab titled X” resolution. Keep
+  tab activation behind policy as one separately registered low-risk mutation.
+- Complete in build 9: add a minimal Manifest V3 extension with exactly `tabs`
+  and `nativeMessaging`, explicit incognito exclusion, no host permissions or
+  page injection, and no continuous or persistent browser snapshot.
+- Complete in build 9: embed a dedicated native-messaging relay; register one
+  exact extension origin to its checked absolute bundle path; use a typed
+  versioned 64-KiB protocol, bounded tab/title/URL values, timeouts,
+  cancellation, concurrency and duplicate handling, explicit completeness for
+  bounded matching, fresh fingerprints, and no activation retry after dispatch.
+- Complete in build 9: start the app-side relay only for a primary-process Chrome
+  request; refuse activation when the bound cannot prove global uniqueness; and
+  classify a disconnected dispatched mutation as an unknown outcome.
+- Complete in build 9: cover resolver, policy, provider, protocol, registration,
+  ambiguity, staleness, timeout, disconnect, version mismatch, and exactly-once
+  behavior in Swift, Node, and Ruby tests. Live Chrome profile acceptance remains
+  a separate named dogfood gate.
 
 Exit: every proposed MVP command works without an LLM, Accessibility, or Screen
 Recording.
@@ -341,10 +361,16 @@ not parallel implementation projects. The canonical contracts are
 
 ### Structured browser context
 
-- Add a narrow Chrome adapter that returns typed tab and DOM data.
-- Treat extension/page messages as untrusted and never execute arbitrary
-  JavaScript from a model or page.
-- Prefer browser data before Accessibility or screenshots.
+- Complete for build 9: add a narrow Chrome adapter that returns typed active
+  and bounded regular-tab metadata and activates one revalidated exact-title
+  match.
+- Complete for build 9: treat extension/tab messages as untrusted; never execute
+  arbitrary JavaScript from a model or page; keep incognito, file URLs, DOM/page
+  bodies, and browser-history persistence out of the slice.
+- Complete for build 9: prefer browser tab data before Accessibility or
+  screenshots.
+- Future: prove live extension/native-host recovery, then design DOM/page
+  context as a separate permission and privacy decision.
 
 ### Remote chat ingress
 

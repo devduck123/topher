@@ -1,8 +1,8 @@
-# 0017: Add bounded contextual evidence to the fast dictation tier
+# 0018: Add bounded contextual evidence to the fast dictation tier
 
 - Status: accepted
 - Date: 2026-07-16
-- Extends: decisions 0015 and 0016
+- Extends: decisions 0016 and 0017
 
 ## Context
 

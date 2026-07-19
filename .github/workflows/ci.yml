@@ -45,6 +45,11 @@ jobs:
       - name: Check formatting
         run: xcrun swift-format lint --strict -r Package.swift Sources Tests
 
+      - name: Test Chrome extension and native-host registration
+        run: |
+          node --test ChromeExtension/tests/*.test.mjs
+          ruby scripts/test_chrome_native_host.rb
+
       - name: Run unit tests
         run: swift test
 

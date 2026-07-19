@@ -21,7 +21,10 @@ enum DeveloperTranscriptSource: String, Codable, Equatable, Sendable {
 }
 
 enum AssistantCommandKind: String, Codable, Equatable, Sendable {
+  case activateChromeTab
+  case identifyActiveChromeTab
   case identifyFrontmostApplication
+  case listChromeTabs
   case openApplication
   case openInstalledApplication
   case openBrowserRoute

@@ -38,7 +38,7 @@ changing its visible content.
   advertise Topher undo for whole-value insertion.
 
 The architecture tradeoff is recorded in
-[decision 0016](../decisions/0016-verify-accessibility-dictation-mutations.md).
+[decision 0017](../decisions/0017-verify-accessibility-dictation-mutations.md).
 
 ## Automated verification
 

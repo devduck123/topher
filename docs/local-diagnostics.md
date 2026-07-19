@@ -20,7 +20,7 @@ application logger whose sink is supplied by the operating system:
 |---|---|
 | Unified Logging | Platform log aggregation |
 | Subsystem `dev.topher.app` | Service or application name |
-| Categories `control-path`, `voice-capture`, and `developer-diagnostics` | Logger namespaces |
+| Categories `control-path`, `voice-capture`, `developer-diagnostics`, and `chrome-context` | Logger namespaces |
 | `log stream` | Follow/tail live events |
 | `log show` | Query retained events |
 | Xcode debug console | Local development console |
@@ -61,6 +61,8 @@ Fixed events emitted across the three Unified Logging categories include:
 - Command policy denied a registered command.
 - A developer-trace setting, read, write, clear, or maintenance operation
   failed, or unreadable storage was cleared.
+- Chrome bridge setup, disconnect, malformed-response, or unmatched-response
+  metadata occurred, without the response payload.
 
 The `voice-capture` category also emits three payload-free signpost interval
 names:
@@ -71,7 +73,8 @@ names:
 - `VoiceFinalization`: key-up through final transcript completion or timeout.
 
 Unified Logging and signposts never receive manual text, partial/final speech,
-search terms, URLs, page contents, raw audio, selected application names, or
+search terms, URLs, browser-returned tab titles/URLs/fingerprints, page contents,
+raw audio, selected application names, or
 detailed errors that might carry user data. Developer-trace failures use fixed
 metadata-only messages; there is no transcript fallback into `Logger` or
 `print`.
@@ -143,7 +146,8 @@ Each record contains only:
 
 Topher does not separately capture or append raw audio, partial transcripts,
 the complete speech-alternative list, microphone buffers, retrieved
-browser/screen/message/document context,
+browser/screen/message/document context, browser-returned tab titles, URLs,
+fingerprints, native messages,
 constructed destination URLs, detailed framework errors, Keychain/config
 values, or arbitrary error text. The exact user-authored request can itself
 contain a query, URL, pasted content, credential, or error string. Dictation

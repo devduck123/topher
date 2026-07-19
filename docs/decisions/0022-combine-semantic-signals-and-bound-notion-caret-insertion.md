@@ -1,4 +1,4 @@
-# 0021: Combine semantic signals and bound Notion caret insertion
+# 0022: Combine semantic signals and bound Notion caret insertion
 
 - Status: accepted
 - Date: 2026-07-18
@@ -78,8 +78,8 @@ the existing bounded user-authored transcript record.
 
 ## Relationship to earlier decisions
 
-This decision supersedes decision 0020's requirement that character count and
+This decision supersedes decision 0021's requirement that character count and
 text-marker length must both be zero. It preserves that decision's process
 binding, revalidation, authored-content refusal, Terminal fallback, and
-exactly-one-mutation requirements. It extends decision 0019's plain web adapter
+exactly-one-mutation requirements. It extends decision 0020's plain web adapter
 only for the narrowly bounded Notion single-line caret case.

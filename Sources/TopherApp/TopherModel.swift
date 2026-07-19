@@ -146,6 +146,7 @@ final class TopherModel: ObservableObject {
     resolver: CommandResolver = .init(),
     policy: CommandPolicy = .init(),
     applicationOpener: ApplicationOpenCapability? = nil,
+    chromeContext: ChromeContextCapabilities? = nil,
     webOpener: WebOpenCapability? = nil,
     microphonePermission: MicrophonePermissionClient? = nil,
     speechAssets: SpeechAssetPreparationClient? = nil,
@@ -178,6 +179,7 @@ final class TopherModel: ObservableObject {
       vocabularyProvider: vocabularyProvider,
       policy: policy,
       applicationOpener: applicationOpener,
+      chromeContext: chromeContext,
       webOpener: webOpener
     )
     self.captureController = captureController

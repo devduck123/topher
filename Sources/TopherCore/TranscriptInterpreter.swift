@@ -418,8 +418,12 @@ public struct TranscriptInterpreter: Sendable {
       // registered destination, but it cannot construct a new destination.
       true
     case (.searchUnknownDestination, .searchUnknownDestination),
-      (.identifyFrontmostApplication, .identifyFrontmostApplication):
+      (.identifyFrontmostApplication, .identifyFrontmostApplication),
+      (.identifyActiveChromeTab, .identifyActiveChromeTab),
+      (.listChromeTabs, .listChromeTabs):
       true
+    case (.activateChromeTab(let firstTitle), .activateChromeTab(let secondTitle)):
+      firstTitle == secondTitle
     default:
       false
     }

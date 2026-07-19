@@ -36,7 +36,7 @@ unnecessarily complex.
   nonempty composer, short pause, and spoken slash scenarios.
 
 The architecture tradeoff is recorded in
-[decision 0017](../decisions/0017-bounded-contextual-dictation-followup.md).
+[decision 0018](../decisions/0018-bounded-contextual-dictation-followup.md).
 
 ## Automated verification
 

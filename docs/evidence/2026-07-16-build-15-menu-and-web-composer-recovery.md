@@ -39,7 +39,7 @@ allowed only single-line end appends.
   web-editor refusal.
 
 The boundary and rejected alternatives are recorded in
-[decision 0018](../decisions/0018-bounded-uniform-web-composer-insertion.md).
+[decision 0019](../decisions/0019-bounded-uniform-web-composer-insertion.md).
 
 ## Automated verification
 

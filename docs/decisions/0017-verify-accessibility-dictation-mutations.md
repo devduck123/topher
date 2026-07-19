@@ -1,8 +1,8 @@
-# 0016: Verify Accessibility dictation mutations and use a bounded plain-value adapter
+# 0017: Verify Accessibility dictation mutations and use a bounded plain-value adapter
 
 - Status: accepted
 - Date: 2026-07-16
-- Supersedes: the categorical whole-value rejection in decision 0013 only
+- Supersedes: the categorical whole-value rejection in decision 0014 only
 
 ## Context
 
@@ -41,7 +41,7 @@ invalid ranges, and unavailable values cannot use this adapter. Topher chooses
 one insertion strategy before mutation; it never tries a second strategy after
 an ambiguous result.
 
-Other compatible fields retain the selected-text path from decision 0013. Both
+Other compatible fields retain the selected-text path from decision 0014. Both
 paths perform bounded readback immediately and after at most three 10 ms waits.
 Success requires the inserted range or exact expected value to match. Caret
 readback distinguishes content-and-caret verification from content-only

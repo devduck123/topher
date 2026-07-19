@@ -42,7 +42,17 @@ noise. Do not coach identical cadence between takes.
 9. “Open Xcode.”
 10. “Search for pnpm workspace filtering.”
 11. “What app am I currently using?”
-12. “What does the current Chrome tab show?”
+12. “What is this Chrome tab?”
+13. “What tabs do I have open?”
+14. “Switch to the Chrome tab titled Example Domain.”
+
+The Chrome phrases use public, non-sensitive example tabs only. For activation,
+replace `Example Domain` with one exact title from the current bounded result;
+do not put private tab titles into a shared benchmark report. The negative
+corpus must also include “Close the Chrome tab,” “What’s on my YouTube feed?”,
+two regular tabs with the same example title, one incognito tab, and a file URL.
+Those cases must refuse, remain unsupported, or be explicitly excluded without
+capturing page bodies or broadening permissions.
 
 Add a distinct prose/dictation corpus with developer terminology and natural
 punctuation, including `GraphQL`, `URLSession`, `pnpm`, repository names,

@@ -4,30 +4,32 @@ Topher is a local-first macOS assistant. This repository currently contains
 end-to-end voice-command and global-dictation paths: a native menu-bar UI, two
 configurable global hold shortcuts, on-device English transcription,
 deterministic typed command resolution, safe focused-field insertion, policy
-validation, native application launching, and bounded web navigation. Capture
-is shared, but command interpretation and dictation insertion remain separate
-request kinds and authority boundaries.
+validation, native application launching, bounded web navigation, and a first
+structured Chrome context slice for active-tab identification, bounded tab
+listing, and exact-title activation through a narrow MV3/native-messaging
+bridge. Capture is shared, but command interpretation, context acquisition,
+browser activation, and dictation insertion remain separate request kinds and
+authority boundaries.
 
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 development tree currently defines 289 Swift tests. Build 19
-passes all 289 normally and under Thread Sanitizer, plus Xcode Debug, universal
-Release, static analysis, and strict product-bundle checks. Build 18's exact
-Release artifact remains the installed dogfood bundle. Live Build 18 dogfooding
-confirmed empty/end-append Codex insertion and Notion start/middle/end insertion,
-then found unstable Codex caret placement, missing punctuation-boundary spacing,
-and command-query formatting drift. Build 19 addresses those findings; its
-replacement bundle and final live acceptance remain pending. Direct Apple
+Status: the 0.4.0 Build 19 integration combines the global-dictation and
+structured Chrome-context foundations. All 320 Swift tests pass normally and
+under Thread Sanitizer, all 13 extension tests and 40 native-host assertions
+pass, and Xcode Debug, universal Release, static analysis, and strict bundle
+checks succeed. The signed Release embeds the universal native Chrome host at
+`Contents/Helpers`.
+Build 18's exact Release artifact remains the installed dogfood bundle; Build 19
+has not been installed or live-tested. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
-local dogfooding. Installation in `/Applications`, launch, and process liveness
-were verified for the earlier strictly checked Build 17 Release bundle. A live
-Core Audio
+local dogfooding. A live Core Audio
 callback-isolation failure was captured, fixed, and covered by an off-main
 regression test. Accuracy, latency, permission-recovery, sleep/wake, and
 repeated-session acceptance remain explicit post-merge dogfood gates; this
 source merge is not evidence that those paths passed.
-The comparative speech benchmark is still open.
+Live Chrome extension/native-host acceptance is also unverified. The
+comparative speech benchmark is still open.
 
 ## Implemented in this slice
 
@@ -134,8 +136,9 @@ The comparative speech benchmark is still open.
 - Voice requests with recognition hypotheses that disagree on an unfamiliar
   domain fail before browser handoff. Known recognition errors may narrow to a
   fixed canonical destination; exact manual domains keep their direct path.
-- A per-user runtime lock ensures only one Topher process can register the
-  global shortcut, including when a second bundle process is forced manually.
+- A per-user runtime lock ensures only the primary Topher process can construct
+  runtime-owned services such as the global shortcut and Chrome relay,
+  including when a second bundle process is forced manually.
 - Fail-closed rejection of multiple executable actions in one request.
 - A bounded local personal-vocabulary editor for developer and product terms.
   Canonical terms may bias on-device recognition; known mis-transcriptions stay
@@ -145,6 +148,18 @@ The comparative speech benchmark is still open.
 - Read-only “What app am I using?” support through
   `NSWorkspace.frontmostApplication`, without Accessibility or Screen
   Recording permission.
+- On-demand “What is this Chrome tab?” and “What tabs do I have open?” support
+  through typed, bounded regular-tab metadata from a minimal Chrome Manifest V3
+  extension.
+- “Switch to the Chrome tab titled X” using exact deterministic title matching,
+  ambiguity and incomplete-observation refusal, a five-second fingerprinted
+  snapshot, extension-side revalidation immediately before mutation, and one
+  non-retried activation attempt.
+- A bundled native-messaging relay with a 64-KiB application protocol limit,
+  launch-scoped same-user socket handshake, exact extension-origin registration,
+  checked absolute helper path, typed cancellation, timeouts, concurrency limits,
+  duplicate-response handling, version mismatch recovery, demand-driven app-side
+  startup, and explicit unknown outcomes when a dispatched activation disconnects.
 - A separate policy decision before execution.
 - Safe rejection of malformed address-like input, ambiguous installed-app
   names, and explicitly requested applications that are not installed.
@@ -160,6 +175,7 @@ The comparative speech benchmark is still open.
   app automatically.
 - XCTest coverage for parsing, policy, native capabilities, audio conversion,
   permission/assets, transcription, cancellation, and push-to-talk races.
+- Dependency-free Node extension tests and Ruby native-host registration tests.
 
 ## Current interaction boundary
 
@@ -193,6 +209,9 @@ general spoken-punctuation commands, multi-paragraph editing,
 always-on wake listening, remote chat, conversational follow-ups, browser-page
 reading, broader Accessibility context, and visual screen understanding remain
 separate future work.
+The implemented Chrome context boundary is metadata-only; it does not add DOM
+or page-body understanding. These remain separate modes and trust boundaries,
+not flags on the command or dictation paths.
 
 See [Interaction modes](docs/product/interaction-modes.md) and
 [Request lifecycle and context](docs/architecture/request-lifecycle.md) for the
@@ -211,10 +230,10 @@ The intended layers are:
    YouTube,” and “Search YouTube for local AI.” These do not need AI.
 2. A future optional local model that interprets fuzzier phrasing into the same
    typed commands. It proposes; the policy layer still decides what can execute.
-3. Read-only native application context now supports “What app am I using?”
-   without an LLM or a new permission. Permissioned browser context for
-   “What’s on my feed?” or “Go to this Chrome tab” still requires a narrow
-   Chrome extension/native adapter and is not implemented yet.
+3. Read-only native application context supports “What app am I using?” and a
+   narrow Chrome adapter now supports tab identity/listing plus exact-title tab
+   activation without an LLM. Page/DOM questions such as “What’s on my feed?”
+   remain unimplemented.
 
 ## Build and run
 
@@ -264,6 +283,12 @@ or rearranging unused status items; a crowded MacBook menu bar can clip app
 items behind the notch. Launch the app bundle through Xcode, Finder, or `open`
 rather than invoking `Contents/MacOS/Topher` directly.
 
+Chrome context requires a separate unpacked extension and per-user native-host
+registration. Build the app first, then follow the checked setup and uninstall
+steps in [the Chrome extension guide](ChromeExtension/README.md). The repository
+contains no fixed unpacked extension ID and setup does not need to replace the
+user's `/Applications` build.
+
 For an interactive smoke test:
 
 1. Click Topher's sparkles icon in the menu bar. Confirm the compact panel shows
@@ -279,7 +304,11 @@ For an interactive smoke test:
 5. Try “Notion,” “Open Figma” (or another installed app), “Open Netflix,”
    “Open Netflix app,” “What app am I using?”, “Open Chrome extensions,”
    “YouTube dining with Derek,” “Go to YouTube, look for dining with Derek,”
-   “Go to eBay,” “eBay.com,” “Go to tnc.com,” and “Search Crunchyroll.”
+   “Go to eBay,” “eBay.com,” “Go to tnc.com,” “Search Crunchyroll,”
+   “What is this Chrome tab?”, “What tabs do I have open?”, “Switch to the
+   Chrome tab titled Example Domain,” and “YouTube for dining with Derek.”
+   Chrome context commands require the separate setup above and an exact
+   current tab title.
 6. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
    fallback. Say a malformed address or an explicitly missing app and confirm
    it fails closed.
@@ -351,12 +380,16 @@ explicit fallback search, or accept an explicit public DNS host through the
 bounded `HTTPSDomain` type, then hand the HTTPS URL to the user's default
 browser through `NSWorkspace`. Browser-owned
 internal routes are delivered only to their registered browser application.
-Topher itself has no direct network client, embedded browser, Chrome
-extension/native-messaging host, browser-page or tab capture, general
-Accessibility context provider, or screen-capture implementation. Its
-Accessibility surface is currently limited to focused-field dictation. The
-browser performs the external request and maintains its
-normal history when the user explicitly runs a search or navigation command.
+Topher itself has no direct network client or embedded browser. Its Chrome
+extension requests exactly `tabs` and `nativeMessaging`, excludes incognito,
+and returns only bounded regular-tab titles/URLs on demand. It has no host
+permissions, content scripts, scripting, DOM/page-body extraction, screenshots,
+cookies, history, form data, file-URL access, or browser snapshot persistence.
+The bundled host relays bounded JSON only; it cannot execute commands. Topher's
+Accessibility surface is limited to focused-field dictation; it has no general
+Accessibility context provider or screen-capture implementation. The browser
+performs external requests and maintains its normal history when the user
+explicitly runs a search, navigation, or permitted tab-activation command.
 
 Before Topher adds direct networking, browser-content adapters, broader local
 data access, or distribution to other Macs, revisit the App Sandbox decision,
@@ -366,11 +399,11 @@ and the corresponding permission and denial-recovery tests.
 ## Logs and diagnostics
 
 Topher writes metadata-only events to macOS Unified Logging under subsystem
-`dev.topher.app` and categories `control-path`, `voice-capture`, and
-`developer-diagnostics`. It also emits payload-free signpost intervals for
-voice preparation, capture, and finalization. Unified Logging never receives
-the manual transcript, search query, URL, raw audio, application name, or
-detailed error text.
+`dev.topher.app` and categories `control-path`, `voice-capture`,
+`developer-diagnostics`, and `chrome-context`. It also emits payload-free
+signpost intervals for voice preparation, capture, and finalization. Unified
+Logging never receives the manual transcript, search query, browser-returned
+tab title/URL, raw audio, application name, or detailed error text.
 
 For local dogfooding, **Settings → Developer → Local diagnostics** can retain a
 separate request trace, while the menu exposes the latest three records and
@@ -468,20 +501,24 @@ mental model.
 - [Build 15 menu and web-composer recovery](docs/evidence/2026-07-16-build-15-menu-and-web-composer-recovery.md)
 - [Latest developer transcript diagnostics verification](docs/evidence/2026-07-15-developer-transcript-diagnostics.md)
 - [Installed-app resolution and fallback decision](docs/decisions/0012-installed-application-resolution-and-fallback.md)
-- [Safe focused-field dictation decision](docs/decisions/0013-safe-focused-field-dictation.md)
-- [Bounded dictation recovery and dogfood-corpus decision](docs/decisions/0014-bounded-dictation-recovery-and-dogfood-corpora.md)
-- [Latency-budgeted dictation-polish decision](docs/decisions/0015-layer-dictation-polish-under-a-latency-budget.md)
-- [Verified Accessibility mutation decision](docs/decisions/0016-verify-accessibility-dictation-mutations.md)
-- [Bounded contextual dictation follow-up decision](docs/decisions/0017-bounded-contextual-dictation-followup.md)
-- [Bounded uniform web-composer insertion decision](docs/decisions/0018-bounded-uniform-web-composer-insertion.md)
-- [Semantic web-append evidence decision](docs/decisions/0019-require-semantic-web-append-evidence.md)
-- [Focus recovery and semantic empty-composer decision](docs/decisions/0020-recover-focus-and-require-semantic-empty-composer-proof.md)
-- [Combined semantic-signal and Notion caret decision](docs/decisions/0021-combine-semantic-signals-and-bound-notion-caret-insertion.md)
-- [Stable caret and shared technical-notation decision](docs/decisions/0022-stabilize-caret-and-share-technical-notation.md)
+- [Structured Chrome tab-context decision](docs/decisions/0013-structured-chrome-tab-context.md)
+- [Safe focused-field dictation decision](docs/decisions/0014-safe-focused-field-dictation.md)
+- [Bounded dictation recovery and dogfood-corpus decision](docs/decisions/0015-bounded-dictation-recovery-and-dogfood-corpora.md)
+- [Latency-budgeted dictation-polish decision](docs/decisions/0016-layer-dictation-polish-under-a-latency-budget.md)
+- [Verified Accessibility mutation decision](docs/decisions/0017-verify-accessibility-dictation-mutations.md)
+- [Bounded contextual dictation follow-up decision](docs/decisions/0018-bounded-contextual-dictation-followup.md)
+- [Bounded uniform web-composer insertion decision](docs/decisions/0019-bounded-uniform-web-composer-insertion.md)
+- [Semantic web-append evidence decision](docs/decisions/0020-require-semantic-web-append-evidence.md)
+- [Focus recovery and semantic empty-composer decision](docs/decisions/0021-recover-focus-and-require-semantic-empty-composer-proof.md)
+- [Combined semantic-signal and Notion caret decision](docs/decisions/0022-combine-semantic-signals-and-bound-notion-caret-insertion.md)
+- [Stable caret and shared technical-notation decision](docs/decisions/0023-stabilize-caret-and-share-technical-notation.md)
 - [Build 16 verification evidence](docs/evidence/2026-07-16-build-16-semantic-web-append-and-menu-feedback.md)
 - [Build 17 verification evidence](docs/evidence/2026-07-18-build-17-focus-and-semantic-composer.md)
 - [Build 18 verification evidence](docs/evidence/2026-07-18-build-18-semantic-signals-and-notion-caret.md)
 - [Build 19 verification evidence](docs/evidence/2026-07-19-build-19-caret-composition-and-query-formatting.md)
+- [Build 19 dictation and Chrome integration evidence](docs/evidence/2026-07-19-build-19-dictation-chrome-integration.md)
+- [Chrome extension setup and manual acceptance](ChromeExtension/README.md)
+- [Chrome context foundation verification](docs/evidence/2026-07-18-chrome-context-foundation.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

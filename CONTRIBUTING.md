@@ -33,6 +33,8 @@ swift --version
 - `swift test` is the authoritative unit-test command.
 - `Topher.xcodeproj` owns the deployable `.app` bundle, macOS target settings,
   signing, entitlements, privacy strings, and shared `TopherApp` scheme.
+- The Xcode app target embeds the `TopherChromeBridgeHost` tool in
+  `Contents/Helpers`; SwiftPM also builds the same dedicated executable target.
 - The SwiftPM `Topher` executable is useful for compiler checks but is not the
   installable application.
 - Run the `TopherApp` scheme in Xcode for interactive debugging.
@@ -57,6 +59,8 @@ xcodebuild -project Topher.xcodeproj -scheme TopherApp \
   -configuration Debug build
 xcodebuild -project Topher.xcodeproj -scheme TopherApp \
   -configuration Release build
+node --test ChromeExtension/tests/*.test.mjs
+ruby scripts/test_chrome_native_host.rb
 ```
 
 Use the shared `TopherApp` scheme. Tests that need a microphone, a permission
@@ -145,6 +149,16 @@ Keep reusable public cases sanitized in `dogfood/manual-corpus.json`; keep raw
 observed queries only in `.topher-local/dogfood/observed-queries.json`. Never
 copy private observations into fixtures, evidence, issues, or pull requests
 without deliberate review and redaction.
+
+The Chrome adapter's tab titles, URLs, fingerprints, extension messages, and
+detailed bridge errors follow the same content rule. They may be transient
+typed request data and user-visible results, but never ordinary log fields or a
+new diagnostics payload. Native-host registration must keep one exact extension
+origin, an absolute checked bundled-helper path, and restrictive user-owned file
+permissions. A bounded activation list must also carry explicit completeness
+metadata: unobserved eligible tabs cannot be treated as proof of uniqueness.
+Disconnect handling must distinguish unsent reads from dispatched mutations so
+an uncertain activation is never presented as a safe retry.
 
 ## Swift concurrency and native callbacks
 

@@ -1,4 +1,4 @@
-# 0014: Finalize bounded holds and separate public from private dogfood corpora
+# 0015: Finalize bounded holds and separate public from private dogfood corpora
 
 - Status: accepted
 - Date: 2026-07-16

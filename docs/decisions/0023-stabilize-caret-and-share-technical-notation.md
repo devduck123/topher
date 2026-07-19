@@ -1,4 +1,4 @@
-# 0022: Stabilize caret and share technical notation
+# 0023: Stabilize caret and share technical notation
 
 - Status: accepted
 - Date: 2026-07-19
@@ -73,8 +73,8 @@ JavaScript, or a general rich-editor adapter.
 
 ## Relationship to earlier decisions
 
-This decision preserves decision 0016's verified-mutation requirement,
-decision 0017's narrow spoken-notation and alternative-selection rules, and
-decision 0021's Codex/Notion whole-value safety boundaries. It refines only
+This decision preserves decision 0017's verified-mutation requirement,
+decision 0018's narrow spoken-notation and alternative-selection rules, and
+decision 0022's Codex/Notion whole-value safety boundaries. It refines only
 post-write caret stabilization, insertion composition, shared query formatting,
 and fallback clarity.

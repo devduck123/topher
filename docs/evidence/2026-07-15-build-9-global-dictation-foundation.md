@@ -20,7 +20,7 @@ commands as a different request kind. The slice includes:
 - dictation-specific HUD and bounded developer-diagnostic outcomes.
 
 The architecture and trust boundary are recorded in
-[decision 0013](../decisions/0013-safe-focused-field-dictation.md).
+[decision 0014](../decisions/0014-safe-focused-field-dictation.md).
 
 ## Safety properties
 

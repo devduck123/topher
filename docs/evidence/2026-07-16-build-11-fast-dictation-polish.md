@@ -24,7 +24,7 @@ focused-field dictation:
 No filler removal, grammar/tone rewriting, invented punctuation, model call,
 network request, new permission, or new entitlement was added. The decision is
 recorded in
-[decision 0015](../decisions/0015-layer-dictation-polish-under-a-latency-budget.md).
+[decision 0016](../decisions/0016-layer-dictation-polish-under-a-latency-budget.md).
 
 ## Automated verification
 

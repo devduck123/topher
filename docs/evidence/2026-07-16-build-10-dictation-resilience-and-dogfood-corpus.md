@@ -26,7 +26,7 @@ a deliberate testing workflow. The slice includes:
   dictation by default and never runs from the app.
 
 The architecture and data-retention choices are recorded in
-[decision 0014](../decisions/0014-bounded-dictation-recovery-and-dogfood-corpora.md).
+[decision 0015](../decisions/0015-bounded-dictation-recovery-and-dogfood-corpora.md).
 
 ## Automated verification
 

@@ -43,12 +43,14 @@ struct TopherApp: App {
     let resolver = CommandResolver(installedApplications: installedApplications)
     let policy = CommandPolicy(installedApplications: installedApplications)
     let installedApplicationNames = installedApplications.map(\.displayName)
+    let isPrimary = TopherRuntime.instanceLock.isPrimary
     _diagnostics = StateObject(wrappedValue: diagnostics)
     _vocabulary = StateObject(wrappedValue: vocabulary)
     _model = StateObject(
       wrappedValue: TopherModel(
         resolver: resolver,
         policy: policy,
+        chromeContext: .runtime(isPrimary: isPrimary),
         voiceTranscription: .live(contextualStrings: {
           Self.contextualStrings(
             personal: vocabulary.entries.map(\.canonicalTerm),
@@ -58,7 +60,7 @@ struct TopherApp: App {
         }),
         developerDiagnostics: diagnostics,
         vocabularyProvider: { vocabulary.vocabulary },
-        listenForShortcutEvents: TopherRuntime.instanceLock.isPrimary
+        listenForShortcutEvents: isPrimary
       )
     )
   }

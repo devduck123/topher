@@ -1,6 +1,7 @@
 # Focused technical investigation
 
-Status: 2026-07-15
+Status: initial investigation snapshot, 2026-07-15. Revalidate current behavior
+against `README.md` and dated evidence records.
 
 ## Recommendation
 
@@ -47,11 +48,12 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.3.0 development tree defines 110 tests and adds only the Release
-audio-input entitlement required for microphone capture. The latest complete
-local normal and Thread Sanitizer runs passed all 109 tests present before the
-final transcript-reload regression; that new bounded-reload path separately
-passed compiler and executable-smoke validation and awaits the full CI rerun.
+At this investigation's 0.3.0 snapshot, the development tree defined 110 tests
+and added only the Release audio-input entitlement required for microphone
+capture. The latest complete local normal and Thread Sanitizer runs then had
+passed all 109 tests present before the final transcript-reload regression; that
+new bounded-reload path separately passed compiler and executable-smoke
+validation and awaited the next full CI run.
 See the dated
 [speech integration evidence](evidence/2026-07-14-speech-integration.md) for the
 installed bundle and live callback verification, and the
@@ -141,9 +143,12 @@ Events, Screen Recording, or legacy `SFSpeechRecognizer` authorization request.
 
 Google/YouTube navigation uses validated fixed HTTPS destinations and delegates
 them to the default browser through `NSWorkspace`. Topher has no direct network
-client, embedded web view, browser extension/native-messaging host, or browser
-page/tab capture implementation. The destination browser—not Topher—performs
-the resulting network request.
+client or embedded web view. Build 9 adds a minimal Chrome extension and bundled
+native-messaging relay for on-demand bounded regular-tab metadata and one
+revalidated activation capability. It requests only `tabs` and
+`nativeMessaging`, excludes incognito, and does not capture DOM/page bodies,
+screenshots, cookies, history, forms, or file URLs. The destination browser—not
+Topher—still performs navigation network requests.
 
 This is a local-dogfood posture, not a distribution design. Revisit App Sandbox
 and capability entitlements before adding direct network or browser-content

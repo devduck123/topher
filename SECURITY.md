@@ -35,11 +35,21 @@ development build. There is not yet a notarized public binary release.
   through macOS, and independent policy requires the exact target identity
   issued by the captured launch catalog.
 - Retrieved content is untrusted data, never a higher-priority instruction.
+- Chrome tab titles and URLs are untrusted retrieved data. Exact-title matching
+  can select only one fresh typed tab identity after the adapter proves its
+  bounded eligible-tab observation was complete; it cannot create a command,
+  navigate, close, reload, submit, or bypass policy.
 - No arbitrary shell, AppleScript, browser JavaScript, or generated code runs.
 - Permissions are requested incrementally for implemented features.
 - Raw audio and screen captures are not persisted beyond the active request by
   default.
 - Sensitive content is excluded from ordinary logs.
+- The Chrome extension requests only `tabs` and `nativeMessaging`, cannot run in
+  incognito, and has no host permissions, content scripts, scripting, DOM/page
+  extraction, screenshots, cookies, history, forms, file-URL access, or stored
+  browser snapshots. Native-host registration binds one exact extension origin
+  to an absolute checked helper inside the current Topher bundle. Only the
+  primary Topher process may construct the app-side relay.
 - During the local dogfood phase, final voice/manual command text is retained by
   the bounded developer trace by default unless the user explicitly opts out.
   Recording is visibly indicated, stored with restrictive POSIX modes,

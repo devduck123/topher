@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "requestID": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "status": "success",
+  "tabs": [
+    {
+      "tabID": 7,
+      "windowID": 3,
+      "index": 1,
+      "active": true,
+      "title": "Example Domain",
+      "url": "https://example.com/",
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "capturedAtMilliseconds": 1721000000000
+    }
+  ],
+  "excludedTabCount": 0
+}

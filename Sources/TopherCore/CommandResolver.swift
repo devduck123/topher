@@ -22,6 +22,10 @@ public struct CommandResolver: Sendable {
   }
 
   private func resolveSingle(_ transcript: String) -> CommandResolution {
+    if let resolution = resolveChromeTabActivation(transcript) {
+      return resolution
+    }
+
     if let target = resolveBareWebsiteSearch(transcript) {
       return .resolved(.openWebsite(target))
     }
@@ -35,6 +39,14 @@ public struct CommandResolver: Sendable {
     }
 
     let request = normalizedRequest(transcript)
+
+    if isActiveChromeTabRequest(request) {
+      return .resolved(.identifyActiveChromeTab)
+    }
+
+    if isChromeTabListRequest(request) {
+      return .resolved(.listChromeTabs)
+    }
 
     if isFrontmostApplicationRequest(request) {
       return .resolved(.identifyFrontmostApplication)
@@ -223,6 +235,40 @@ public struct CommandResolver: Sendable {
       "what application is open", "what app am i in", "what application am i in",
       "what app is this", "what application is this",
     ].contains(request)
+  }
+
+  private func isActiveChromeTabRequest(_ request: String) -> Bool {
+    [
+      "what is this chrome tab", "what is the active chrome tab",
+      "what chrome tab is this", "which chrome tab is active",
+    ].contains(request)
+  }
+
+  private func isChromeTabListRequest(_ request: String) -> Bool {
+    [
+      "what chrome tabs do i have open", "what tabs do i have open",
+      "list my chrome tabs", "list my open chrome tabs", "which chrome tabs are open",
+    ].contains(request)
+  }
+
+  private func resolveChromeTabActivation(_ transcript: String) -> CommandResolution? {
+    let request = rawCommandRequest(transcript)
+    guard
+      let rawTitle = removingRawPrefix(
+        from: request,
+        candidates: [
+          "go to the chrome tab titled", "go to chrome tab titled",
+          "switch to the chrome tab titled", "switch to chrome tab titled",
+          "activate the chrome tab titled", "activate chrome tab titled",
+        ]
+      )
+    else { return nil }
+
+    let title = removingLikelySentencePunctuation(from: rawTitle)
+    guard let query = ChromeTabTitleQuery(title) else {
+      return .unsupported(reason: .missingValue)
+    }
+    return .resolved(.activateChromeTab(query))
   }
 
   private func resolveBareWebsiteSearch(_ transcript: String) -> WebsiteTarget? {

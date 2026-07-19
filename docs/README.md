@@ -17,6 +17,7 @@ that answers the question instead of reading every file.
 | What are the security and privacy invariants? | [`SECURITY.md`](../SECURITY.md) |
 | How should contributors build and validate changes? | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | How do local logs and retained dogfood diagnostics work? | [Local diagnostics](local-diagnostics.md) |
+| How is the Chrome adapter installed and dogfooded? | [Chrome extension guide](../ChromeExtension/README.md) |
 | How will speech quality be selected? | [Speech benchmark](speech-benchmark.md) |
 
 ## Document classes
@@ -69,6 +70,8 @@ edit an older record to claim a test that was not run then.
   capture/transcription source and tests → latest relevant evidence.
 - **Permission or context feature:** product vision → interaction modes → request
   lifecycle → security policy → risks → relevant ADRs.
+- **Chrome context work:** decision 0013 → `ChromeExtension/README.md` → Core
+  protocol/App bridge sources and tests → latest Chrome evidence record.
 - **Release or installation work:** contributing guide → README security posture
   → latest release evidence → install helper.
 - **Code review:** changed files and tests → `AGENTS.md` review priorities →

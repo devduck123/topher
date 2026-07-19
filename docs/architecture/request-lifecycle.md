@@ -45,6 +45,14 @@ global shortcut
   -> visible result
 ```
 
+The Chrome foundation extends that same processor with three registered
+capabilities: active-tab read, bounded tab-list read, and exact-title tab
+activation. A versioned MV3/native-messaging provider acquires regular-tab
+metadata only after one of those deterministic intents resolves. Activation
+requeries a bounded list, refuses zero or multiple exact matches, and asks the
+extension to revalidate the typed tab/window identity, capture time, and
+fingerprint immediately before one non-retried activation attempt.
+
 `PushToTalkCaptureController` owns microphone permission, speech assets,
 capture, partial/final transcript state, bounded alternative hypotheses,
 confidence evidence, timeouts, generation guards, and cleanup. It returns the
@@ -180,12 +188,16 @@ A model may help interpret phrasing, but it cannot create capabilities, grant
 permissions, set policy, or return executable code. Unavailable local reasoning
 must not break deterministic behavior.
 
-Some requests can resolve without broader context:
+Some requests resolve directly or name one narrow structured provider:
 
 - “Open Safari.”
 - “Go to YouTube.”
 - “Search Google for local speech recognition.”
 - “What app am I using?” reads only macOS's frontmost-application identity.
+- “What is this Chrome tab?” reads only the active regular Chrome tab's bounded
+  title and typed URL through the configured adapter.
+- “What tabs do I have open?” reads a bounded regular Chrome tab list; incognito
+  and unsupported URL schemes are excluded.
 
 Other requests should resolve first into a typed context need instead of a
 guessed action:
@@ -203,7 +215,7 @@ Use the narrowest structured provider capable of answering the request:
 | Priority | Provider | Example data | Permission or trust boundary |
 |---:|---|---|---|
 | 1 | Native application state | Frontmost app name and bundle identifier | No Accessibility permission for `NSWorkspace` frontmost-app lookup |
-| 2 | App or browser adapter | Active tab title/URL, typed DOM records, message metadata | Adapter authentication and narrow host/provider permissions |
+| 2 | App or browser adapter | Active tab title/URL (implemented for bounded regular Chrome tabs), future typed DOM records, message metadata | Adapter authentication and narrow host/provider permissions |
 | 3 | Accessibility | Focused element, selected text, accessible controls | Accessibility permission; deny secure elements |
 | 4 | Focused-window capture | On-demand pixels for one window | Screen Recording permission and visible capture feedback |
 | 5 | OCR or vision interpretation | Text/visual description derived from a capture | Same visual sensitivity plus model/data boundary |
@@ -361,11 +373,14 @@ contain a query, URL, pasted content, or secret and must be treated accordingly.
 1. Preserve the current deterministic local command path.
 2. Complete in build 8: add a read-only frontmost-application capability; do
    not build a general broker for one provider.
-3. Add a second structured provider, then introduce shared context request,
-   freshness, and cancellation behavior if duplication is real.
+3. Complete for the Chrome tab foundation: add a second structured provider
+   with typed freshness, cancellation, timeout, and staleness behavior; keep its
+   coordinator scoped to the browser bridge rather than generalizing every
+   provider prematurely.
 4. Add focused-field dictation as a separate mode and permission boundary.
-5. Add a Chrome adapter that returns typed tab/DOM data without arbitrary
-   JavaScript.
+5. Complete for tab metadata: add a Chrome adapter that returns typed active and
+   bounded tab records without arbitrary JavaScript. DOM/page data remains a
+   separate future slice.
 6. Add capability-specific confirmation before any message send or remote
    mutation.
 7. Normalize one read-only chat adapter into the shared request envelope.

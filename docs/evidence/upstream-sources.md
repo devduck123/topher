@@ -1,6 +1,6 @@
 # Upstream evidence ledger
 
-Retrieved 2026-07-14. Prefer these primary sources when refreshing the
+Retrieved 2026-07-14 and refreshed for Chrome context on 2026-07-18. Prefer these primary sources when refreshing the
 investigation.
 
 ## Apple
@@ -37,8 +37,10 @@ intentionally has no 27 declarations.
 
 ## Chrome
 
-- [Manifest V3 format](https://developer.chrome.com/docs/extensions/mv3/manifest)
-- [`activeTab`](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab)
+- [Manifest format](https://developer.chrome.com/docs/extensions/reference/manifest)
+- [`chrome.tabs`](https://developer.chrome.com/docs/extensions/reference/api/tabs)
+- [Incognito manifest modes](https://developer.chrome.com/docs/extensions/reference/manifest/incognito)
 - [Content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)
 - [Native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
 - [Extension message security](https://developer.chrome.com/docs/extensions/develop/concepts/messaging#security-considerations)
+- [Extension service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)

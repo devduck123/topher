@@ -5,6 +5,46 @@ import XCTest
 final class CommandResolverTests: XCTestCase {
   private let resolver = CommandResolver()
 
+  func testRecognizesBoundedChromeContextQuestions() {
+    let cases: [(String, TopherCommand)] = [
+      ("What is this Chrome tab?", .identifyActiveChromeTab),
+      ("Which Chrome tab is active?", .identifyActiveChromeTab),
+      ("What tabs do I have open?", .listChromeTabs),
+      ("List my open Chrome tabs.", .listChromeTabs),
+    ]
+
+    for (transcript, expected) in cases {
+      XCTAssertEqual(resolver.resolve(transcript), .resolved(expected))
+    }
+  }
+
+  func testRecognizesExplicitChromeTabTitleActivation() throws {
+    let title = try XCTUnwrap(ChromeTabTitleQuery("GitHub — Pull requests"))
+    XCTAssertEqual(
+      resolver.resolve("Switch to the Chrome tab titled GitHub — Pull requests."),
+      .resolved(.activateChromeTab(title))
+    )
+    XCTAssertEqual(
+      resolver.resolve("Go to Chrome tab titled GitHub — Pull requests"),
+      .resolved(.activateChromeTab(title))
+    )
+  }
+
+  func testChromeTabActivationRequiresATitleAndDoesNotAcceptBroaderBrowserWork() {
+    XCTAssertEqual(
+      resolver.resolve("Switch to the Chrome tab titled"),
+      .unsupported(reason: .missingValue)
+    )
+    XCTAssertEqual(
+      resolver.resolve("Close the Chrome tab titled GitHub"),
+      .unsupported(reason: .unsupportedPhrasing)
+    )
+    XCTAssertEqual(
+      resolver.resolve("What's on my YouTube feed?"),
+      .unsupported(reason: .contextRequired)
+    )
+  }
+
   func testRecognizesExactApplicationCommands() {
     let cases: [(String, ApplicationTarget)] = [
       ("Open Chrome.", .chrome),
@@ -393,10 +433,8 @@ final class CommandResolverTests: XCTestCase {
     XCTAssertEqual(resolver.resolve("  "), .unsupported(reason: .emptyInput))
   }
 
-  func testScreenAwareRequestsExplainThatContextIsRequired() {
+  func testBroaderScreenAndPageRequestsStillRequireUnavailableContext() {
     let cases = [
-      "What is this Chrome tab?",
-      "What tabs do I have open?",
       "Go to this Chrome tab",
       "What's on my YouTube feed?",
       "Summarize this page",

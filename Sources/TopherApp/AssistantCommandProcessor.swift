@@ -30,6 +30,7 @@ final class AssistantCommandProcessor {
   private let policy: CommandPolicy
   private let applicationOpener: ApplicationOpenCapability
   private let browserRouteOpener: BrowserRouteOpenCapability
+  private let chromeContext: ChromeContextCapabilities
   private let frontmostApplicationReader: FrontmostApplicationCapability
   private let webOpener: WebOpenCapability
   private let logger = Logger(subsystem: "dev.topher.app", category: "control-path")
@@ -42,6 +43,7 @@ final class AssistantCommandProcessor {
     policy: CommandPolicy = .init(),
     applicationOpener: ApplicationOpenCapability? = nil,
     browserRouteOpener: BrowserRouteOpenCapability? = nil,
+    chromeContext: ChromeContextCapabilities? = nil,
     frontmostApplicationReader: FrontmostApplicationCapability? = nil,
     webOpener: WebOpenCapability? = nil
   ) {
@@ -50,6 +52,7 @@ final class AssistantCommandProcessor {
     self.policy = policy
     self.applicationOpener = applicationOpener ?? ApplicationOpenCapability()
     self.browserRouteOpener = browserRouteOpener ?? BrowserRouteOpenCapability()
+    self.chromeContext = chromeContext ?? .unavailable()
     self.frontmostApplicationReader =
       frontmostApplicationReader ?? FrontmostApplicationCapability()
     self.webOpener = webOpener ?? WebOpenCapability()
@@ -135,6 +138,15 @@ final class AssistantCommandProcessor {
 
     let outcome: ActionOutcome
     switch command {
+    case .activateChromeTab(let query):
+      logExecution(ChromeTabActivationCapability.descriptor)
+      outcome = await chromeContext.activateTab.execute(query)
+    case .identifyActiveChromeTab:
+      logExecution(ChromeActiveTabCapability.descriptor)
+      outcome = await chromeContext.activeTab.execute()
+    case .listChromeTabs:
+      logExecution(ChromeTabListCapability.descriptor)
+      outcome = await chromeContext.listTabs.execute()
     case .identifyFrontmostApplication:
       logExecution(FrontmostApplicationCapability.descriptor)
       outcome = frontmostApplicationReader.execute()
@@ -211,8 +223,9 @@ final class AssistantCommandProcessor {
           return domain.host
         case .openWebsite(let target):
           return target.canonicalHost
-        case .identifyFrontmostApplication, .openApplication, .openInstalledApplication,
-          .openBrowserRoute, .searchWeb, .searchUnknownDestination:
+        case .activateChromeTab, .identifyActiveChromeTab, .identifyFrontmostApplication,
+          .listChromeTabs, .openApplication, .openInstalledApplication, .openBrowserRoute,
+          .searchWeb, .searchUnknownDestination:
           return nil
         }
       }
@@ -224,6 +237,12 @@ final class AssistantCommandProcessor {
     for command: TopherCommand
   ) -> (kind: AssistantCommandKind, capabilityIdentifier: String) {
     switch command {
+    case .activateChromeTab:
+      (.activateChromeTab, ChromeTabActivationCapability.descriptor.identifier)
+    case .identifyActiveChromeTab:
+      (.identifyActiveChromeTab, ChromeActiveTabCapability.descriptor.identifier)
+    case .listChromeTabs:
+      (.listChromeTabs, ChromeTabListCapability.descriptor.identifier)
     case .identifyFrontmostApplication:
       (
         .identifyFrontmostApplication,

@@ -33,6 +33,8 @@ swift --version
 - `swift test` is the authoritative unit-test command.
 - `Topher.xcodeproj` owns the deployable `.app` bundle, macOS target settings,
   signing, entitlements, privacy strings, and shared `TopherApp` scheme.
+- The Xcode app target embeds the `TopherChromeBridgeHost` tool in
+  `Contents/Helpers`; SwiftPM also builds the same dedicated executable target.
 - The SwiftPM `Topher` executable is useful for compiler checks but is not the
   installable application.
 - Run the `TopherApp` scheme in Xcode for interactive debugging.
@@ -55,6 +57,8 @@ xcodebuild -project Topher.xcodeproj -scheme TopherApp \
   -configuration Debug build
 xcodebuild -project Topher.xcodeproj -scheme TopherApp \
   -configuration Release build
+node --test ChromeExtension/tests/*.test.mjs
+ruby scripts/test_chrome_native_host.rb
 ```
 
 Use the shared `TopherApp` scheme. Tests that need a microphone, a permission
@@ -122,6 +126,13 @@ diagnostic sink implicitly. Credentials belong in Keychain and must never be
 committed, printed, or stored in plist/user-default values or transcript
 diagnostics by Topher. Because the retained user-authored command can itself
 contain a pasted or spoken credential, treat every trace as sensitive.
+
+The Chrome adapter's tab titles, URLs, fingerprints, extension messages, and
+detailed bridge errors follow the same content rule. They may be transient
+typed request data and user-visible results, but never ordinary log fields or a
+new diagnostics payload. Native-host registration must keep one exact extension
+origin, an absolute checked bundled-helper path, and restrictive user-owned file
+permissions.
 
 ## Swift concurrency and native callbacks
 

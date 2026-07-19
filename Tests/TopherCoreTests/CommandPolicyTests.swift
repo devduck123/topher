@@ -52,6 +52,14 @@ final class CommandPolicyTests: XCTestCase {
     }
   }
 
+  func testAllowsRegisteredChromeReadsAndExplicitTabActivation() throws {
+    let title = try XCTUnwrap(ChromeTabTitleQuery("Topher"))
+
+    XCTAssertEqual(policy.evaluate(.identifyActiveChromeTab), .allowed)
+    XCTAssertEqual(policy.evaluate(.listChromeTabs), .allowed)
+    XCTAssertEqual(policy.evaluate(.activateChromeTab(title)), .allowed)
+  }
+
   func testSupportsAnInjectedDenialWithoutChangingProductionPolicy() {
     let deniedPolicy = CommandPolicy { _ in
       .denied(reason: "User presence is required.")

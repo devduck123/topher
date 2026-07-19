@@ -49,6 +49,7 @@ struct TopherApp: App {
       wrappedValue: TopherModel(
         resolver: resolver,
         policy: policy,
+        chromeContext: .live(),
         voiceTranscription: .live(contextualStrings: {
           Self.contextualStrings(
             personal: vocabulary.entries.map(\.canonicalTerm),

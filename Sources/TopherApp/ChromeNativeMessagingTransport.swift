@@ -439,6 +439,16 @@ final class ChromeSocketRelay: @unchecked Sendable {
   }
 }
 
+func chromeBridgeDisconnectError(
+  operation: ChromeBridgeOperation,
+  wasSent: Bool
+) -> ChromeContextError {
+  if operation == .activateTab, wasSent {
+    return .activationOutcomeUnknown
+  }
+  return .bridgeUnavailable
+}
+
 private actor ChromeNativeMessagingBroker {
   private static let logger = Logger(
     subsystem: "dev.topher.app",
@@ -446,6 +456,7 @@ private actor ChromeNativeMessagingBroker {
   )
   private struct PendingResponse {
     let data: Data
+    let operation: ChromeBridgeOperation
     let continuation: CheckedContinuation<ChromeBridgeResponse, any Error>
     var wasSent: Bool
   }
@@ -456,7 +467,6 @@ private actor ChromeNativeMessagingBroker {
 
   static func liveExchange() -> ChromeBridgeExchange {
     let broker = ChromeNativeMessagingBroker()
-    Task { await broker.startIfNeeded() }
     return ChromeBridgeExchange(
       send: { request in try await broker.exchange(request) }
     )
@@ -503,6 +513,7 @@ private actor ChromeNativeMessagingBroker {
         }
         pendingResponses[request.requestID] = PendingResponse(
           data: data,
+          operation: request.operation,
           continuation: continuation,
           wasSent: false
         )
@@ -543,7 +554,12 @@ private actor ChromeNativeMessagingBroker {
     let pending = pendingResponses.values
     pendingResponses.removeAll()
     for response in pending {
-      response.continuation.resume(throwing: ChromeContextError.bridgeUnavailable)
+      response.continuation.resume(
+        throwing: chromeBridgeDisconnectError(
+          operation: response.operation,
+          wasSent: response.wasSent
+        )
+      )
     }
     Self.logger.notice("Chrome native messaging bridge disconnected")
   }

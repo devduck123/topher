@@ -567,7 +567,8 @@ private actor ProcessorChromeExchangeStub {
         requestID: request.requestID,
         status: .success,
         tabs: [tab],
-        excludedTabCount: 0
+        excludedTabCount: 0,
+        observationWasTruncated: false
       )
     case .activateTab, .cancel:
       return ChromeBridgeResponse(requestID: request.requestID, status: .success)

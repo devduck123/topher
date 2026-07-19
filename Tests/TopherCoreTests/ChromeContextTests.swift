@@ -95,6 +95,7 @@ final class ChromeContextTests: XCTestCase {
     )
     XCTAssertEqual(listResponse.status, .success)
     XCTAssertEqual(listResponse.tabs?.first?.validatedSnapshot?.title, "Example Domain")
+    XCTAssertEqual(listResponse.observationWasTruncated, false)
 
     let activation = try JSONDecoder().decode(
       ChromeBridgeRequest.self,

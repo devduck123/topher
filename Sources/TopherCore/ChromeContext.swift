@@ -326,6 +326,7 @@ public struct ChromeBridgeResponse: Codable, Equatable, Sendable {
   public let tab: ChromeBridgeWireTab?
   public let tabs: [ChromeBridgeWireTab]?
   public let excludedTabCount: Int?
+  public let observationWasTruncated: Bool?
   public let failureCode: ChromeBridgeFailureCode?
 
   public init(
@@ -335,6 +336,7 @@ public struct ChromeBridgeResponse: Codable, Equatable, Sendable {
     tab: ChromeBridgeWireTab? = nil,
     tabs: [ChromeBridgeWireTab]? = nil,
     excludedTabCount: Int? = nil,
+    observationWasTruncated: Bool? = nil,
     failureCode: ChromeBridgeFailureCode? = nil
   ) {
     self.version = version
@@ -343,6 +345,7 @@ public struct ChromeBridgeResponse: Codable, Equatable, Sendable {
     self.tab = tab
     self.tabs = tabs
     self.excludedTabCount = excludedTabCount
+    self.observationWasTruncated = observationWasTruncated
     self.failureCode = failureCode
   }
 }

@@ -121,7 +121,7 @@ export async function fingerprintForTab(tab) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function snapshotTab(tab, capturedAtMilliseconds) {
+function validatedCanonicalTab(tab) {
   if (
     !isPlainObject(tab)
     || tab.incognito === true
@@ -139,17 +139,27 @@ export async function snapshotTab(tab, capturedAtMilliseconds) {
   if (title === null || url === null) {
     return null;
   }
-  const canonicalTab = {...tab, title, url};
+  return {...tab, title, url};
+}
+
+async function snapshotCanonicalTab(canonicalTab, capturedAtMilliseconds) {
   return {
-    tabID: tab.id,
-    windowID: tab.windowId,
-    index: tab.index,
-    active: tab.active === true,
-    title,
-    url,
+    tabID: canonicalTab.id,
+    windowID: canonicalTab.windowId,
+    index: canonicalTab.index,
+    active: canonicalTab.active === true,
+    title: canonicalTab.title,
+    url: canonicalTab.url,
     fingerprint: await fingerprintForTab(canonicalTab),
     capturedAtMilliseconds,
   };
+}
+
+export async function snapshotTab(tab, capturedAtMilliseconds) {
+  const canonicalTab = validatedCanonicalTab(tab);
+  return canonicalTab === null
+    ? null
+    : snapshotCanonicalTab(canonicalTab, capturedAtMilliseconds);
 }
 
 export function successResponse(requestID, fields = {}) {
@@ -206,21 +216,23 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
     const observedTabs = allTabs.slice(0, MAXIMUM_OBSERVED_TAB_COUNT);
     const snapshots = [];
     let excludedTabCount = Math.max(0, allTabs.length - observedTabs.length);
+    let observationWasTruncated = allTabs.length > observedTabs.length;
     const capturedAtMilliseconds = nowMilliseconds();
 
     for (const tab of observedTabs) {
-      if (snapshots.length >= maximumTabCount) {
+      const canonicalTab = validatedCanonicalTab(tab);
+      if (canonicalTab === null) {
         excludedTabCount += 1;
         continue;
       }
-      const snapshot = await snapshotTab(tab, capturedAtMilliseconds);
-      if (snapshot === null) {
+      if (snapshots.length >= maximumTabCount) {
         excludedTabCount += 1;
-      } else {
-        snapshots.push(snapshot);
+        observationWasTruncated = true;
+        continue;
       }
+      snapshots.push(await snapshotCanonicalTab(canonicalTab, capturedAtMilliseconds));
     }
-    return {tabs: snapshots, excludedTabCount};
+    return {tabs: snapshots, excludedTabCount, observationWasTruncated};
   }
 
   async function handleValidated(request) {
@@ -279,6 +291,13 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
       currentSnapshot === null
       || currentSnapshot.windowID !== target.windowID
       || currentSnapshot.fingerprint !== target.fingerprint.value
+    ) {
+      return failureResponse(request.requestID, "staleTab");
+    }
+    const revalidatedAge = nowMilliseconds() - target.capturedAtMilliseconds;
+    if (
+      revalidatedAge < -MAXIMUM_FUTURE_CLOCK_SKEW_MILLISECONDS
+      || revalidatedAge > MAXIMUM_SNAPSHOT_AGE_MILLISECONDS
     ) {
       return failureResponse(request.requestID, "staleTab");
     }

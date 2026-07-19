@@ -22,8 +22,10 @@ Topher command and policy
   -> chrome.tabs / chrome.windows for the requested operation
 ```
 
-The connection can remain idle, but tab data is acquired only for an active
-request. Neither side mirrors tabs continuously or persists a browser snapshot.
+The native port can remain idle, but the primary Topher process creates its
+socket/token only for the first resolved Chrome request and tab data is acquired
+only for an active request. Neither side mirrors tabs continuously or persists a
+browser snapshot.
 
 ## Permissions
 
@@ -102,18 +104,21 @@ Then remove the unpacked extension from `chrome://extensions` if desired.
    tab and its window become active once without navigation or reload.
 5. Use the duplicate title and confirm Topher refuses ambiguity without
    switching either tab.
-6. Close or navigate the target during a request if practical and confirm the
+6. If practical, open more than 50 supported regular tabs and confirm activation
+   refuses because the bounded observation cannot prove global uniqueness.
+7. Close or navigate the target during a request if practical and confirm the
    request refuses a missing/stale target rather than guessing or retrying.
-7. Disable/remove the extension, stop Chrome, or unregister the host in turn;
+8. Disable/remove the extension, stop Chrome, or unregister the host in turn;
    confirm Topher reports a recoverable fixed failure and never falls back to
    Accessibility, screenshots, or broader browser control.
-8. Stream Unified Logging and confirm no tab title or URL appears. If developer
+9. Stream Unified Logging and confirm no tab title or URL appears. If developer
    transcript diagnostics are enabled, confirm they retain only the
    user-authored command; browser-returned titles and URLs are not appended.
 
 Automated tests exercise the manifest, URL/title bounds, malformed messages,
 the composed 64-KiB message cap, tab-list bounds, incognito and scheme
 exclusion, version mismatch, cancellation, staleness, duplicate request IDs,
-authenticated socket framing, one-shot mutation, and unknown post-dispatch
-outcomes. They do not prove live Chrome/native-host acceptance on a user's
+observation completeness, authenticated socket framing, primary-only lazy relay
+construction, one-shot mutation, and unknown post-dispatch outcomes. They do not
+prove live Chrome/native-host acceptance on a user's
 profile.

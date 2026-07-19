@@ -8,7 +8,7 @@ speech-to-action loop survives the reliability slice.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The tree defines 206 Swift tests. Build 9 passed normal and Thread Sanitizer
+2. The tree defines 210 Swift tests. Build 9 passed normal and Thread Sanitizer
    suites, Xcode Debug and universal Release builds, static analysis, signature,
    entitlement, architecture, extension, and registration-helper checks.
    Installation, process, and live Chrome checks remain separate manual gates.
@@ -153,8 +153,11 @@ dependency, and installed-app denial/error recovery is verified.
 - Complete in build 9: embed a dedicated native-messaging relay; register one
   exact extension origin to its checked absolute bundle path; use a typed
   versioned 64-KiB protocol, bounded tab/title/URL values, timeouts,
-  cancellation, concurrency and duplicate handling, fresh fingerprints, and
-  no activation retry after dispatch.
+  cancellation, concurrency and duplicate handling, explicit completeness for
+  bounded matching, fresh fingerprints, and no activation retry after dispatch.
+- Complete in build 9: start the app-side relay only for a primary-process Chrome
+  request; refuse activation when the bound cannot prove global uniqueness; and
+  classify a disconnected dispatched mutation as an unknown outcome.
 - Complete in build 9: cover resolver, policy, provider, protocol, registration,
   ambiguity, staleness, timeout, disconnect, version mismatch, and exactly-once
   behavior in Swift, Node, and Ruby tests. Live Chrome profile acceptance remains

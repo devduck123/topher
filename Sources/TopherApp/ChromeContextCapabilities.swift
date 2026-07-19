@@ -16,6 +16,7 @@ enum ChromeContextError: Error, Equatable, Sendable {
 struct ChromeTabList: Equatable, Sendable {
   let tabs: [ChromeTabSnapshot]
   let excludedTabCount: Int
+  let observationWasTruncated: Bool
 }
 
 struct ChromeBridgeExchange: Sendable {
@@ -68,6 +69,7 @@ actor ChromeBridgeClient {
       response.failureCode == nil,
       response.tabs == nil,
       response.excludedTabCount == nil,
+      response.observationWasTruncated == nil,
       let tab = response.tab?.validatedSnapshot,
       tab.active
     else {
@@ -88,7 +90,8 @@ actor ChromeBridgeClient {
       let wireTabs = response.tabs,
       wireTabs.count <= maximumCount,
       let excludedTabCount = response.excludedTabCount,
-      excludedTabCount >= 0
+      excludedTabCount >= 0,
+      let observationWasTruncated = response.observationWasTruncated
     else {
       throw responseError(response)
     }
@@ -97,7 +100,11 @@ actor ChromeBridgeClient {
     guard tabs.count == wireTabs.count else {
       throw ChromeContextError.malformedResponse
     }
-    return ChromeTabList(tabs: tabs, excludedTabCount: excludedTabCount)
+    return ChromeTabList(
+      tabs: tabs,
+      excludedTabCount: excludedTabCount,
+      observationWasTruncated: observationWasTruncated
+    )
   }
 
   func activate(_ target: ChromeTabActivationTarget) async throws {
@@ -109,7 +116,8 @@ actor ChromeBridgeClient {
         response.failureCode == nil,
         response.tab == nil,
         response.tabs == nil,
-        response.excludedTabCount == nil
+        response.excludedTabCount == nil,
+        response.observationWasTruncated == nil
       else {
         throw responseError(response)
       }
@@ -261,6 +269,12 @@ final class ChromeTabActivationCapability {
   func execute(_ query: ChromeTabTitleQuery) async -> ActionOutcome {
     do {
       let result = try await client.listTabs(maximumCount: ChromeBridgeRequest.maximumTabCount)
+      guard !result.observationWasTruncated else {
+        return .failed(
+          message:
+            "Topher couldn't safely check every supported Chrome tab within the activation bound, so it did not switch tabs."
+        )
+      }
       let matches = result.tabs.filter { query.matches($0.title) }
 
       guard let match = matches.first else {
@@ -311,6 +325,14 @@ struct ChromeContextCapabilities {
 
   static func unavailable() -> Self {
     Self(client: ChromeBridgeClient(exchange: .unavailable))
+  }
+
+  static func runtime(
+    isPrimary: Bool,
+    liveFactory: () -> Self = { .live() }
+  ) -> Self {
+    guard isPrimary else { return .unavailable() }
+    return liveFactory()
   }
 }
 

@@ -14,5 +14,6 @@
       "capturedAtMilliseconds": 1721000000000
     }
   ],
-  "excludedTabCount": 0
+  "excludedTabCount": 0,
+  "observationWasTruncated": false
 }

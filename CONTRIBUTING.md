@@ -132,7 +132,10 @@ detailed bridge errors follow the same content rule. They may be transient
 typed request data and user-visible results, but never ordinary log fields or a
 new diagnostics payload. Native-host registration must keep one exact extension
 origin, an absolute checked bundled-helper path, and restrictive user-owned file
-permissions.
+permissions. A bounded activation list must also carry explicit completeness
+metadata: unobserved eligible tabs cannot be treated as proof of uniqueness.
+Disconnect handling must distinguish unsent reads from dispatched mutations so
+an uncertain activation is never presented as a safe retry.
 
 ## Swift concurrency and native callbacks
 

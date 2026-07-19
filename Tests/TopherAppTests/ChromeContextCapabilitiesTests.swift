@@ -6,6 +6,22 @@ import XCTest
 
 @MainActor
 final class ChromeContextCapabilitiesTests: XCTestCase {
+  func testRuntimeOwnershipConstructsLiveBridgeOnlyForPrimaryInstance() {
+    var liveFactoryCallCount = 0
+
+    _ = ChromeContextCapabilities.runtime(isPrimary: false) {
+      liveFactoryCallCount += 1
+      return .unavailable()
+    }
+    XCTAssertEqual(liveFactoryCallCount, 0)
+
+    _ = ChromeContextCapabilities.runtime(isPrimary: true) {
+      liveFactoryCallCount += 1
+      return .unavailable()
+    }
+    XCTAssertEqual(liveFactoryCallCount, 1)
+  }
+
   func testActiveTabReadReturnsBoundedUserVisibleContext() async {
     let stub = ChromeExchangeStub(tabs: [wireTab(title: "Private account — Example")])
     let capability = ChromeActiveTabCapability(client: client(stub))
@@ -84,6 +100,32 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
       .failed(
         message:
           "More than one Chrome tab has that exact title. Make the titles unique and try again."
+      )
+    )
+    let operations = await stub.operations()
+    let activationCount = await stub.activationCount()
+    XCTAssertEqual(operations, [.listTabs])
+    XCTAssertEqual(activationCount, 0)
+  }
+
+  func testActivationRefusesWhenBoundCannotProveGlobalUniqueness() async throws {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ChromeExchangeStub(
+      tabs: [wireTab(title: "Topher", capturedAtMilliseconds: now)],
+      observationWasTruncated: true
+    )
+    let capability = ChromeTabActivationCapability(
+      client: client(stub),
+      nowMilliseconds: { now }
+    )
+
+    let outcome = await capability.execute(try XCTUnwrap(ChromeTabTitleQuery("Topher")))
+
+    XCTAssertEqual(
+      outcome,
+      .failed(
+        message:
+          "Topher couldn't safely check every supported Chrome tab within the activation bound, so it did not switch tabs."
       )
     )
     let operations = await stub.operations()
@@ -212,6 +254,31 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     }
   }
 
+  func testClientRejectsListWithoutCompletenessMetadata() async {
+    let stub = ChromeExchangeStub(
+      tabs: [wireTab()],
+      observationWasTruncated: nil
+    )
+    await assertThrowsErrorAsync(try await client(stub).listTabs(maximumCount: 25)) { error in
+      XCTAssertEqual(error as? ChromeContextError, .malformedResponse)
+    }
+  }
+
+  func testDisconnectClassificationPreservesUnknownActivationOutcome() {
+    XCTAssertEqual(
+      chromeBridgeDisconnectError(operation: .activateTab, wasSent: true),
+      .activationOutcomeUnknown
+    )
+    XCTAssertEqual(
+      chromeBridgeDisconnectError(operation: .activateTab, wasSent: false),
+      .bridgeUnavailable
+    )
+    XCTAssertEqual(
+      chromeBridgeDisconnectError(operation: .listTabs, wasSent: true),
+      .bridgeUnavailable
+    )
+  }
+
   func testCancellationSendsTypedCancellationAndReturnsWithoutReplyReuse() async {
     let stub = ChromeExchangeStub(tabs: [wireTab()], readDelay: .seconds(1))
     let client = ChromeBridgeClient(
@@ -277,6 +344,7 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
 private actor ChromeExchangeStub {
   private let tabs: [ChromeBridgeWireTab]
   private let excludedTabCount: Int
+  private let observationWasTruncated: Bool?
   private let activationFailure: ChromeBridgeFailureCode?
   private let responseVersion: Int
   private let mismatchesRequestID: Bool
@@ -289,6 +357,7 @@ private actor ChromeExchangeStub {
   init(
     tabs: [ChromeBridgeWireTab],
     excludedTabCount: Int = 0,
+    observationWasTruncated: Bool? = false,
     activationFailure: ChromeBridgeFailureCode? = nil,
     responseVersion: Int = ChromeBridgeRequest.protocolVersion,
     mismatchesRequestID: Bool = false,
@@ -298,6 +367,7 @@ private actor ChromeExchangeStub {
   ) {
     self.tabs = tabs
     self.excludedTabCount = excludedTabCount
+    self.observationWasTruncated = observationWasTruncated
     self.activationFailure = activationFailure
     self.responseVersion = responseVersion
     self.mismatchesRequestID = mismatchesRequestID
@@ -329,7 +399,8 @@ private actor ChromeExchangeStub {
         requestID: responseID,
         status: .success,
         tabs: tabs,
-        excludedTabCount: excludedTabCount
+        excludedTabCount: excludedTabCount,
+        observationWasTruncated: observationWasTruncated
       )
     case .activateTab:
       if let activationFailure {

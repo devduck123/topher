@@ -49,8 +49,9 @@ The Chrome foundation extends that same processor with three registered
 capabilities: active-tab read, bounded tab-list read, and exact-title tab
 activation. A versioned MV3/native-messaging provider acquires regular-tab
 metadata only after one of those deterministic intents resolves. Activation
-requeries a bounded list, refuses zero or multiple exact matches, and asks the
-extension to revalidate the typed tab/window identity, capture time, and
+requeries a bounded list, requires the adapter to prove that every eligible tab
+fit within that observation, refuses zero or multiple exact matches, and asks
+the extension to revalidate the typed tab/window identity, capture time, and
 fingerprint immediately before one non-retried activation attempt.
 
 `PushToTalkCaptureController` owns microphone permission, speech assets,
@@ -67,10 +68,12 @@ executable `TopherCommand`, and never crosses the policy boundary. Once an
 allowed command is resolved, the processor awaits one typed capability exactly
 once and returns its typed outcome to the presentation layer.
 
-Only the process holding Topher's per-user runtime lock may subscribe to the
-global shortcut. A duplicate or unsafe lock state terminates before shortcut
-registration, so one physical key release cannot create multiple independent
-requests. This is an execution invariant, not merely an installer convention.
+Only the process holding Topher's per-user runtime lock may construct runtime-
+owned services, including the global shortcut and app-side Chrome relay. A
+duplicate or unsafe lock state uses unavailable adapters and terminates before
+shortcut registration, so it cannot replace the primary relay's socket/token or
+create independent requests. This is an execution invariant, not merely an
+installer convention.
 
 Do not introduce every future type now. The model below defines boundaries to
 preserve as real providers and channels are added.

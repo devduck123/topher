@@ -35,20 +35,23 @@ UUID request IDs, a 64-KiB application limit, a maximum 50-tab activation
 snapshot, a 25-tab displayed list, fixed URL schemes, fixed title/URL bounds,
 two-second read and three-second activation timeouts, four concurrent requests,
 typed cancellation, socket handshake/send timeouts, no-signal socket writes,
-and fixed failure codes. Version mismatch, malformed JSON, oversized fields or
-composed responses, unexpected IDs, duplicate replies, and disconnects fail
-closed. No tab snapshot is persisted or continuously mirrored.
+explicit observation-completeness metadata, and fixed failure codes. Version
+mismatch, malformed JSON, oversized fields or composed responses, unexpected
+IDs, duplicate replies, and disconnects fail closed. The app-side socket starts
+only for a resolved Chrome request, and only in the primary Topher process. No
+tab snapshot is persisted or continuously mirrored.
 
 Read-only active-tab and list operations are separate registered capabilities.
 Activation is a low-risk reversible local mutation and a third registered
 capability. It resolves an exact normalized user-authored title against a fresh
-bounded list, refuses zero or multiple matches, and sends only a typed tab/window
-identity, capture time, and SHA-256 fingerprint. The extension fetches the tab
-again and compares the identity and fingerprint immediately before making one
+bounded list, refuses when eligible tabs exceeded the observation bound, refuses
+zero or multiple matches, and sends only a typed tab/window identity, capture
+time, and SHA-256 fingerprint. The extension fetches the tab again and compares
+the identity, fingerprint, and age immediately before making one
 `tabs.update(..., {active: true})` call and one `windows.update(...,
 {focused: true})` call. Neither layer retries an activation after dispatch; a
-lost reply or API failure after mutation dispatch produces an explicit unknown
-outcome.
+timeout, disconnect, or API failure after mutation dispatch produces an explicit
+unknown outcome.
 
 Tab titles and URLs are untrusted data. They may be shown to the requesting user
 and used for exact matching/fingerprinting, but cannot become commands, extend
@@ -68,8 +71,9 @@ detailed bridge errors.
   processing and output but cannot make Chrome's API itself return a limited
   count.
 - The persistent native port keeps the MV3 service worker and helper available,
-  but neither acquires tab data while idle. A helper process may therefore be
-  present while Chrome runs.
+  but neither acquires tab data while idle. The app-side socket/token is created
+  only for the first resolved Chrome request. A helper process may therefore be
+  present while Chrome runs even when Topher has not started its relay.
 - Unpacked installation and exact native-host registration remain explicit
   local dogfood steps. This decision does not claim Chrome Web Store packaging,
   notarized distribution, or live Chrome acceptance.

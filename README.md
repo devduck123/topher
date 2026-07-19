@@ -14,8 +14,8 @@ command authority.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 build 9 development tree defines 206 Swift tests. The latest
-complete normal and Thread Sanitizer runs passed all 206 tests. Xcode Debug,
+Status: the 0.4.0 build 9 development tree defines 210 Swift tests. The latest
+complete normal and Thread Sanitizer runs passed all 210 tests. Xcode Debug,
 universal Release, and static-analysis builds pass; the signed Release embeds
 the universal native host at `Contents/Helpers`, and deep strict signature
 validation passes. Direct Apple
@@ -79,8 +79,9 @@ comparative speech benchmark is still open.
 - Voice requests with recognition hypotheses that disagree on an unfamiliar
   domain fail before browser handoff. Known recognition errors may narrow to a
   fixed canonical destination; exact manual domains keep their direct path.
-- A per-user runtime lock ensures only one Topher process can register the
-  global shortcut, including when a second bundle process is forced manually.
+- A per-user runtime lock ensures only the primary Topher process can construct
+  runtime-owned services such as the global shortcut and Chrome relay,
+  including when a second bundle process is forced manually.
 - Fail-closed rejection of multiple executable actions in one request.
 - A bounded local personal-vocabulary editor for developer and product terms.
   Canonical terms may bias on-device recognition; known mis-transcriptions stay
@@ -94,12 +95,14 @@ comparative speech benchmark is still open.
   through typed, bounded regular-tab metadata from a minimal Chrome Manifest V3
   extension.
 - “Switch to the Chrome tab titled X” using exact deterministic title matching,
-  ambiguity refusal, a five-second fingerprinted snapshot, extension-side
-  revalidation, and one non-retried activation attempt.
+  ambiguity and incomplete-observation refusal, a five-second fingerprinted
+  snapshot, extension-side revalidation immediately before mutation, and one
+  non-retried activation attempt.
 - A bundled native-messaging relay with a 64-KiB application protocol limit,
   launch-scoped same-user socket handshake, exact extension-origin registration,
   checked absolute helper path, typed cancellation, timeouts, concurrency limits,
-  duplicate-response handling, and version mismatch recovery.
+  duplicate-response handling, version mismatch recovery, demand-driven app-side
+  startup, and explicit unknown outcomes when a dispatched activation disconnects.
 - A separate policy decision before execution.
 - Safe rejection of malformed address-like input, ambiguous installed-app
   names, and explicitly requested applications that are not installed.

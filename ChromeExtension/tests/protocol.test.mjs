@@ -85,8 +85,12 @@ test("shared version-one fixtures match the extension request schema", async () 
   const activationRequest = JSON.parse(
     await readFile(new URL("../../Fixtures/ChromeNativeMessaging/activate-request-v1.json", import.meta.url)),
   );
+  const listResponse = JSON.parse(
+    await readFile(new URL("../../Fixtures/ChromeNativeMessaging/list-response-v1.json", import.meta.url)),
+  );
   assert.equal(validateRequest(listRequest).ok, true);
   assert.equal(validateRequest(activationRequest).ok, true);
+  assert.equal(listResponse.observationWasTruncated, false);
 });
 
 test("URL validation rejects credentials, local files, script data, and oversized input", () => {
@@ -207,6 +211,26 @@ test("tab list excludes incognito and disallowed schemes and enforces the reques
   assert.equal(response.tabs.length, 1);
   assert.equal(response.tabs[0].title, "One");
   assert.equal(response.excludedTabCount, 3);
+  assert.equal(response.observationWasTruncated, true);
+});
+
+test("unsupported tabs beyond the return bound do not make observation incomplete", async () => {
+  const stub = chromeStub([
+    tab({id: 1, title: "One"}),
+    tab({id: 2, title: "Private", incognito: true}),
+    tab({id: 3, title: "File", url: "file:///tmp/private"}),
+  ]);
+  const handle = createRequestHandler(stub.api, () => 1000);
+  const response = await handle({
+    version: 1,
+    requestID: requestIDs.list,
+    operation: "listTabs",
+    maximumTabCount: 1,
+  });
+
+  assert.equal(response.tabs.length, 1);
+  assert.equal(response.excludedTabCount, 2);
+  assert.equal(response.observationWasTruncated, false);
 });
 
 test("activation revalidates fingerprint and invokes each mutation exactly once", async () => {
@@ -273,6 +297,29 @@ test("activation refuses stale and changed targets before mutation", async () =>
   });
   assert.equal(changed.failureCode, "staleTab");
   assert.equal(changedStub.calls.tabUpdate, 0);
+});
+
+test("activation rechecks age immediately before mutation", async () => {
+  const current = tab();
+  const fingerprint = await fingerprintForTab(current);
+  const stub = chromeStub([current]);
+  const times = [1000, 7001, 7001];
+  const handle = createRequestHandler(stub.api, () => times.shift() ?? 7001);
+  const response = await handle({
+    version: 1,
+    requestID: requestIDs.activate,
+    operation: "activateTab",
+    target: {
+      tabID: current.id,
+      windowID: current.windowId,
+      fingerprint: {value: fingerprint},
+      capturedAtMilliseconds: 1000,
+    },
+  });
+
+  assert.equal(response.failureCode, "staleTab");
+  assert.equal(stub.calls.tabUpdate, 0);
+  assert.equal(stub.calls.windowUpdate, 0);
 });
 
 test("activation API failures after dispatch report unknown outcome without retry", async () => {

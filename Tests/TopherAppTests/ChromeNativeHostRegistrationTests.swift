@@ -115,6 +115,10 @@ final class ChromeNativeHostRegistrationTests: XCTestCase {
         to: wrongOriginDescriptor
       )
     )
+    XCTAssertEqual(Darwin.shutdown(wrongOriginDescriptor, SHUT_WR), 0)
+    // Wait until the relay has consumed and rejected this connection before
+    // filling the one-entry listener backlog with the authenticated client.
+    XCTAssertNil(readFrame(from: wrongOriginDescriptor))
     Darwin.close(wrongOriginDescriptor)
 
     let descriptor = try connectUnixSocket(path: paths.socketURL.path)

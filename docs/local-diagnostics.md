@@ -73,7 +73,8 @@ names:
 - `VoiceFinalization`: key-up through final transcript completion or timeout.
 
 Unified Logging and signposts never receive manual text, partial/final speech,
-search terms, URLs, browser-returned tab titles/URLs/fingerprints, page contents,
+search terms, URLs, browser-returned tab titles/URLs/fingerprints, YouTube feed
+titles/channels/video IDs/observation metadata, page contents,
 raw audio, selected application names, or
 detailed errors that might carry user data. Developer-trace failures use fixed
 metadata-only messages; there is no transcript fallback into `Logger` or
@@ -147,10 +148,13 @@ Each record contains only:
 Topher does not separately capture or append raw audio, partial transcripts,
 the complete speech-alternative list, microphone buffers, retrieved
 browser/screen/message/document context, browser-returned tab titles, URLs,
-fingerprints, native messages,
+fingerprints, YouTube feed titles/channels/video IDs/observation metadata,
+native messages,
 constructed destination URLs, detailed framework errors, Keychain/config
 values, or arbitrary error text. The exact user-authored request can itself
-contain a query, URL, pasted content, credential, or error string. Dictation
+contain a query, URL, pasted content, credential, error string, or a feed title
+the user repeats in an explicit title follow-up; that does not cause the
+browser-returned feed to be appended. Dictation
 aimed at a secure field is refused before capture; if the field becomes secure
 during a hold, the final text is discarded without a preview or trace record.
 

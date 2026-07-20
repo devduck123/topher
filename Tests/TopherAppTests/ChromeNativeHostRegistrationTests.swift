@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import TopherCore
 import XCTest
 
 @testable import TopherApp
@@ -106,7 +107,7 @@ final class ChromeNativeHostRegistrationTests: XCTestCase {
     XCTAssertTrue(
       writeFrame(
         jsonData([
-          "version": 1,
+          "version": ChromeBridgeRequest.protocolVersion,
           "type": "bridgeHello",
           "sessionToken": try String(contentsOf: paths.sessionTokenURL, encoding: .utf8),
           "extensionOrigin": "chrome-extension://pppppppppppppppppppppppppppppppp/",
@@ -121,7 +122,7 @@ final class ChromeNativeHostRegistrationTests: XCTestCase {
     XCTAssertTrue(
       writeFrame(
         jsonData([
-          "version": 1,
+          "version": ChromeBridgeRequest.protocolVersion,
           "type": "bridgeHello",
           "sessionToken": try String(contentsOf: paths.sessionTokenURL, encoding: .utf8),
           "extensionOrigin": origin,
@@ -131,12 +132,18 @@ final class ChromeNativeHostRegistrationTests: XCTestCase {
     )
     await fulfillment(of: [connected], timeout: 1)
 
-    let request = jsonData(["version": 1, "requestID": UUID().uuidString])
+    let request = jsonData([
+      "version": ChromeBridgeRequest.protocolVersion,
+      "requestID": UUID().uuidString,
+    ])
     XCTAssertTrue(writeFrame(request, to: descriptor))
     await fulfillment(of: [received], timeout: 1)
     XCTAssertEqual(receivedData.value, request)
 
-    let response = jsonData(["version": 1, "status": "success"])
+    let response = jsonData([
+      "version": ChromeBridgeRequest.protocolVersion,
+      "status": "success",
+    ])
     XCTAssertTrue(relay.send(response))
     XCTAssertEqual(readFrame(from: descriptor), response)
   }

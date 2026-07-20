@@ -58,6 +58,8 @@ final class CommandPolicyTests: XCTestCase {
     XCTAssertEqual(policy.evaluate(.identifyActiveChromeTab), .allowed)
     XCTAssertEqual(policy.evaluate(.listChromeTabs), .allowed)
     XCTAssertEqual(policy.evaluate(.activateChromeTab(title)), .allowed)
+    XCTAssertEqual(policy.evaluate(.readYouTubeFeed), .allowed)
+    XCTAssertEqual(policy.evaluate(.openYouTubeFeedItem(.ordinal(3))), .allowed)
   }
 
   func testSupportsAnInjectedDenialWithoutChangingProductionPolicy() {

@@ -12,10 +12,28 @@ enum AssistantCommandInputSource: Equatable, Sendable {
   case voice
 }
 
+enum AssistantCommandPresentationUpdate: Equatable, Sendable {
+  case clearYouTubeFeed
+  case youTubeFeed(YouTubeFeedSnapshot)
+}
+
 struct AssistantCommandProcessingResult: Equatable, Sendable {
   let outcome: AssistantCommandOutcome
   let trace: AssistantCommandTrace
   let interpretation: TranscriptInterpretation
+  let presentationUpdate: AssistantCommandPresentationUpdate?
+
+  init(
+    outcome: AssistantCommandOutcome,
+    trace: AssistantCommandTrace,
+    interpretation: TranscriptInterpretation,
+    presentationUpdate: AssistantCommandPresentationUpdate? = nil
+  ) {
+    self.outcome = outcome
+    self.trace = trace
+    self.interpretation = interpretation
+    self.presentationUpdate = presentationUpdate
+  }
 }
 
 /// Owns the deterministic transcript-to-capability path.
@@ -137,6 +155,7 @@ final class AssistantCommandProcessor {
     executionStarted()
 
     let outcome: ActionOutcome
+    var presentationUpdate: AssistantCommandPresentationUpdate? = nil
     switch command {
     case .activateChromeTab(let query):
       logExecution(ChromeTabActivationCapability.descriptor)
@@ -147,6 +166,19 @@ final class AssistantCommandProcessor {
     case .listChromeTabs:
       logExecution(ChromeTabListCapability.descriptor)
       outcome = await chromeContext.listTabs.execute()
+    case .openYouTubeFeedItem(let selection):
+      logExecution(ChromeYouTubeVideoOpenCapability.descriptor)
+      outcome = await chromeContext.openYouTubeVideo.execute(selection)
+      if !chromeContext.hasYouTubeFeedSession {
+        presentationUpdate = .clearYouTubeFeed
+      }
+    case .readYouTubeFeed:
+      logExecution(ChromeYouTubeFeedCapability.descriptor)
+      let result = await chromeContext.youTubeFeed.execute()
+      outcome = result.outcome
+      presentationUpdate =
+        result.snapshot.map(AssistantCommandPresentationUpdate.youTubeFeed)
+        ?? .clearYouTubeFeed
     case .identifyFrontmostApplication:
       logExecution(FrontmostApplicationCapability.descriptor)
       outcome = frontmostApplicationReader.execute()
@@ -195,7 +227,8 @@ final class AssistantCommandProcessor {
         commandKind: commandMetadata.kind,
         capabilityIdentifier: commandMetadata.capabilityIdentifier
       ),
-      interpretation: interpretation
+      interpretation: interpretation,
+      presentationUpdate: presentationUpdate
     )
   }
 
@@ -225,7 +258,7 @@ final class AssistantCommandProcessor {
           return target.canonicalHost
         case .activateChromeTab, .identifyActiveChromeTab, .identifyFrontmostApplication,
           .listChromeTabs, .openApplication, .openInstalledApplication, .openBrowserRoute,
-          .searchWeb, .searchUnknownDestination:
+          .openYouTubeFeedItem, .readYouTubeFeed, .searchWeb, .searchUnknownDestination:
           return nil
         }
       }
@@ -243,6 +276,10 @@ final class AssistantCommandProcessor {
       (.identifyActiveChromeTab, ChromeActiveTabCapability.descriptor.identifier)
     case .listChromeTabs:
       (.listChromeTabs, ChromeTabListCapability.descriptor.identifier)
+    case .openYouTubeFeedItem:
+      (.openYouTubeFeedItem, ChromeYouTubeVideoOpenCapability.descriptor.identifier)
+    case .readYouTubeFeed:
+      (.readYouTubeFeed, ChromeYouTubeFeedCapability.descriptor.identifier)
     case .identifyFrontmostApplication:
       (
         .identifyFrontmostApplication,

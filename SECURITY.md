@@ -39,6 +39,13 @@ development build. There is not yet a notarized public binary release.
   can select only one fresh typed tab identity after the adapter proves its
   bounded eligible-tab observation was complete; it cannot create a command,
   navigate, close, reload, submit, or bypass policy.
+- YouTube titles, channels, video IDs, and observation metadata are untrusted
+  retrieved data. They are length/count/schema validated, never interpreted as
+  instructions, and live only in one 90-second in-memory feed session. Ordinal
+  selection is limited to that list; normalized exact-title selection refuses
+  ambiguity and incomplete observations. The extension revalidates optional
+  permission, active source tab/page/fingerprint, expiry, and selected-item
+  presence before one navigation constructed from a strict video ID.
 - No arbitrary shell, AppleScript, browser JavaScript, or generated code runs.
 - Permissions are requested incrementally for implemented features.
 - Accessibility is requested only from an explicit dictation action. Focus,
@@ -91,13 +98,20 @@ development build. There is not yet a notarized public binary release.
 - Sensitive content is excluded from ordinary logs.
 - During the local dogfood phase, final voice/manual command text and non-secure
   dictation are retained by the bounded developer trace by default unless the
-  user explicitly opts out.
-- The Chrome extension requests only `tabs` and `nativeMessaging`, cannot run in
-  incognito, and has no host permissions, content scripts, scripting, DOM/page
-  extraction, screenshots, cookies, history, forms, file-URL access, or stored
-  browser snapshots. Native-host registration binds one exact extension origin
-  to an absolute checked helper inside the current Topher bundle. Only the
-  primary Topher process may construct the app-side relay.
+  user explicitly opts out. An exact-title follow-up can therefore retain the
+  title the user authored, but feed results, channels, video IDs, source URLs,
+  and constructed destinations are never appended.
+- The Chrome extension requires only `tabs`, `nativeMessaging`, and `scripting`;
+  cannot run in incognito; and declares only optional
+  `https://www.youtube.com/*` host access. That permission is requested or
+  removed only from the extension popup's explicit user gesture. `scripting`
+  runs only the fixed packaged YouTube Home extractor in the isolated world.
+  There are no content scripts, required host permissions, screenshots, OCR,
+  cookies, history, account data, comments, descriptions, forms, file-URL
+  access, arbitrary/page/model-generated JavaScript, continuous observation,
+  or stored browser snapshots. Native-host registration binds one exact
+  extension origin to an absolute checked helper inside the current Topher
+  bundle. Only the primary Topher process may construct the app-side relay.
   Recording is visibly indicated, stored with restrictive POSIX modes,
   automatically pruned, and immediately clearable. The command can itself
   contain a spoken or pasted credential; Topher never separately appends

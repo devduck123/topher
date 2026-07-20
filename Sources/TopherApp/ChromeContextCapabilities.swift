@@ -8,6 +8,7 @@ enum ChromeContextError: Error, Equatable, Sendable {
   case busy
   case canceled
   case malformedResponse
+  case navigationOutcomeUnknown
   case provider(ChromeBridgeFailureCode)
   case responseTimedOut
   case versionMismatch
@@ -40,11 +41,13 @@ struct ChromeBridgeExchange: Sendable {
 /// concurrency, duplicate-ID, and no-retry behavior.
 actor ChromeBridgeClient {
   static let standardReadTimeout: Duration = .seconds(2)
+  static let standardFeedReadTimeout: Duration = .seconds(3)
   static let standardActivationTimeout: Duration = .seconds(3)
   static let maximumConcurrentRequests = 4
 
   private let exchange: ChromeBridgeExchange
   private let readTimeout: Duration
+  private let feedReadTimeout: Duration
   private let activationTimeout: Duration
   private let maximumConcurrentRequests: Int
   private var inFlightRequestIDs = Set<UUID>()
@@ -52,11 +55,13 @@ actor ChromeBridgeClient {
   init(
     exchange: ChromeBridgeExchange,
     readTimeout: Duration = standardReadTimeout,
+    feedReadTimeout: Duration = standardFeedReadTimeout,
     activationTimeout: Duration = standardActivationTimeout,
     maximumConcurrentRequests: Int = maximumConcurrentRequests
   ) {
     self.exchange = exchange
     self.readTimeout = readTimeout
+    self.feedReadTimeout = feedReadTimeout
     self.activationTimeout = activationTimeout
     self.maximumConcurrentRequests = max(1, maximumConcurrentRequests)
   }
@@ -68,6 +73,7 @@ actor ChromeBridgeClient {
       response.status == .success,
       response.failureCode == nil,
       response.tabs == nil,
+      response.youTubeFeed == nil,
       response.excludedTabCount == nil,
       response.observationWasTruncated == nil,
       let tab = response.tab?.validatedSnapshot,
@@ -87,6 +93,7 @@ actor ChromeBridgeClient {
       response.status == .success,
       response.failureCode == nil,
       response.tab == nil,
+      response.youTubeFeed == nil,
       let wireTabs = response.tabs,
       wireTabs.count <= maximumCount,
       let excludedTabCount = response.excludedTabCount,
@@ -107,6 +114,23 @@ actor ChromeBridgeClient {
     )
   }
 
+  func youTubeFeed() async throws -> YouTubeFeedSnapshot {
+    let request = ChromeBridgeRequest.youTubeFeed()
+    let response = try await perform(request, timeout: feedReadTimeout)
+    guard
+      response.status == .success,
+      response.failureCode == nil,
+      response.tab == nil,
+      response.tabs == nil,
+      response.excludedTabCount == nil,
+      response.observationWasTruncated == nil,
+      let feed = response.youTubeFeed?.validatedSnapshot
+    else {
+      throw responseError(response)
+    }
+    return feed
+  }
+
   func activate(_ target: ChromeTabActivationTarget) async throws {
     let request = ChromeBridgeRequest.activate(target)
     do {
@@ -116,6 +140,7 @@ actor ChromeBridgeClient {
         response.failureCode == nil,
         response.tab == nil,
         response.tabs == nil,
+        response.youTubeFeed == nil,
         response.excludedTabCount == nil,
         response.observationWasTruncated == nil
       else {
@@ -125,6 +150,26 @@ actor ChromeBridgeClient {
       // Activation is never retried after dispatch: a lost reply is an unknown
       // outcome, not permission to possibly run the mutation again.
       throw ChromeContextError.activationOutcomeUnknown
+    }
+  }
+
+  func openYouTubeVideo(_ target: YouTubeVideoOpenTarget) async throws {
+    let request = ChromeBridgeRequest.openYouTubeVideo(target)
+    do {
+      let response = try await perform(request, timeout: activationTimeout)
+      guard
+        response.status == .success,
+        response.failureCode == nil,
+        response.tab == nil,
+        response.tabs == nil,
+        response.youTubeFeed == nil,
+        response.excludedTabCount == nil,
+        response.observationWasTruncated == nil
+      else {
+        throw responseError(response)
+      }
+    } catch ChromeContextError.responseTimedOut {
+      throw ChromeContextError.navigationOutcomeUnknown
     }
   }
 
@@ -177,6 +222,167 @@ actor ChromeBridgeClient {
       return failureCode == .canceled ? .canceled : .provider(failureCode)
     }
     return .malformedResponse
+  }
+}
+
+@MainActor
+final class YouTubeFeedSessionStore {
+  private(set) var snapshot: YouTubeFeedSnapshot?
+
+  func replace(with snapshot: YouTubeFeedSnapshot) {
+    self.snapshot = snapshot
+  }
+
+  func current(nowMilliseconds: Int64) -> YouTubeFeedSnapshot? {
+    guard let snapshot else { return nil }
+    guard nowMilliseconds <= snapshot.expiresAtMilliseconds else {
+      self.snapshot = nil
+      return nil
+    }
+    return snapshot
+  }
+
+  func clear() {
+    snapshot = nil
+  }
+}
+
+struct YouTubeFeedReadExecution: Equatable, Sendable {
+  let outcome: ActionOutcome
+  let snapshot: YouTubeFeedSnapshot?
+}
+
+@MainActor
+final class ChromeYouTubeFeedCapability {
+  static let descriptor = CapabilityDescriptor(
+    identifier: "chromeYouTubeFeedContext",
+    access: .readsState,
+    risk: .readOnly
+  )
+
+  private let client: ChromeBridgeClient
+  private let sessionStore: YouTubeFeedSessionStore
+  private let nowMilliseconds: @Sendable () -> Int64
+
+  init(
+    client: ChromeBridgeClient,
+    sessionStore: YouTubeFeedSessionStore,
+    nowMilliseconds: @escaping @Sendable () -> Int64
+  ) {
+    self.client = client
+    self.sessionStore = sessionStore
+    self.nowMilliseconds = nowMilliseconds
+  }
+
+  func execute() async -> YouTubeFeedReadExecution {
+    do {
+      let snapshot = try await client.youTubeFeed()
+      let now = nowMilliseconds()
+      guard
+        now >= snapshot.capturedAtMilliseconds
+          - ChromeYouTubeVideoOpenCapability.maximumFutureClockSkewMilliseconds,
+        now <= snapshot.expiresAtMilliseconds
+      else {
+        sessionStore.clear()
+        return YouTubeFeedReadExecution(
+          outcome: .failed(message: "The YouTube feed snapshot was already stale. Ask again."),
+          snapshot: nil
+        )
+      }
+      sessionStore.replace(with: snapshot)
+      let noun = snapshot.items.count == 1 ? "recommendation" : "recommendations"
+      var message =
+        "I found \(snapshot.items.count) YouTube \(noun). Open Topher to review the numbered list."
+      if snapshot.observationWasTruncated {
+        message += " The view is bounded; use a number for the safest follow-up."
+      }
+      return YouTubeFeedReadExecution(
+        outcome: .succeeded(message: message),
+        snapshot: snapshot
+      )
+    } catch {
+      sessionStore.clear()
+      return YouTubeFeedReadExecution(
+        outcome: .failed(message: chromeFailureMessage(error)),
+        snapshot: nil
+      )
+    }
+  }
+}
+
+@MainActor
+final class ChromeYouTubeVideoOpenCapability {
+  static let descriptor = CapabilityDescriptor(
+    identifier: "openChromeYouTubeFeedVideo",
+    access: .changesState,
+    risk: .lowRiskReversible
+  )
+  static let maximumFutureClockSkewMilliseconds: Int64 = 1_000
+
+  private let client: ChromeBridgeClient
+  private let sessionStore: YouTubeFeedSessionStore
+  private let nowMilliseconds: @Sendable () -> Int64
+
+  init(
+    client: ChromeBridgeClient,
+    sessionStore: YouTubeFeedSessionStore,
+    nowMilliseconds: @escaping @Sendable () -> Int64
+  ) {
+    self.client = client
+    self.sessionStore = sessionStore
+    self.nowMilliseconds = nowMilliseconds
+  }
+
+  func execute(_ selection: YouTubeFeedSelection) async -> ActionOutcome {
+    let now = nowMilliseconds()
+    guard let snapshot = sessionStore.current(nowMilliseconds: now) else {
+      return .failed(
+        message: "Ask “What’s on my YouTube feed?” first, then use the numbered list promptly."
+      )
+    }
+    guard now >= snapshot.capturedAtMilliseconds - Self.maximumFutureClockSkewMilliseconds else {
+      sessionStore.clear()
+      return .failed(message: "The YouTube feed snapshot has invalid timing. Ask again.")
+    }
+
+    let item: YouTubeFeedItem
+    switch selection {
+    case .ordinal(let position):
+      guard let match = snapshot.items.first(where: { $0.position == position }) else {
+        return .failed(
+          message: "That number is not in the current YouTube list. Choose a listed number."
+        )
+      }
+      item = match
+    case .title(let query):
+      guard !snapshot.observationWasTruncated else {
+        return .failed(
+          message:
+            "The YouTube list was bounded, so a title match could be incomplete. Use its number or ask again."
+        )
+      }
+      let matches = snapshot.items.filter { query.matches($0.title) }
+      guard let match = matches.first else {
+        return .failed(message: "That title is not in the current YouTube list. Ask again.")
+      }
+      guard matches.dropFirst().isEmpty else {
+        return .failed(
+          message: "More than one listed YouTube video has that title. Use its number."
+        )
+      }
+      item = match
+    }
+
+    // Consume the reference before dispatch. A timeout or disconnect after the
+    // request leaves the navigation outcome unknown, so the same snapshot must
+    // never authorize a replay.
+    sessionStore.clear()
+    do {
+      try await client.openYouTubeVideo(snapshot.openTarget(for: item))
+      return .succeeded(message: "Opened “\(boundedTitle(item.title))” in the YouTube tab.")
+    } catch {
+      return .failed(message: chromeFailureMessage(error))
+    }
   }
 }
 
@@ -308,6 +514,9 @@ struct ChromeContextCapabilities {
   let activeTab: ChromeActiveTabCapability
   let listTabs: ChromeTabListCapability
   let activateTab: ChromeTabActivationCapability
+  let youTubeFeed: ChromeYouTubeFeedCapability
+  let openYouTubeVideo: ChromeYouTubeVideoOpenCapability
+  private let youTubeSessionStore: YouTubeFeedSessionStore
 
   init(
     client: ChromeBridgeClient,
@@ -315,12 +524,32 @@ struct ChromeContextCapabilities {
       Int64((Date().timeIntervalSince1970 * 1_000).rounded())
     }
   ) {
+    let youTubeSessionStore = YouTubeFeedSessionStore()
+    self.youTubeSessionStore = youTubeSessionStore
     activeTab = ChromeActiveTabCapability(client: client)
     listTabs = ChromeTabListCapability(client: client)
     activateTab = ChromeTabActivationCapability(
       client: client,
       nowMilliseconds: nowMilliseconds
     )
+    youTubeFeed = ChromeYouTubeFeedCapability(
+      client: client,
+      sessionStore: youTubeSessionStore,
+      nowMilliseconds: nowMilliseconds
+    )
+    openYouTubeVideo = ChromeYouTubeVideoOpenCapability(
+      client: client,
+      sessionStore: youTubeSessionStore,
+      nowMilliseconds: nowMilliseconds
+    )
+  }
+
+  func clearYouTubeFeedSession() {
+    youTubeSessionStore.clear()
+  }
+
+  var hasYouTubeFeedSession: Bool {
+    youTubeSessionStore.snapshot != nil
   }
 
   static func unavailable() -> Self {
@@ -365,11 +594,17 @@ private func chromeFailureMessage(_ error: Error) -> String {
       "Topher and the Chrome extension are incompatible or returned invalid data. Reinstall matching versions."
   case .responseTimedOut:
     return "Chrome context timed out. No broader context fallback was used."
+  case .navigationOutcomeUnknown:
+    return
+      "Chrome may have opened the video, but Topher did not receive confirmation and will not retry automatically. Ask for the feed again before another open."
   case .provider(let failure):
     switch failure {
     case .activationOutcomeUnknown:
       return
         "Chrome may have switched tabs, but Topher did not receive confirmation and will not retry automatically."
+    case .navigationOutcomeUnknown:
+      return
+        "Chrome may have opened the video, but Topher did not receive confirmation and will not retry automatically. Ask for the feed again before another open."
     case .staleTab, .targetNotFound:
       return "That Chrome tab changed or closed before activation. Ask again to refresh it."
     case .incognitoExcluded:
@@ -381,12 +616,22 @@ private func chromeFailureMessage(_ error: Error) -> String {
     case .duplicateRequest:
       return "Chrome rejected a duplicate request without repeating the action."
     case .browserFailure:
-      return "Chrome could not complete the bounded tab request. Try again."
+      return "Chrome could not complete the bounded request. Try again."
     case .invalidTarget, .malformedRequest, .messageTooLarge, .unsupportedOperation,
       .unsupportedVersion:
       return "Topher and the Chrome extension rejected an invalid or incompatible request."
     case .noActiveTab:
       return "Chrome has no supported active non-incognito tab."
+    case .staleYouTubeFeed, .youTubeFeedChanged:
+      return "The YouTube feed changed. Ask “What’s on my YouTube feed?” again."
+    case .unsupportedYouTubePage:
+      return "Open YouTube Home in the active Chrome tab, then ask again."
+    case .youTubeFeedUnavailable:
+      return
+        "Topher couldn’t read a bounded recommendation list. Let YouTube Home finish loading and try again."
+    case .youTubePermissionRequired:
+      return
+        "Grant YouTube access from the Topher extension button in Chrome, then ask again. You can remove access there at any time."
     }
   }
 }

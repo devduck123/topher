@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Topher YouTube access</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <h1>Topher YouTube feed</h1>
+      <p>
+        Topher can read up to 20 recommendation titles and channels from the active
+        YouTube Home page only when you ask. It does not read comments, descriptions,
+        account data, cookies, history, or screenshots.
+      </p>
+      <p id="permission-status" class="status" role="status" aria-live="polite">
+        Checking access…
+      </p>
+      <button id="grant-access" type="button">Grant YouTube access</button>
+      <button id="remove-access" class="secondary" type="button" hidden>
+        Remove YouTube access
+      </button>
+      <p class="hint">
+        After granting access, open YouTube Home and ask “What’s on my YouTube feed?”
+      </p>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

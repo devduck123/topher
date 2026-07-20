@@ -64,14 +64,26 @@ global dictation shortcut
      and explicit Copy
 ```
 
-The Chrome foundation extends that same processor with three registered
-capabilities: active-tab read, bounded tab-list read, and exact-title tab
-activation. A versioned MV3/native-messaging provider acquires regular-tab
-metadata only after one of those deterministic intents resolves. Activation
+The Chrome boundary extends that same processor with five registered
+capabilities: active-tab read, bounded tab-list read, exact-title tab
+activation, YouTube Home feed read, and listed-video open. A versioned
+MV3/native-messaging provider acquires regular-tab metadata or the narrow typed
+YouTube schema only after one of those deterministic intents resolves. Tab activation
 requeries a bounded list, requires the adapter to prove that every eligible tab
 fit within that observation, refuses zero or multiple exact matches, and asks
 the extension to revalidate the typed tab/window identity, capture time, and
 fingerprint immediately before one non-retried activation attempt.
+
+The feed read first requires optional YouTube origin access granted by a user
+gesture in the extension popup, then runs one fixed packaged isolated-world
+extractor only on YouTube Home. It returns at most 20 ordered strict video IDs,
+bounded titles/channels, observation IDs, completeness, source identity, and a
+90-second expiry. The app keeps that snapshot only in memory and presents it in
+the menu. Ordinal and normalized exact-title follow-ups resolve locally; titles
+refuse ambiguity and truncated observations. Before navigation, the extension
+revalidates permission, active source tab/page/fingerprint, expiry, and selected
+item presence, then constructs and dispatches one strict watch URL. The app
+consumes the session before dispatch and never retries an unknown outcome.
 
 `PushToTalkCaptureController` owns microphone permission, speech assets,
 capture, partial/final transcript state, bounded alternative hypotheses,
@@ -239,12 +251,17 @@ Some requests resolve directly or name one narrow structured provider:
   title and typed URL through the configured adapter.
 - “What tabs do I have open?” reads a bounded regular Chrome tab list; incognito
   and unsupported URL schemes are excluded.
+- “What’s on my YouTube feed?” reads only the active regular YouTube Home tab's
+  bounded recommendation records after the optional permission is present.
+- “Open the third one” and “Open the YouTube video titled X” resolve only
+  against the latest unexpired YouTube feed session and revalidate before one
+  browser mutation.
 
 Other requests should resolve first into a typed context need instead of a
 guessed action:
 
 - “Summarize the selected text” needs a validated selection.
-- “What’s on my YouTube feed?” needs structured browser-page data.
+- “Summarize this webpage” needs a future general browser-page schema.
 - “What am I looking at?” may need accessibility data or a focused-window image.
 - “Reply to this” needs a specific message/conversation reference and separate
   draft versus send intent.
@@ -256,7 +273,7 @@ Use the narrowest structured provider capable of answering the request:
 | Priority | Provider | Example data | Permission or trust boundary |
 |---:|---|---|---|
 | 1 | Native application state | Frontmost app name and bundle identifier | No Accessibility permission for `NSWorkspace` frontmost-app lookup |
-| 2 | App or browser adapter | Active tab title/URL (implemented for bounded regular Chrome tabs), future typed DOM records, message metadata | Adapter authentication and narrow host/provider permissions |
+| 2 | App or browser adapter | Active tab title/URL and the implemented YouTube Home recommendation schema; future typed DOM records and message metadata | Adapter authentication and narrow host/provider permissions |
 | 3 | Accessibility | Focused element, selected text, accessible controls | Accessibility permission; deny secure elements |
 | 4 | Focused-window capture | On-demand pixels for one window | Screen Recording permission and visible capture feedback |
 | 5 | OCR or vision interpretation | Text/visual description derived from a capture | Same visual sensitivity plus model/data boundary |
@@ -377,6 +394,11 @@ session may remember typed identifiers for recent results and actions, with:
 - A visible reset.
 - Target revalidation before use.
 
+Build 20's YouTube feed session is the first implementation: it contains at
+most 20 typed items, expires after 90 seconds, is visible and explicitly
+clearable in the menu, and is cleared after a dispatched open. It does not
+authorize another page schema or establish general conversational memory.
+
 Do not store raw audio, screenshots, full pages, or message bodies merely to
 support “that one.” Introduce durable history, embeddings, or retrieval only
 after a concrete use case and retention policy exist.
@@ -425,12 +447,14 @@ contain a query, URL, pasted content, or secret and must be treated accordingly.
    coordinator scoped to the browser bridge rather than generalizing every
    provider prematurely.
 6. Complete for tab metadata: add a Chrome adapter that returns typed active and
-   bounded tab records without arbitrary JavaScript. DOM/page data remains a
-   separate future slice.
-7. Add capability-specific confirmation before any message send or remote
+   bounded tab records without arbitrary JavaScript.
+7. Complete in Build 20: add the optional-permission, packaged-extractor YouTube
+   Home schema and one visible 90-second ordinal/title follow-up. Other DOM/page
+   data remains a separate future slice.
+8. Add capability-specific confirmation before any message send or remote
    mutation.
-8. Normalize one read-only chat adapter into the shared request envelope.
-9. Evaluate wake-phrase activation after reliability and idle-energy gates.
+9. Normalize one read-only chat adapter into the shared request envelope.
+10. Evaluate wake-phrase activation after reliability and idle-energy gates.
 
 See [Interaction modes](../product/interaction-modes.md) for the user-facing
 contracts and delivery order.

@@ -30,6 +30,65 @@ final class CommandResolverTests: XCTestCase {
     )
   }
 
+  func testRecognizesBoundedYouTubeFeedReadPhrasings() {
+    for transcript in [
+      "What’s on my YouTube feed?",
+      "What is on my YouTube feed",
+      "Show me my YouTube feed.",
+      "Read my YouTube feed",
+      "What's on my YouTube home page?",
+    ] {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .resolved(.readYouTubeFeed),
+        transcript
+      )
+    }
+  }
+
+  func testRecognizesYouTubeFeedOrdinalFollowupsThroughTwenty() {
+    let cases: [(String, Int)] = [
+      ("Open the third one", 3),
+      ("Play the 2nd video", 2),
+      ("Open YouTube recommendation number 12", 12),
+      ("Open item twenty", 20),
+      ("Open item one", 1),
+      ("Open number 1", 1),
+    ]
+    for (transcript, position) in cases {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .resolved(.openYouTubeFeedItem(.ordinal(position))),
+        transcript
+      )
+    }
+
+    XCTAssertEqual(
+      resolver.resolve("Open the twenty-first one"),
+      .unsupported(reason: .contextRequired)
+    )
+    XCTAssertEqual(
+      resolver.resolve("Open number 21"),
+      .unsupported(reason: .contextRequired)
+    )
+  }
+
+  func testRecognizesYouTubeFeedTitleFollowupWithoutFuzzyAuthority() throws {
+    let title = try XCTUnwrap(YouTubeVideoTitleQuery("Swift Concurrency — Carefully"))
+    XCTAssertEqual(
+      resolver.resolve("Open the YouTube video titled Swift Concurrency — Carefully."),
+      .resolved(.openYouTubeFeedItem(.title(title)))
+    )
+    XCTAssertEqual(
+      resolver.resolve("Open the YouTube video titled"),
+      .unsupported(reason: .missingValue)
+    )
+    XCTAssertEqual(
+      resolver.resolve("Open any YouTube recommendation"),
+      .unsupported(reason: .unsupportedAction)
+    )
+  }
+
   func testChromeTabActivationRequiresATitleAndDoesNotAcceptBroaderBrowserWork() {
     XCTAssertEqual(
       resolver.resolve("Switch to the Chrome tab titled"),
@@ -38,10 +97,6 @@ final class CommandResolverTests: XCTestCase {
     XCTAssertEqual(
       resolver.resolve("Close the Chrome tab titled GitHub"),
       .unsupported(reason: .unsupportedPhrasing)
-    )
-    XCTAssertEqual(
-      resolver.resolve("What's on my YouTube feed?"),
-      .unsupported(reason: .contextRequired)
     )
   }
 
@@ -465,7 +520,6 @@ final class CommandResolverTests: XCTestCase {
   func testBroaderScreenAndPageRequestsStillRequireUnavailableContext() {
     let cases = [
       "Go to this Chrome tab",
-      "What's on my YouTube feed?",
       "Summarize this page",
     ]
 

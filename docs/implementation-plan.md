@@ -10,7 +10,7 @@ own measured safety and reliability gates.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The Build 20 tree defines 334 Swift tests, 27 extension tests, and 40
+2. The Build 20 tree defines 334 Swift tests, 29 extension tests, and 40
    registration-helper assertions. Normal and Thread Sanitizer suites, Xcode
    Debug and universal Release builds, static analysis, signature, entitlement,
    and architecture checks are captured in its evidence record. Installation,

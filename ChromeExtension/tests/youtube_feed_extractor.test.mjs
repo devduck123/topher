@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
+import {TextEncoder} from "node:util";
 import vm from "node:vm";
 
 const source = await readFile(
@@ -31,7 +32,7 @@ function fakeCard(record) {
 }
 
 function loadExtractor() {
-  const context = {URL};
+  const context = {TextEncoder, URL};
   vm.runInNewContext(source, context, {filename: "youtube_feed_extractor.js"});
   return context.TopherYouTubeFeedExtractor;
 }
@@ -103,4 +104,29 @@ test("packaged extractor rejects credentialed and ambiguous watch links", () => 
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.items)), []);
   assert.equal(result.eligibleItemCount, 0);
+});
+
+test("packaged extractor rejects oversized DOM strings before returning them", () => {
+  const cards = [
+    fakeCard({
+      href: "/watch?v=abcDEF123_-",
+      title: "a".repeat(513),
+      channel: "Fixture Channel",
+      rect: {top: 20, bottom: 220, width: 320, height: 200},
+    }),
+    fakeCard({
+      href: "/watch?v=ZYX987abc_-",
+      title: "Bounded title",
+      channel: "b".repeat(257),
+      rect: {top: 240, bottom: 440, width: 320, height: 200},
+    }),
+  ];
+  const result = loadExtractor().extract(
+    {querySelectorAll: () => cards},
+    {innerHeight: 800},
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result.items)), []);
+  assert.equal(result.eligibleItemCount, 2);
+  assert.equal(result.incompleteItemCount, 2);
 });

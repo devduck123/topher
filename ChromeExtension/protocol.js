@@ -584,12 +584,18 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
       return failureResponse(request.requestID, "youTubeFeedChanged");
     }
     const revalidatedFingerprint = await fingerprintForTab(revalidatedTab);
+    const [revalidatedActive, permissionStillGranted] = await Promise.all([
+      activeYouTubeFeedTab(),
+      hasYouTubePermission(),
+    ]);
     const revalidatedNow = nowMilliseconds();
-    if (!await hasYouTubePermission()) {
+    if (!permissionStillGranted) {
       return failureResponse(request.requestID, "youTubePermissionRequired");
     }
     if (
-      revalidatedTab.active !== true
+      revalidatedActive.tab?.id !== target.sourceTabID
+      || revalidatedActive.tab?.windowId !== target.sourceWindowID
+      || revalidatedTab.active !== true
       || revalidatedTab.windowId !== target.sourceWindowID
       || validatedYouTubeFeedPageURL(revalidatedTab.url) !== currentURL
       || revalidatedFingerprint !== target.sourceFingerprint.value

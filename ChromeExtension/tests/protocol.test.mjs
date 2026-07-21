@@ -648,6 +648,39 @@ test("YouTube open refuses DOM drift, expiry, and permission revocation before m
   assert.equal(expiredStub.calls.tabUpdate, 0);
 });
 
+test("YouTube open refuses a last-focused Chrome window change during extraction", async () => {
+  const sourceTab = youtubeTab();
+  const otherWindowTab = youtubeTab({id: 8, windowId: 4, index: 0});
+  const stub = chromeStub([sourceTab], {extractedFeed: extractedFeed()});
+  const handle = createRequestHandler(stub.api, () => 1000);
+  const read = await handle({
+    version: 2,
+    requestID: requestIDs.feed,
+    operation: "getYouTubeFeed",
+  });
+
+  let focusMoved = false;
+  stub.api.tabs.query = async () => {
+    stub.calls.query += 1;
+    return focusMoved ? [otherWindowTab] : [sourceTab];
+  };
+  stub.api.scripting.executeScript = async () => {
+    stub.calls.scripting += 1;
+    focusMoved = true;
+    return [{frameId: 0, result: extractedFeed()}];
+  };
+
+  const response = await handle({
+    version: 2,
+    requestID: requestIDs.openVideo,
+    operation: "openYouTubeVideo",
+    youTubeTarget: openTarget(read.youTubeFeed),
+  });
+
+  assert.equal(response.failureCode, "youTubeFeedChanged");
+  assert.equal(stub.calls.tabUpdate, 0);
+});
+
 test("YouTube navigation API failure is an unknown outcome and is not retried", async () => {
   const stub = chromeStub([youtubeTab()], {extractedFeed: extractedFeed()});
   stub.api.tabs.update = async () => {

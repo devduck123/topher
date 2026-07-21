@@ -53,7 +53,7 @@ git diff --check
 Results:
 
 - Swift: 334 tests, zero failures, normally and under Thread Sanitizer.
-- Extension: 27 dependency-free Node tests, zero failures.
+- Extension: 29 dependency-free Node tests, zero failures.
 - Native-host registration/framing: 5 runs and 40 assertions, zero failures.
 - Sanitized manual corpus: 46 cases; observed-query exporter tests passed.
 - Dependency parity: KeyboardShortcuts 3.0.1 at the same revision in SwiftPM,
@@ -67,10 +67,11 @@ The focused deterministic corpus covers feed phrasings, ordinals 1 through 20,
 normalized title selection, ambiguity, missing/stale context, truncated title
 refusal, permission denial/revocation, unsupported routes, malformed and
 oversized untrusted values, duplicate items/requests, extractor bounds and
-sanitized DOM fixtures, cancellation/timeout, DOM drift, version mismatch,
-native disconnect classification, exactly-once dispatch, and unknown
-post-dispatch outcomes. Existing command, application, web, Chrome-tab,
-dictation, and diagnostics suites remain included in the 334-test run.
+sanitized DOM fixtures, last-focused-window drift, cancellation/timeout, DOM
+drift, version mismatch, native disconnect classification, exactly-once
+dispatch, and unknown post-dispatch outcomes. Existing command, application,
+web, Chrome-tab, dictation, and diagnostics suites remain included in the
+334-test run.
 
 ## Release bundle verification
 

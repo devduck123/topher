@@ -373,6 +373,76 @@
       "checks": ["No content or formatting mutation", "No automatic clipboard write", "Fallback explains that content was left unchanged"]
     },
     {
+      "id": "assistant-youtube-feed-read",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "What's on my YouTube feed?",
+      "setup": "Load the unpacked Topher extension, grant its optional YouTube access from the extension button, and make YouTube Home the active non-incognito Chrome tab.",
+      "expectedStatus": "supported",
+      "expectedResult": "Show a short-lived numbered list of at most 20 visible or nearby YouTube recommendations with title and channel.",
+      "checks": ["The HUD remains concise", "The list appears in Topher", "A bounded view is labeled", "No page content appears in ordinary logs"]
+    },
+    {
+      "id": "assistant-youtube-feed-permission-denied",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Show me my YouTube feed.",
+      "setup": "Load the unpacked Topher extension but leave its optional YouTube access removed.",
+      "expectedStatus": "supported",
+      "expectedResult": "Do not inspect the page; explain how to grant YouTube access from the extension button.",
+      "checks": ["Chrome owns the permission prompt", "No broad host access is requested", "No screenshot or accessibility fallback runs"]
+    },
+    {
+      "id": "assistant-youtube-feed-ordinal-open",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open the third one.",
+      "setup": "Immediately after a successful feed read with at least three listed items, keep the same YouTube Home tab active.",
+      "expectedStatus": "supported",
+      "expectedResult": "Revalidate the feed and navigate the source tab exactly once to the third listed video's application-constructed watch URL.",
+      "checks": ["Exactly one tab update", "No new arbitrary URL", "The short-lived list is consumed", "No automatic retry after an unknown outcome"]
+    },
+    {
+      "id": "assistant-youtube-feed-title-open",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open the YouTube video titled Fixture Alpha.",
+      "setup": "Immediately after an untruncated feed read containing exactly one normalized title match for 'Fixture Alpha', keep the same YouTube Home tab active.",
+      "expectedStatus": "supported",
+      "expectedResult": "Revalidate and open the uniquely matching listed video exactly once.",
+      "checks": ["Matching is normalized but not fuzzy", "The page-provided URL is ignored", "The destination is constructed from a strict video ID"]
+    },
+    {
+      "id": "assistant-youtube-feed-title-ambiguous",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open the YouTube video titled Fixture Duplicate.",
+      "setup": "Immediately after an untruncated feed read containing two normalized matches for 'Fixture Duplicate'.",
+      "expectedStatus": "supported",
+      "expectedResult": "Refuse before navigation and ask for a numbered selection.",
+      "checks": ["No tab update", "The numbered list remains available", "No model chooses between duplicates"]
+    },
+    {
+      "id": "assistant-youtube-feed-stale",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open the first one.",
+      "setup": "Read the feed, then change or leave the YouTube Home tab before the follow-up, or wait for the list to expire.",
+      "expectedStatus": "supported",
+      "expectedResult": "Refuse the navigation and tell the user to ask for the feed again.",
+      "checks": ["No stale navigation", "No automatic reread", "No retry", "Recovery is actionable"]
+    },
+    {
+      "id": "assistant-youtube-feed-unsupported-page",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Read my YouTube feed.",
+      "setup": "Grant optional YouTube access, but make a watch, search, Shorts, or non-YouTube tab active.",
+      "expectedStatus": "supported",
+      "expectedResult": "Do not inspect the page and ask the user to open YouTube Home.",
+      "checks": ["No generalized DOM extraction", "No screenshot or OCR fallback", "No page-body content crosses the bridge"]
+    },
+    {
       "id": "dictation-secure-field",
       "mode": "dictation",
       "category": "security",

@@ -4,6 +4,8 @@ public enum TopherCommand: Equatable, Sendable {
   case activateChromeTab(ChromeTabTitleQuery)
   case identifyActiveChromeTab
   case listChromeTabs
+  case readYouTubeFeed
+  case openYouTubeFeedItem(YouTubeFeedSelection)
   case openApplication(ApplicationTarget)
   case openInstalledApplication(InstalledApplicationTarget)
   case openBrowserRoute(BrowserRouteTarget)

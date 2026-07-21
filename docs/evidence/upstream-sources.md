@@ -1,7 +1,7 @@
 # Upstream evidence ledger
 
-Retrieved 2026-07-14 and refreshed for Chrome context on 2026-07-18. Prefer these primary sources when refreshing the
-investigation.
+Retrieved 2026-07-14 and refreshed for Chrome context on 2026-07-19. Prefer
+these primary sources when refreshing the investigation.
 
 ## Apple
 
@@ -44,3 +44,6 @@ intentionally has no 27 declarations.
 - [Native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
 - [Extension message security](https://developer.chrome.com/docs/extensions/develop/concepts/messaging#security-considerations)
 - [Extension service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
+- [`chrome.permissions`](https://developer.chrome.com/docs/extensions/reference/api/permissions)
+- [`chrome.scripting`](https://developer.chrome.com/docs/extensions/reference/api/scripting)
+- [Declare optional permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions#optional_permissions)

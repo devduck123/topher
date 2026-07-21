@@ -229,6 +229,205 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     XCTAssertEqual(activationCount, 1)
   }
 
+  func testYouTubeFeedReadStoresAnEphemeralListAndOrdinalOpenConsumesIt() async {
+    let now: Int64 = 1_000
+    let stub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(capturedAtMilliseconds: now)
+    )
+    let capabilities = ChromeContextCapabilities(client: client(stub), nowMilliseconds: { now })
+
+    let read = await capabilities.youTubeFeed.execute()
+    XCTAssertEqual(read.snapshot?.items.count, 2)
+    XCTAssertEqual(
+      read.outcome,
+      .succeeded(
+        message: "I found 2 YouTube recommendations. Open Topher to review the numbered list."
+      )
+    )
+
+    let opened = await capabilities.openYouTubeVideo.execute(.ordinal(2))
+    XCTAssertEqual(
+      opened,
+      .succeeded(message: "Opened “Swift concurrency, carefully” in the YouTube tab.")
+    )
+    let openCount = await stub.youTubeOpenCount()
+    let openTarget = await stub.lastYouTubeOpenTarget()
+    XCTAssertEqual(openCount, 1)
+    XCTAssertEqual(openTarget?.videoID.value, "ZYX987abc_-")
+
+    let replay = await capabilities.openYouTubeVideo.execute(.ordinal(2))
+    XCTAssertEqual(
+      replay,
+      .failed(
+        message: "Ask “What’s on my YouTube feed?” first, then use the numbered list promptly."
+      )
+    )
+    let replayOpenCount = await stub.youTubeOpenCount()
+    XCTAssertEqual(replayOpenCount, 1)
+  }
+
+  func testYouTubeTitleSelectionUsesNormalizedUniqueMatchAndRefusesAmbiguity() async throws {
+    let now: Int64 = 1_000
+    let uniqueStub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(capturedAtMilliseconds: now)
+    )
+    let unique = ChromeContextCapabilities(client: client(uniqueStub), nowMilliseconds: { now })
+    _ = await unique.youTubeFeed.execute()
+    let query = try XCTUnwrap(YouTubeVideoTitleQuery("swift concurrency carefully"))
+    let uniqueOutcome = await unique.openYouTubeVideo.execute(.title(query))
+    XCTAssertEqual(
+      uniqueOutcome,
+      .succeeded(message: "Opened “Swift concurrency, carefully” in the YouTube tab.")
+    )
+
+    let ambiguousStub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(
+        capturedAtMilliseconds: now,
+        titles: ["Same title", "SAME TITLE"]
+      )
+    )
+    let ambiguous = ChromeContextCapabilities(
+      client: client(ambiguousStub),
+      nowMilliseconds: { now }
+    )
+    _ = await ambiguous.youTubeFeed.execute()
+    let ambiguousQuery = try XCTUnwrap(YouTubeVideoTitleQuery("same title"))
+    let ambiguousOutcome = await ambiguous.openYouTubeVideo.execute(.title(ambiguousQuery))
+    XCTAssertEqual(
+      ambiguousOutcome,
+      .failed(message: "More than one listed YouTube video has that title. Use its number.")
+    )
+    let ambiguousOpenCount = await ambiguousStub.youTubeOpenCount()
+    XCTAssertEqual(ambiguousOpenCount, 0)
+  }
+
+  func testYouTubeTitleSelectionRefusesTruncatedUnsafeAndExpiredSnapshots() async throws {
+    let now: Int64 = 1_000
+    let truncatedStub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(
+        capturedAtMilliseconds: now,
+        observationWasTruncated: true
+      )
+    )
+    let truncated = ChromeContextCapabilities(
+      client: client(truncatedStub),
+      nowMilliseconds: { now }
+    )
+    _ = await truncated.youTubeFeed.execute()
+    let truncatedQuery = try XCTUnwrap(
+      YouTubeVideoTitleQuery("Local-first Mac assistants")
+    )
+    let truncatedOutcome = await truncated.openYouTubeVideo.execute(.title(truncatedQuery))
+    XCTAssertEqual(
+      truncatedOutcome,
+      .failed(
+        message:
+          "The YouTube list was bounded, so a title match could be incomplete. Use its number or ask again."
+      )
+    )
+
+    let expiredStub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(capturedAtMilliseconds: now)
+    )
+    let expired = ChromeContextCapabilities(
+      client: client(expiredStub),
+      nowMilliseconds: { now + 90_001 }
+    )
+    let expiredRead = await expired.youTubeFeed.execute()
+    XCTAssertEqual(
+      expiredRead.outcome,
+      .failed(message: "The YouTube feed snapshot was already stale. Ask again.")
+    )
+    XCTAssertNil(expiredRead.snapshot)
+    let expiredOutcome = await expired.openYouTubeVideo.execute(.ordinal(1))
+    XCTAssertEqual(
+      expiredOutcome,
+      .failed(
+        message: "Ask “What’s on my YouTube feed?” first, then use the numbered list promptly."
+      )
+    )
+    let expiredOpenCount = await expiredStub.youTubeOpenCount()
+    XCTAssertEqual(expiredOpenCount, 0)
+  }
+
+  func testYouTubePermissionAndPageFailuresAreActionableAndClearSession() async {
+    let stub = ChromeExchangeStub(
+      tabs: [],
+      youTubeReadFailure: .youTubePermissionRequired
+    )
+    let capabilities = ChromeContextCapabilities(client: client(stub))
+    let read = await capabilities.youTubeFeed.execute()
+    XCTAssertNil(read.snapshot)
+    XCTAssertEqual(
+      read.outcome,
+      .failed(
+        message:
+          "Grant YouTube access from the Topher extension button in Chrome, then ask again. You can remove access there at any time."
+      )
+    )
+
+    let unsupported = ChromeExchangeStub(
+      tabs: [],
+      youTubeReadFailure: .unsupportedYouTubePage
+    )
+    let unsupportedOutcome = await ChromeContextCapabilities(
+      client: client(unsupported)
+    ).youTubeFeed.execute().outcome
+    XCTAssertEqual(
+      unsupportedOutcome,
+      .failed(message: "Open YouTube Home in the active Chrome tab, then ask again.")
+    )
+  }
+
+  func testYouTubeOpenChangedAndUnknownOutcomesNeverRetry() async {
+    let now: Int64 = 1_000
+    let changedStub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(capturedAtMilliseconds: now),
+      youTubeOpenFailure: .youTubeFeedChanged
+    )
+    let changed = ChromeContextCapabilities(
+      client: client(changedStub),
+      nowMilliseconds: { now }
+    )
+    _ = await changed.youTubeFeed.execute()
+    let changedOutcome = await changed.openYouTubeVideo.execute(.ordinal(1))
+    XCTAssertEqual(
+      changedOutcome,
+      .failed(message: "The YouTube feed changed. Ask “What’s on my YouTube feed?” again.")
+    )
+    let changedOpenCount = await changedStub.youTubeOpenCount()
+    XCTAssertEqual(changedOpenCount, 1)
+
+    let timeoutStub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(capturedAtMilliseconds: now),
+      activationDelay: .seconds(1)
+    )
+    let timeoutClient = ChromeBridgeClient(
+      exchange: exchange(timeoutStub),
+      feedReadTimeout: .seconds(1),
+      activationTimeout: .milliseconds(10)
+    )
+    let timeout = ChromeContextCapabilities(client: timeoutClient, nowMilliseconds: { now })
+    _ = await timeout.youTubeFeed.execute()
+    let timeoutOutcome = await timeout.openYouTubeVideo.execute(.ordinal(1))
+    XCTAssertEqual(
+      timeoutOutcome,
+      .failed(
+        message:
+          "Chrome may have opened the video, but Topher did not receive confirmation and will not retry automatically. Ask for the feed again before another open."
+      )
+    )
+    let timeoutOpenCount = await timeoutStub.youTubeOpenCount()
+    XCTAssertEqual(timeoutOpenCount, 1)
+  }
+
   func testClientRejectsMismatchedVersionAndRequestID() async {
     let versionStub = ChromeExchangeStub(
       tabs: [wireTab()],
@@ -254,6 +453,49 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     }
   }
 
+  func testClientRejectsMalformedOrMixedYouTubeFeedResponses() async {
+    let now: Int64 = 1_000
+    let oversized = wireYouTubeFeed(
+      capturedAtMilliseconds: now,
+      titles: [String(repeating: "a", count: 513)]
+    )
+    let malformedClient = ChromeBridgeClient(
+      exchange: ChromeBridgeExchange(send: { request in
+        ChromeBridgeResponse(
+          requestID: request.requestID,
+          status: .success,
+          youTubeFeed: oversized
+        )
+      })
+    )
+    do {
+      _ = try await malformedClient.youTubeFeed()
+      XCTFail("Expected malformed feed data to fail closed")
+    } catch {
+      XCTAssertEqual(error as? ChromeContextError, .malformedResponse)
+    }
+
+    let validFeed = wireYouTubeFeed(capturedAtMilliseconds: now)
+    let mixedClient = ChromeBridgeClient(
+      exchange: ChromeBridgeExchange(send: { request in
+        ChromeBridgeResponse(
+          requestID: request.requestID,
+          status: .success,
+          tabs: [],
+          youTubeFeed: validFeed,
+          excludedTabCount: 0,
+          observationWasTruncated: false
+        )
+      })
+    )
+    do {
+      _ = try await mixedClient.youTubeFeed()
+      XCTFail("Expected mixed response fields to fail closed")
+    } catch {
+      XCTAssertEqual(error as? ChromeContextError, .malformedResponse)
+    }
+  }
+
   func testClientRejectsListWithoutCompletenessMetadata() async {
     let stub = ChromeExchangeStub(
       tabs: [wireTab()],
@@ -275,6 +517,14 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     )
     XCTAssertEqual(
       chromeBridgeDisconnectError(operation: .listTabs, wasSent: true),
+      .bridgeUnavailable
+    )
+    XCTAssertEqual(
+      chromeBridgeDisconnectError(operation: .openYouTubeVideo, wasSent: true),
+      .navigationOutcomeUnknown
+    )
+    XCTAssertEqual(
+      chromeBridgeDisconnectError(operation: .openYouTubeVideo, wasSent: false),
       .bridgeUnavailable
     )
   }
@@ -339,6 +589,35 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
       capturedAtMilliseconds: capturedAtMilliseconds
     )
   }
+
+  private func wireYouTubeFeed(
+    capturedAtMilliseconds: Int64,
+    observationWasTruncated: Bool = false,
+    titles: [String] = ["Local-first Mac assistants", "Swift concurrency, carefully"]
+  ) -> ChromeBridgeWireYouTubeFeedSnapshot {
+    let videoIDs = ["abcDEF123_-", "ZYX987abc_-"]
+    let channels = ["Example Channel", "Sample Engineering"]
+    let observationCharacters = ["c", "d"]
+    return ChromeBridgeWireYouTubeFeedSnapshot(
+      sourceTabID: 7,
+      sourceWindowID: 3,
+      sourceURL: "https://www.youtube.com/",
+      sourceFingerprint: String(repeating: "a", count: 64),
+      feedObservationID: String(repeating: "b", count: 64),
+      capturedAtMilliseconds: capturedAtMilliseconds,
+      expiresAtMilliseconds: capturedAtMilliseconds + 90_000,
+      observationWasTruncated: observationWasTruncated,
+      items: titles.enumerated().map { index, title in
+        ChromeBridgeWireYouTubeFeedItem(
+          position: index + 1,
+          videoID: videoIDs[index],
+          title: title,
+          channel: channels[index],
+          observationID: String(repeating: observationCharacters[index], count: 64)
+        )
+      }
+    )
+  }
 }
 
 private actor ChromeExchangeStub {
@@ -346,6 +625,9 @@ private actor ChromeExchangeStub {
   private let excludedTabCount: Int
   private let observationWasTruncated: Bool?
   private let activationFailure: ChromeBridgeFailureCode?
+  private let youTubeFeed: ChromeBridgeWireYouTubeFeedSnapshot?
+  private let youTubeReadFailure: ChromeBridgeFailureCode?
+  private let youTubeOpenFailure: ChromeBridgeFailureCode?
   private let responseVersion: Int
   private let mismatchesRequestID: Bool
   private let readDelay: Duration?
@@ -359,6 +641,9 @@ private actor ChromeExchangeStub {
     excludedTabCount: Int = 0,
     observationWasTruncated: Bool? = false,
     activationFailure: ChromeBridgeFailureCode? = nil,
+    youTubeFeed: ChromeBridgeWireYouTubeFeedSnapshot? = nil,
+    youTubeReadFailure: ChromeBridgeFailureCode? = nil,
+    youTubeOpenFailure: ChromeBridgeFailureCode? = nil,
     responseVersion: Int = ChromeBridgeRequest.protocolVersion,
     mismatchesRequestID: Bool = false,
     readDelay: Duration? = nil,
@@ -369,6 +654,9 @@ private actor ChromeExchangeStub {
     self.excludedTabCount = excludedTabCount
     self.observationWasTruncated = observationWasTruncated
     self.activationFailure = activationFailure
+    self.youTubeFeed = youTubeFeed
+    self.youTubeReadFailure = youTubeReadFailure
+    self.youTubeOpenFailure = youTubeOpenFailure
     self.responseVersion = responseVersion
     self.mismatchesRequestID = mismatchesRequestID
     self.readDelay = readDelay
@@ -378,7 +666,9 @@ private actor ChromeExchangeStub {
 
   func send(_ request: ChromeBridgeRequest) async throws -> ChromeBridgeResponse {
     receivedRequests.append(request)
-    let delay = request.operation == .activateTab ? activationDelay : readDelay
+    let delay =
+      request.operation == .activateTab || request.operation == .openYouTubeVideo
+      ? activationDelay : readDelay
     if let delay {
       try await Task.sleep(for: delay)
     }
@@ -416,6 +706,35 @@ private actor ChromeExchangeStub {
         requestID: responseID,
         status: .success
       )
+    case .getYouTubeFeed:
+      if let youTubeReadFailure {
+        return ChromeBridgeResponse(
+          version: responseVersion,
+          requestID: responseID,
+          status: .failure,
+          failureCode: youTubeReadFailure
+        )
+      }
+      return ChromeBridgeResponse(
+        version: responseVersion,
+        requestID: responseID,
+        status: .success,
+        youTubeFeed: youTubeFeed
+      )
+    case .openYouTubeVideo:
+      if let youTubeOpenFailure {
+        return ChromeBridgeResponse(
+          version: responseVersion,
+          requestID: responseID,
+          status: .failure,
+          failureCode: youTubeOpenFailure
+        )
+      }
+      return ChromeBridgeResponse(
+        version: responseVersion,
+        requestID: responseID,
+        status: .success
+      )
     case .cancel:
       return ChromeBridgeResponse(
         version: responseVersion,
@@ -443,6 +762,14 @@ private actor ChromeExchangeStub {
 
   func lastActivationTarget() -> ChromeTabActivationTarget? {
     receivedRequests.last(where: { $0.operation == .activateTab })?.target
+  }
+
+  func youTubeOpenCount() -> Int {
+    receivedRequests.filter { $0.operation == .openYouTubeVideo }.count
+  }
+
+  func lastYouTubeOpenTarget() -> YouTubeVideoOpenTarget? {
+    receivedRequests.last(where: { $0.operation == .openYouTubeVideo })?.youTubeTarget
   }
 
   func canceledRequestIDs() -> [UUID] {

@@ -22,6 +22,10 @@ public struct CommandResolver: Sendable {
   }
 
   private func resolveSingle(_ transcript: String) -> CommandResolution {
+    if let resolution = resolveYouTubeFeedFollowup(transcript) {
+      return resolution
+    }
+
     if let resolution = resolveChromeTabActivation(transcript) {
       return resolution
     }
@@ -46,6 +50,10 @@ public struct CommandResolver: Sendable {
 
     if isChromeTabListRequest(request) {
       return .resolved(.listChromeTabs)
+    }
+
+    if isYouTubeFeedRequest(request) {
+      return .resolved(.readYouTubeFeed)
     }
 
     if isFrontmostApplicationRequest(request) {
@@ -260,6 +268,108 @@ public struct CommandResolver: Sendable {
       "list my chrome tabs", "list my open chrome tabs", "which chrome tabs are open",
     ].contains(request)
   }
+
+  private func isYouTubeFeedRequest(_ request: String) -> Bool {
+    [
+      "what s on my youtube feed", "what is on my youtube feed",
+      "what s on the youtube feed", "what is on the youtube feed",
+      "show me my youtube feed", "read my youtube feed",
+      "what s on my youtube home page", "what is on my youtube home page",
+    ].contains(request)
+  }
+
+  private func resolveYouTubeFeedFollowup(_ transcript: String) -> CommandResolution? {
+    let rawRequest = rawCommandRequest(transcript)
+    if let rawTitle = removingRawPrefix(
+      from: rawRequest,
+      candidates: [
+        "open the youtube video titled", "open youtube video titled",
+        "play the youtube video titled", "play youtube video titled",
+      ]
+    ) {
+      let title = removingLikelySentencePunctuation(from: rawTitle)
+      guard let query = YouTubeVideoTitleQuery(title) else {
+        return .unsupported(reason: .missingValue)
+      }
+      return .resolved(.openYouTubeFeedItem(.title(query)))
+    }
+
+    let request = normalizedRequest(transcript)
+    let prefixes = [
+      "open youtube recommendation number", "open youtube video number",
+      "open recommendation number", "open item", "open number", "open the", "play the",
+      "open", "play",
+    ]
+    for prefix in prefixes {
+      guard var reference = removingFirstPrefix(from: request, candidates: [prefix]) else {
+        continue
+      }
+      if let ordinal = Self.youTubeOrdinalValues[reference] {
+        return .resolved(.openYouTubeFeedItem(.ordinal(ordinal)))
+      }
+      reference = removingFirstSuffix(
+        from: reference,
+        candidates: ["one", "video", "recommendation", "item"]
+      )
+      guard let ordinal = Self.youTubeOrdinalValues[reference] else { continue }
+      return .resolved(.openYouTubeFeedItem(.ordinal(ordinal)))
+    }
+
+    if removingFirstPrefix(
+      from: request,
+      candidates: [
+        "open youtube recommendation number", "open youtube video number",
+        "open recommendation number", "open item", "open number",
+      ]
+    ) != nil {
+      return .unsupported(reason: .contextRequired)
+    }
+    if request.hasPrefix("open the ") || request.hasPrefix("play the "),
+      request.hasSuffix(" one")
+    {
+      return .unsupported(reason: .contextRequired)
+    }
+    if request.contains("youtube recommendation") {
+      return .unsupported(reason: .unsupportedAction)
+    }
+
+    return nil
+  }
+
+  private static let youTubeOrdinalValues: [String: Int] = {
+    let words = [
+      "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+      "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth",
+      "sixteenth", "seventeenth", "eighteenth", "nineteenth", "twentieth",
+    ]
+    var values = Dictionary(
+      uniqueKeysWithValues: words.enumerated().map { ($0.element, $0.offset + 1) })
+    let cardinalWords = [
+      "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+      "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+      "eighteen", "nineteen", "twenty",
+    ]
+    for (index, word) in cardinalWords.enumerated() {
+      values[word] = index + 1
+    }
+    for value in 1...ChromeBridgeRequest.maximumYouTubeFeedItemCount {
+      values[String(value)] = value
+      let suffix: String
+      if (11...13).contains(value % 100) {
+        suffix = "th"
+      } else {
+        suffix =
+          switch value % 10 {
+          case 1: "st"
+          case 2: "nd"
+          case 3: "rd"
+          default: "th"
+          }
+      }
+      values["\(value)\(suffix)"] = value
+    }
+    return values
+  }()
 
   private func resolveChromeTabActivation(_ transcript: String) -> CommandResolution? {
     let request = rawCommandRequest(transcript)

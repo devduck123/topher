@@ -1,0 +1,35 @@
+{
+  "viewportHeight": 800,
+  "cards": [
+    {
+      "href": "/watch?v=abcDEF123_-",
+      "title": "Local-first Mac assistants",
+      "channel": "Example Channel",
+      "rect": {"top": 20, "bottom": 240, "width": 320, "height": 220}
+    },
+    {
+      "href": "https://www.youtube.com/watch?v=ZYX987abc_-&feature=feed",
+      "title": "Swift concurrency, carefully",
+      "channel": "Sample Engineering",
+      "rect": {"top": 260, "bottom": 480, "width": 320, "height": 220}
+    },
+    {
+      "href": "/shorts/abcDEF123_-",
+      "title": "Excluded short",
+      "channel": "Sample Engineering",
+      "rect": {"top": 500, "bottom": 720, "width": 320, "height": 220}
+    },
+    {
+      "href": "/watch?v=QWE456rty_-",
+      "title": "Still loading its channel",
+      "channel": "",
+      "rect": {"top": 740, "bottom": 960, "width": 320, "height": 220}
+    },
+    {
+      "href": "/watch?v=farAway123_",
+      "title": "Outside the relevant window",
+      "channel": "Sample Engineering",
+      "rect": {"top": 3000, "bottom": 3220, "width": 320, "height": 220}
+    }
+  ]
+}

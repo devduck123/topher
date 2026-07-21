@@ -68,6 +68,9 @@ and bounded Notion start/middle caret insertion are decision
 Stable post-write caret placement, punctuation-boundary composition, and shared
 strong-token search-query notation are decision
 [`0023`](decisions/0023-stabilize-caret-and-share-technical-notation.md).
+The optional-permission, bounded YouTube Home schema and short-lived follow-up
+are decision
+[`0024`](decisions/0024-bounded-youtube-feed-context.md).
 
 ### Evidence
 
@@ -94,10 +97,11 @@ edit an older record to claim a test that was not run then.
   capture/transcription source and tests → latest relevant evidence.
 - **Permission or context feature:** product vision → interaction modes → request
   lifecycle → security policy → risks → relevant ADRs.
-- **Chrome context work:** decision 0013 → `ChromeExtension/README.md` → Core
-  protocol/App bridge sources and tests → latest Chrome evidence record.
+- **Chrome context work:** decisions 0013 and 0024 →
+  `ChromeExtension/README.md` → Core protocol/App bridge sources and tests →
+  latest Chrome evidence record.
 - **Release or installation work:** contributing guide → README security posture
-  → [latest integrated release evidence](evidence/2026-07-19-build-19-dictation-chrome-integration.md)
+  → [latest integrated release evidence](evidence/2026-07-19-build-20-youtube-feed-context.md)
   → install helper.
 - **Code review:** changed files and tests → `AGENTS.md` review priorities →
   relevant contract and risk documents.

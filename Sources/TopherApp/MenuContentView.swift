@@ -1,6 +1,7 @@
 import AppKit
 import KeyboardShortcuts
 import SwiftUI
+import TopherCore
 
 struct MenuContentView: View {
   static let panelSize = CGSize(width: 380, height: 460)
@@ -20,6 +21,13 @@ struct MenuContentView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 14) {
           phaseHeader
+
+          if let youTubeFeedSnapshot = model.youTubeFeedSnapshot {
+            YouTubeFeedResultsCard(
+              snapshot: youTubeFeedSnapshot,
+              clear: model.clearYouTubeFeedResults
+            )
+          }
 
           if !diagnostics.latestRecords.isEmpty {
             MenuRecentActivityView(
@@ -266,6 +274,74 @@ struct MenuContentView: View {
       forKey: TopherSettingsSection.preferenceKey
     )
     openSettings()
+  }
+}
+
+private struct YouTubeFeedResultsCard: View {
+  let snapshot: YouTubeFeedSnapshot
+  let clear: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(alignment: .firstTextBaseline) {
+        Label("YouTube feed", systemImage: "play.rectangle.fill")
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.red)
+
+        Spacer()
+
+        Button("Clear", action: clear)
+          .buttonStyle(.plain)
+          .font(.caption2)
+          .foregroundStyle(Color.accentColor)
+          .accessibilityLabel("Clear YouTube feed results")
+      }
+
+      ForEach(snapshot.items, id: \.observationID.value) { item in
+        HStack(alignment: .top, spacing: 9) {
+          Text("\(item.position)")
+            .font(.caption.monospacedDigit().weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 20, alignment: .trailing)
+
+          VStack(alignment: .leading, spacing: 2) {
+            Text(item.title)
+              .font(.caption.weight(.medium))
+              .fixedSize(horizontal: false, vertical: true)
+            Text(item.channel)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+          }
+
+          Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.position). \(item.title), by \(item.channel)")
+      }
+
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
+        Image(
+          systemName: snapshot.observationWasTruncated ? "rectangle.stack.badge.minus" : "clock"
+        )
+        .accessibilityHidden(true)
+        Text(
+          snapshot.observationWasTruncated
+            ? "Bounded view. Say “Open the third one”; title follow-ups may require a fresh list."
+            : "Short-lived list. Say a number or exact listed title before it expires."
+        )
+      }
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(12)
+    .background(.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+    .overlay {
+      RoundedRectangle(cornerRadius: 12)
+        .strokeBorder(.red.opacity(0.16))
+    }
+    .accessibilityElement(children: .contain)
   }
 }
 

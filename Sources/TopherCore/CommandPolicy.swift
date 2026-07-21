@@ -29,7 +29,7 @@ public struct CommandPolicy: Sendable {
 
     switch command {
     case .activateChromeTab, .identifyActiveChromeTab, .identifyFrontmostApplication,
-      .listChromeTabs:
+      .listChromeTabs, .openYouTubeFeedItem, .readYouTubeFeed:
       return .allowed
     case .openInstalledApplication(let target):
       guard installedApplications.contains(target) else {

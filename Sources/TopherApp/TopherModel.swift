@@ -111,6 +111,7 @@ final class TopherModel: ObservableObject {
   @Published private(set) var voiceFeedback: VoiceFeedback = .hidden
   @Published private(set) var accessibilityPermissionState: AccessibilityPermissionState
   @Published private(set) var pendingDictationText: String?
+  @Published private(set) var youTubeFeedSnapshot: YouTubeFeedSnapshot?
   @Published private(set) var canUndoDictation = false
   @Published private(set) var isDictationPolishEnabled: Bool
 
@@ -120,6 +121,7 @@ final class TopherModel: ObservableObject {
   }
 
   private let commandProcessor: AssistantCommandProcessor
+  private let chromeContext: ChromeContextCapabilities
   private let captureController: PushToTalkCaptureController
   private let developerDiagnostics: DeveloperDiagnosticsController?
   private let voiceFeedbackResultDuration: Duration
@@ -134,6 +136,7 @@ final class TopherModel: ObservableObject {
   private var commandExecutionTask: Task<Void, Never>?
   private var dictationInsertionTask: Task<Void, Never>?
   private var voiceFeedbackDismissalTask: Task<Void, Never>?
+  private var youTubeFeedExpiryTask: Task<Void, Never>?
   private var voiceFeedbackGeneration: UInt64 = 0
   private var activePermissionFailure: MicrophonePermissionState?
   private var activeVoicePresentation: VoicePresentation?
@@ -174,6 +177,8 @@ final class TopherModel: ObservableObject {
       finalizationTimeout: finalizationTimeout
     )
 
+    let chromeContext = chromeContext ?? .unavailable()
+    self.chromeContext = chromeContext
     commandProcessor = AssistantCommandProcessor(
       resolver: resolver,
       vocabularyProvider: vocabularyProvider,
@@ -241,6 +246,7 @@ final class TopherModel: ObservableObject {
     commandExecutionTask?.cancel()
     dictationInsertionTask?.cancel()
     voiceFeedbackDismissalTask?.cancel()
+    youTubeFeedExpiryTask?.cancel()
   }
 
   func refreshVoiceReadiness() {
@@ -255,6 +261,13 @@ final class TopherModel: ObservableObject {
     {
       phase = .idle
     }
+  }
+
+  func clearYouTubeFeedResults() {
+    youTubeFeedExpiryTask?.cancel()
+    youTubeFeedExpiryTask = nil
+    youTubeFeedSnapshot = nil
+    chromeContext.clearYouTubeFeedSession()
   }
 
   func requestAccessibilityPermission() {
@@ -1135,6 +1148,7 @@ final class TopherModel: ObservableObject {
 
       guard !Task.isCancelled, let self else { return }
       commandExecutionTask = nil
+      apply(result.presentationUpdate)
       apply(result.outcome, source: source)
 
       if let diagnostics, let traceToken {
@@ -1167,6 +1181,36 @@ final class TopherModel: ObservableObject {
       applyFailure(reason, source: source)
     case .completed(let actionOutcome):
       apply(actionOutcome, source: source)
+    }
+  }
+
+  private func apply(_ update: AssistantCommandPresentationUpdate?) {
+    guard let update else { return }
+    youTubeFeedExpiryTask?.cancel()
+    youTubeFeedExpiryTask = nil
+
+    switch update {
+    case .clearYouTubeFeed:
+      youTubeFeedSnapshot = nil
+      chromeContext.clearYouTubeFeedSession()
+    case .youTubeFeed(let snapshot):
+      youTubeFeedSnapshot = snapshot
+      let nowMilliseconds = Int64((Date().timeIntervalSince1970 * 1_000).rounded())
+      let remainingMilliseconds = max(0, snapshot.expiresAtMilliseconds - nowMilliseconds)
+      youTubeFeedExpiryTask = Task { [weak self] in
+        do {
+          try await Task.sleep(for: .milliseconds(remainingMilliseconds))
+        } catch {
+          return
+        }
+        guard
+          let self,
+          youTubeFeedSnapshot?.feedObservationID == snapshot.feedObservationID
+        else { return }
+        youTubeFeedSnapshot = nil
+        chromeContext.clearYouTubeFeedSession()
+        youTubeFeedExpiryTask = nil
+      }
     }
   }
 

@@ -10,11 +10,12 @@ own measured safety and reliability gates.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The integrated Build 19 tree defines 320 Swift tests. Normal and Thread
-   Sanitizer suites, Xcode Debug and universal Release builds, static analysis,
-   signature, entitlement, architecture, 13 extension tests, and 40
-   registration-helper assertions pass. Installation, process, live dictation,
-   and live Chrome checks remain separate manual gates.
+2. The Build 20 tree defines 334 Swift tests, 29 extension tests, and 40
+   registration-helper assertions. Normal and Thread Sanitizer suites, Xcode
+   Debug and universal Release builds, static analysis, signature, entitlement,
+   and architecture checks are captured in its evidence record. Installation,
+   process, live dictation, and live Chrome/YouTube checks remain separate
+   manual gates.
 3. The conventional Xcode macOS application target uses fixed bundle ID
    `dev.topher.app`, `LSUIElement`, local signing, and the existing local core.
 4. Debug and Release bundles build. The tightened Release bundle is installed
@@ -167,6 +168,17 @@ dependency, and installed-app denial/error recovery is verified.
   ambiguity, staleness, timeout, disconnect, version mismatch, and exactly-once
   behavior in Swift, Node, and Ruby tests. Live Chrome profile acceptance remains
   a separate named dogfood gate.
+- Complete in build 20: bump the Chrome protocol to version 2 and add
+  deterministic feed-read plus ordinal/exact-title commands; optional
+  `https://www.youtube.com/*` access with popup grant/remove/state UX; a fixed
+  packaged isolated-world YouTube Home extractor; at most 20 bounded typed
+  items; a visible 90-second in-memory session; and one revalidated,
+  application-constructed watch navigation with no post-dispatch retry.
+- Complete in build 20: add sanitized DOM/protocol fixtures and Swift/Node/manual
+  corpora for permission denial/revocation, unsupported routes, hostile and
+  oversized data, truncation, ambiguity, expiry, DOM drift, restart/disconnect,
+  cancellation/timeout, version mismatch, and exactly-once/unknown outcomes.
+  Live Chrome/YouTube acceptance remains a separate named gate.
 
 Exit: every proposed MVP command works without an LLM, Accessibility, or Screen
 Recording.
@@ -369,8 +381,13 @@ not parallel implementation projects. The canonical contracts are
   bodies, and browser-history persistence out of the slice.
 - Complete for build 9: prefer browser tab data before Accessibility or
   screenshots.
-- Future: prove live extension/native-host recovery, then design DOM/page
-  context as a separate permission and privacy decision.
+- Complete for build 20: add the separately approved YouTube Home schema behind
+  optional exact-origin access and a fixed packaged extractor. Keep it
+  demand-driven, content-bounded, in-memory, explicitly clearable, and isolated
+  from general DOM automation.
+- Future: prove live extension/native-host/YouTube recovery, then require
+  another permission and privacy decision before any additional DOM/page
+  context schema.
 
 ### Remote chat ingress
 

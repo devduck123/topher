@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "requestID": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "operation": "activateTab",
+  "target": {
+    "tabID": 7,
+    "windowID": 3,
+    "fingerprint": {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "capturedAtMilliseconds": 1721000000000
+  }
+}

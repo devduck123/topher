@@ -25,11 +25,13 @@ enum AssistantCommandKind: String, Codable, Equatable, Sendable {
   case identifyActiveChromeTab
   case identifyFrontmostApplication
   case listChromeTabs
+  case openYouTubeFeedItem
   case openApplication
   case openInstalledApplication
   case openBrowserRoute
   case openDomain
   case openWebsite
+  case readYouTubeFeed
   case searchWeb
   case searchUnknownDestination
 }

@@ -6,30 +6,29 @@ configurable global hold shortcuts, on-device English transcription,
 deterministic typed command resolution, safe focused-field insertion, policy
 validation, native application launching, bounded web navigation, and a first
 structured Chrome context slice for active-tab identification, bounded tab
-listing, and exact-title activation through a narrow MV3/native-messaging
-bridge. Capture is shared, but command interpretation, context acquisition,
-browser activation, and dictation insertion remain separate request kinds and
-authority boundaries.
+listing, exact-title activation, and an optional YouTube Home feed vertical
+slice through a narrow MV3/native-messaging bridge. Capture is shared, but
+command interpretation, context acquisition, browser mutation, and dictation
+insertion remain separate request kinds and authority boundaries.
 
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.4.0 Build 19 integration combines the global-dictation and
-structured Chrome-context foundations. All 320 Swift tests pass normally and
-under Thread Sanitizer, all 13 extension tests and 40 native-host assertions
-pass, and Xcode Debug, universal Release, static analysis, and strict bundle
-checks succeed. The signed Release embeds the universal native Chrome host at
-`Contents/Helpers`.
-Build 18's exact Release artifact remains the installed dogfood bundle; Build 19
-has not been installed or live-tested. Direct Apple
+Status: the 0.5.0 Build 20 source adds bounded YouTube feed context and
+short-lived ordinal/title follow-ups to the integrated dictation and Chrome-tab
+foundation. Automated and build evidence is recorded in the Build 20 evidence
+checkpoint. The Release bundle continues to embed the universal native Chrome
+host at `Contents/Helpers`.
+Build 18's exact Release artifact remains the installed dogfood bundle; Builds
+19 and 20 have not been installed or live-tested. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. A live Core Audio
 callback-isolation failure was captured, fixed, and covered by an off-main
 regression test. Accuracy, latency, permission-recovery, sleep/wake, and
 repeated-session acceptance remain explicit post-merge dogfood gates; this
 source merge is not evidence that those paths passed.
-Live Chrome extension/native-host acceptance is also unverified. The
-comparative speech benchmark is still open.
+Live Chrome extension/native-host and YouTube acceptance is also unverified.
+The comparative speech benchmark is still open.
 
 ## Implemented in this slice
 
@@ -155,6 +154,17 @@ comparative speech benchmark is still open.
   ambiguity and incomplete-observation refusal, a five-second fingerprinted
   snapshot, extension-side revalidation immediately before mutation, and one
   non-retried activation attempt.
+- “What’s on my YouTube feed?” using the active regular Chrome tab only. After
+  explicit optional YouTube permission, a packaged isolated-world extractor
+  returns at most 20 visible or nearby Home recommendations as strict video ID,
+  bounded title, and bounded channel records. Topher shows a numbered,
+  accessible, short-lived list in its menu while keeping the HUD concise.
+- “Open the third one” and “Open the YouTube video titled X” resolve only
+  against the latest 90-second in-memory feed. Title matching is normalized
+  exact and refuses ambiguity or truncated observations. Before one non-retried
+  tab navigation, the extension rechecks permission, active source tab/page,
+  fingerprint, expiry, and selected-item presence, then constructs the watch URL
+  from the validated video ID rather than trusting a page-provided URL.
 - A bundled native-messaging relay with a 64-KiB application protocol limit,
   launch-scoped same-user socket handshake, exact extension-origin registration,
   checked absolute helper path, typed cancellation, timeouts, concurrency limits,
@@ -206,12 +216,13 @@ review/copy fallback rather than a keystroke or paste target.
 Live cross-app acceptance is still required.
 Filler removal, grammar/tone rewriting, general context-aware punctuation,
 general spoken-punctuation commands, multi-paragraph editing,
-always-on wake listening, remote chat, conversational follow-ups, browser-page
-reading, broader Accessibility context, and visual screen understanding remain
-separate future work.
-The implemented Chrome context boundary is metadata-only; it does not add DOM
-or page-body understanding. These remain separate modes and trust boundaries,
-not flags on the command or dictation paths.
+always-on wake listening, remote chat, general conversational follow-ups,
+general browser-page reading, broader Accessibility context, and visual screen
+understanding remain separate future work. The only implemented DOM-derived
+context is the reviewed YouTube Home recommendation schema; there is no general
+page-body, screenshot, OCR, comment, description, account, or browser-agent
+capability. These remain separate modes and trust boundaries, not flags on the
+command or dictation paths.
 
 See [Interaction modes](docs/product/interaction-modes.md) and
 [Request lifecycle and context](docs/architecture/request-lifecycle.md) for the
@@ -231,9 +242,9 @@ The intended layers are:
 2. A future optional local model that interprets fuzzier phrasing into the same
    typed commands. It proposes; the policy layer still decides what can execute.
 3. Read-only native application context supports “What app am I using?” and a
-   narrow Chrome adapter now supports tab identity/listing plus exact-title tab
-   activation without an LLM. Page/DOM questions such as “What’s on my feed?”
-   remain unimplemented.
+   narrow Chrome adapter supports tab identity/listing, exact-title tab
+   activation, and the explicit typed YouTube Home feed slice without an LLM.
+   Other page/DOM questions remain unimplemented.
 
 ## Build and run
 
@@ -309,12 +320,19 @@ For an interactive smoke test:
    Chrome tab titled Example Domain,” and “YouTube for dining with Derek.”
    Chrome context commands require the separate setup above and an exact
    current tab title.
-6. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
+6. In the extension popup, remove YouTube access and ask “What’s on my YouTube
+   feed?” Confirm Topher gives grant instructions without inspecting the page.
+   Grant access, make YouTube Home active, and ask again. Confirm a numbered list
+   of at most 20 titles/channels appears in Topher. Say “Open the third one” and
+   confirm one revalidated navigation. Repeat by an exact unique title; confirm
+   duplicate, stale, changed, expired, revoked, and non-Home states refuse with
+   actionable recovery.
+7. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
    fallback. Say a malformed address or an explicitly missing app and confirm
    it fails closed.
-7. Open **Settings → Developer**, enter a manual command, and use **Run
+8. Open **Settings → Developer**, enter a manual command, and use **Run
    Command** as a development fallback. Confirm blank input cannot run.
-8. Record a different hold-to-dictate shortcut, explicitly allow Topher under
+9. Record a different hold-to-dictate shortcut, explicitly allow Topher under
    **Privacy & Security → Accessibility**, focus a normal editable field in
    another app, hold the dictation shortcut, say a sentence, and release.
    Confirm text is inserted once without Return being pressed. Repeat in an
@@ -329,7 +347,7 @@ For an interactive smoke test:
    supported, review the pending text in Topher and press **Copy** explicitly.
    If Settings shows Topher enabled while the app still reports denial, quit
    Topher, select its stale row and click **−**, relaunch, and allow it again.
-9. For a bounded-duration recovery check, keep holding dictation past its
+10. For a bounded-duration recovery check, keep holding dictation past its
    configured maximum. Confirm Topher finalizes and inserts or previews the
    best available text once, then does not start another request until the
    physical shortcut is released.
@@ -381,20 +399,24 @@ bounded `HTTPSDomain` type, then hand the HTTPS URL to the user's default
 browser through `NSWorkspace`. Browser-owned
 internal routes are delivered only to their registered browser application.
 Topher itself has no direct network client or embedded browser. Its Chrome
-extension requests exactly `tabs` and `nativeMessaging`, excludes incognito,
-and returns only bounded regular-tab titles/URLs on demand. It has no host
-permissions, content scripts, scripting, DOM/page-body extraction, screenshots,
-cookies, history, form data, file-URL access, or browser snapshot persistence.
+extension requires `tabs`, `nativeMessaging`, and `scripting`, excludes
+incognito, and returns bounded regular-tab titles/URLs on demand. Its only host
+permission is optional `https://www.youtube.com/*`, granted or removed through
+an explicit extension-popup action. Scripting runs only the packaged YouTube
+Home extractor in an isolated world. There are no content scripts, required
+host permissions, screenshots, cookies, history, account data, comments,
+descriptions, form data, file-URL access, arbitrary/page-authored script, or
+browser snapshot persistence.
 The bundled host relays bounded JSON only; it cannot execute commands. Topher's
 Accessibility surface is limited to focused-field dictation; it has no general
 Accessibility context provider or screen-capture implementation. The browser
 performs external requests and maintains its normal history when the user
 explicitly runs a search, navigation, or permitted tab-activation command.
 
-Before Topher adds direct networking, browser-content adapters, broader local
-data access, or distribution to other Macs, revisit the App Sandbox decision,
-capability-specific entitlements, stable Developer ID signing, notarization,
-and the corresponding permission and denial-recovery tests.
+Before Topher adds direct networking, another browser-content schema, broader
+local data access, or distribution to other Macs, revisit the App Sandbox
+decision, capability-specific entitlements, stable Developer ID signing,
+notarization, and the corresponding permission and denial-recovery tests.
 
 ## Logs and diagnostics
 
@@ -425,7 +447,10 @@ the maximum duration auto-finalized the request, optional local
 transcript/action ratings and fixed action-issue tags, capture-stage and
 processing durations, and app version/build. It never contains raw audio,
 partials, or content Topher separately captures from a page, screen, message,
-or document. Topher does not
+or document. A user-authored exact-title follow-up may itself repeat a feed
+title in this explicitly enabled content-bearing trace; the browser-returned
+feed, channels, video IDs, source URLs, and constructed destinations are never
+appended. Topher does not
 append constructed destination URLs, Keychain/config values, or detailed
 framework errors. Secure-field dictation is deliberately excluded, but other
 user-authored text can itself contain a query, URL, pasted content, or secret.
@@ -512,6 +537,7 @@ mental model.
 - [Focus recovery and semantic empty-composer decision](docs/decisions/0021-recover-focus-and-require-semantic-empty-composer-proof.md)
 - [Combined semantic-signal and Notion caret decision](docs/decisions/0022-combine-semantic-signals-and-bound-notion-caret-insertion.md)
 - [Stable caret and shared technical-notation decision](docs/decisions/0023-stabilize-caret-and-share-technical-notation.md)
+- [Bounded YouTube feed-context decision](docs/decisions/0024-bounded-youtube-feed-context.md)
 - [Build 16 verification evidence](docs/evidence/2026-07-16-build-16-semantic-web-append-and-menu-feedback.md)
 - [Build 17 verification evidence](docs/evidence/2026-07-18-build-17-focus-and-semantic-composer.md)
 - [Build 18 verification evidence](docs/evidence/2026-07-18-build-18-semantic-signals-and-notion-caret.md)
@@ -519,6 +545,7 @@ mental model.
 - [Build 19 dictation and Chrome integration evidence](docs/evidence/2026-07-19-build-19-dictation-chrome-integration.md)
 - [Chrome extension setup and manual acceptance](ChromeExtension/README.md)
 - [Chrome context foundation verification](docs/evidence/2026-07-18-chrome-context-foundation.md)
+- [Build 20 YouTube feed-context verification](docs/evidence/2026-07-19-build-20-youtube-feed-context.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

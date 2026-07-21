@@ -446,6 +446,9 @@ func chromeBridgeDisconnectError(
   if operation == .activateTab, wasSent {
     return .activationOutcomeUnknown
   }
+  if operation == .openYouTubeVideo, wasSent {
+    return .navigationOutcomeUnknown
+  }
   return .bridgeUnavailable
 }
 

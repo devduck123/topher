@@ -226,6 +226,62 @@ final class AssistantCommandProcessorTests: XCTestCase {
     XCTAssertEqual(operations, [.listTabs, .activateTab])
   }
 
+  func testYouTubeFeedReadAndOrdinalFollowupStayTypedAcrossPolicyAndPresentation() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(capturedAtMilliseconds: now)
+    let chromeContext = ChromeContextCapabilities(
+      client: ChromeBridgeClient(
+        exchange: ChromeBridgeExchange(send: { request in
+          try await stub.send(request)
+        })
+      ),
+      nowMilliseconds: { now }
+    )
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: chromeContext,
+      webOpener: inertWebOpener()
+    )
+
+    let read = await processor.process("What’s on my YouTube feed?")
+    XCTAssertEqual(
+      read.outcome,
+      .completed(
+        .succeeded(
+          message: "I found 2 YouTube recommendations. Open Topher to review the numbered list."
+        )
+      )
+    )
+    guard case .youTubeFeed(let snapshot) = read.presentationUpdate else {
+      return XCTFail("Expected a typed YouTube feed presentation")
+    }
+    XCTAssertEqual(snapshot.items.map(\.title), ["First recommendation", "Second recommendation"])
+    XCTAssertEqual(read.trace.commandKind, .readYouTubeFeed)
+    XCTAssertEqual(
+      read.trace.capabilityIdentifier,
+      ChromeYouTubeFeedCapability.descriptor.identifier
+    )
+
+    let missing = await processor.process("Open number 20")
+    XCTAssertEqual(
+      missing.outcome,
+      .completed(
+        .failed(message: "That number is not in the current YouTube list. Choose a listed number.")
+      )
+    )
+    XCTAssertNil(missing.presentationUpdate)
+
+    let open = await processor.process("Open the second one")
+    XCTAssertEqual(
+      open.outcome,
+      .completed(.succeeded(message: "Opened “Second recommendation” in the YouTube tab."))
+    )
+    XCTAssertEqual(open.presentationUpdate, .clearYouTubeFeed)
+    XCTAssertEqual(open.trace.commandKind, .openYouTubeFeedItem)
+    let operations = await stub.operations()
+    XCTAssertEqual(operations, [.getYouTubeFeed, .openYouTubeVideo])
+  }
+
   func testBrowserRouteCommandExecutesExactlyOnce() async {
     let applicationURL = URL(fileURLWithPath: "/Applications/Google Chrome.app")
     var openCount = 0
@@ -570,8 +626,40 @@ private actor ProcessorChromeExchangeStub {
         excludedTabCount: 0,
         observationWasTruncated: false
       )
-    case .activateTab, .cancel:
+    case .activateTab, .cancel, .openYouTubeVideo:
       return ChromeBridgeResponse(requestID: request.requestID, status: .success)
+    case .getYouTubeFeed:
+      let feed = ChromeBridgeWireYouTubeFeedSnapshot(
+        sourceTabID: 7,
+        sourceWindowID: 3,
+        sourceURL: "https://www.youtube.com/",
+        sourceFingerprint: String(repeating: "a", count: 64),
+        feedObservationID: String(repeating: "b", count: 64),
+        capturedAtMilliseconds: capturedAtMilliseconds,
+        expiresAtMilliseconds: capturedAtMilliseconds + 90_000,
+        observationWasTruncated: false,
+        items: [
+          ChromeBridgeWireYouTubeFeedItem(
+            position: 1,
+            videoID: "abcDEF123_-",
+            title: "First recommendation",
+            channel: "Example Channel",
+            observationID: String(repeating: "c", count: 64)
+          ),
+          ChromeBridgeWireYouTubeFeedItem(
+            position: 2,
+            videoID: "ZYX987abc_-",
+            title: "Second recommendation",
+            channel: "Sample Engineering",
+            observationID: String(repeating: "d", count: 64)
+          ),
+        ]
+      )
+      return ChromeBridgeResponse(
+        requestID: request.requestID,
+        status: .success,
+        youTubeFeed: feed
+      )
     }
   }
 

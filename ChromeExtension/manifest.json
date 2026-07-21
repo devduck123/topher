@@ -1,14 +1,25 @@
 {
   "manifest_version": 3,
   "name": "Topher Chrome Context",
-  "description": "Provides bounded, on-demand Chrome tab metadata to the local Topher app.",
-  "version": "0.1.0",
+  "description": "Provides bounded, on-demand Chrome tab and YouTube feed context to the local Topher app.",
+  "version": "0.2.0",
   "minimum_chrome_version": "105",
   "permissions": [
     "tabs",
-    "nativeMessaging"
+    "nativeMessaging",
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "https://www.youtube.com/*"
   ],
   "incognito": "not_allowed",
+  "action": {
+    "default_title": "Topher YouTube access",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; object-src 'none'"
+  },
   "background": {
     "service_worker": "service_worker.js",
     "type": "module"

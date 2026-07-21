@@ -38,7 +38,7 @@ that mode new authority over the Mac.
 | Global text dictation | Hold a distinct shortcut and insert conservatively formatted text into the focused editable field. | Safe foundation implemented; app-compatibility acceptance pending | Accessibility plus focused-element validation |
 | Local wake phrase | Opt in to local “Topher” detection, then capture one request without a keyboard hold. | Research only | Persistent microphone use, energy, false activation, visible ambient-state controls |
 | Remote chat message | Send Topher a request from another device through Discord, Slack, WhatsApp, or another adapter. | Planned investigation | Provider network, account identity, credentials, replay and remote-presence policy |
-| Conversational follow-up | Keep a short, visible interaction window for references such as “the second one.” | Future | Bounded local state, expiry, provenance, and clear reset behavior |
+| Conversational follow-up | Keep a short, visible interaction window for references such as “the second one.” | Implemented only for the latest YouTube Home feed; general follow-ups remain future work | Bounded local state, expiry, provenance, revalidation, and clear reset behavior |
 
 ## Current global push-to-talk contract
 
@@ -55,8 +55,10 @@ The current feature is a global **assistant command** mode:
 For the explicitly configured Chrome adapter, the same command mode can now
 acquire bounded regular-tab metadata on demand for an active-tab answer or tab
 list. Exact-title tab activation remains a separate registered mutation after
-policy, unique matching, and freshness revalidation. It does not grant page or
-DOM understanding.
+policy, unique matching, and freshness revalidation. After an explicit optional
+host-permission grant, the adapter can also run one reviewed packaged extractor
+on the active YouTube Home route and return a bounded title/channel/video-ID
+schema. This is not general page or DOM understanding.
 
 The menu does not need to be open and Topher does not need to be the focused
 application. The microphone is active only for the hold. At 30 seconds Topher
@@ -217,6 +219,17 @@ access, and sensitive visual capture should require local confirmation.
 
 ## Conversational follow-up
 
+Build 20 implements one deliberately non-general instance: a successful
+YouTube Home read creates a visible, in-memory session for no more than 90
+seconds. “Open the third one” resolves by list position. “Open the YouTube video
+titled X” uses normalized exact matching, refuses ambiguity, and is unavailable
+when the observation was truncated. A dispatch consumes the session before the
+browser mutation, and the extension revalidates source/page/item state before
+one non-retried navigation. Clearing the UI, expiry, a failed refresh, or a
+dispatched open clears the reference. No model or other command may reuse it.
+
+Any broader follow-up mode should retain only a small interaction state with:
+
 Follow-up mode should retain only a small interaction state with:
 
 - The originating channel and authenticated source.
@@ -263,11 +276,13 @@ Keep one reliable loop at every checkpoint:
 3. Complete in build 9: build global text dictation as an explicitly separate
    mode and permission; continue its app-compatibility and speech-quality gate.
 4. Complete for tab metadata: add structured Chrome active-tab/list context and
-   exact-title activation before screenshot-based context. Page/DOM context
-   remains a separate future gate.
-5. Establish confirmation and bounded-session behavior before remote mutation.
-6. Spike one chat adapter with read-only authority.
-7. Evaluate a local wake phrase only after idle-resource and privacy gates exist.
+   exact-title activation before screenshot-based context.
+5. Complete for Build 20: add only the optional-permission YouTube Home schema
+   and its 90-second ordinal/title follow-up. General DOM/page context remains a
+   separate future gate.
+6. Establish confirmation and broader bounded-session behavior before remote mutation.
+7. Spike one chat adapter with read-only authority.
+8. Evaluate a local wake phrase only after idle-resource and privacy gates exist.
 
 This order is a planning default, not a promise that every mode will ship.
 Measured usefulness and safety determine whether each phase proceeds.

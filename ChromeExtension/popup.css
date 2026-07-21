@@ -1,0 +1,63 @@
+:root {
+  color-scheme: light dark;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 300px;
+}
+
+main {
+  padding: 16px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+p {
+  margin: 8px 0;
+}
+
+.status {
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+button {
+  appearance: none;
+  background: #c00;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 8px 11px;
+  width: 100%;
+}
+
+button.secondary {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+}
+
+button:focus-visible {
+  outline: 3px solid Highlight;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.hint {
+  color: GrayText;
+  font-size: 12px;
+  margin-bottom: 0;
+}

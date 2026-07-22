@@ -46,6 +46,10 @@ development build. There is not yet a notarized public binary release.
   ambiguity and incomplete observations. The extension revalidates optional
   permission, active source tab/page/fingerprint, expiry, and selected-item
   presence before one navigation constructed from a strict video ID.
+- A bare reference such as “that YouTube video” cannot select among multiple
+  observed items. Topher requests a listed ordinal or exact title and preserves
+  the short-lived list; neither deterministic fallback nor a future model may
+  guess the referent.
 - No arbitrary shell, AppleScript, browser JavaScript, or generated code runs.
 - Permissions are requested incrementally for implemented features.
 - Accessibility is requested only from an explicit dictation action. Focus,
@@ -110,8 +114,17 @@ development build. There is not yet a notarized public binary release.
   cookies, history, account data, comments, descriptions, forms, file-URL
   access, arbitrary/page/model-generated JavaScript, continuous observation,
   or stored browser snapshots. Native-host registration binds one exact
-  extension origin to an absolute checked helper inside the current Topher
-  bundle. Only the primary Topher process may construct the app-side relay.
+  packaged extension origin to an absolute checked helper inside the current
+  Topher bundle. The committed manifest key is public development identity,
+  not a credential; its private key is not stored. Readiness inspection does
+  not mutate external state. Only an explicit **Set Up** or **Repair** action
+  may create or update the per-user manifest, and only when an existing
+  manifest is absent or is a secure current-user Topher registration with one
+  valid origin and the exact Topher app/helper path shape. This permits
+  explicit migration from a pre-stable-ID Topher build. Multiple origins,
+  non-Topher helper paths, symlinks, insecure modes, and malformed data are
+  refused. Setup never loads the extension or grants page access. Only the
+  primary Topher process may construct the app-side relay.
   Recording is visibly indicated, stored with restrictive POSIX modes,
   automatically pruned, and immediately clearable. The command can itself
   contain a spoken or pasted credential; Topher never separately appends

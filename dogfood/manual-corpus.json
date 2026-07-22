@@ -423,6 +423,16 @@
       "checks": ["No tab update", "The numbered list remains available", "No model chooses between duplicates"]
     },
     {
+      "id": "assistant-youtube-feed-pronoun-clarification",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open that YouTube video.",
+      "setup": "Immediately after a successful feed read containing multiple listed recommendations.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Keep the numbered list available and ask the user to choose a listed number or exact title.",
+      "checks": ["No guessed referent", "No tab update", "No model is required", "The recovery instruction is actionable"]
+    },
+    {
       "id": "assistant-youtube-feed-stale",
       "mode": "assistant",
       "category": "youtube-feed-context",

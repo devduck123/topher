@@ -4,6 +4,14 @@ import XCTest
 @testable import TopherCore
 
 final class ChromeContextTests: XCTestCase {
+  func testPackagedChromeExtensionIdentityIsStableAcrossTheTypedBoundary() {
+    XCTAssertEqual(ChromeBridgeConstants.extensionID, "mhbppdheppcibhhcnhnfockmfpcfhndj")
+    XCTAssertEqual(
+      ChromeBridgeConstants.extensionOrigin,
+      "chrome-extension://mhbppdheppcibhhcnhnfockmfpcfhndj/"
+    )
+  }
+
   func testTitleQueryUsesExactNormalizedMatching() throws {
     let query = try XCTUnwrap(ChromeTabTitleQuery("  Résumé — GitHub  "))
 

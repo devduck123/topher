@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "Topher Chrome Context",
   "description": "Provides bounded, on-demand Chrome tab and YouTube feed context to the local Topher app.",
-  "version": "0.2.0",
+  "version": "0.2.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsubGI6rI+8owpaja/3jndLXSVuH1Ip/rX1k3jtTcq3vX7nsHyS0mdC/OHjXxFbIY50WXWFUFhYPd4jDXlB+93Qf8DDwDkQ8iVAb8CGNi3izj/jDAS5ive6JbbVzgvxa7vP+6HjRH8DF+roOna8pLOTQk+1PoDPsAmr12QZ4kX/Os07yKiz40umz2U16U7KCTbuYY82C+vav2+Wld2/Kd6elo0Ykb3M3kd31nuvefNJ2rc/7YF1d1aqvzaRJQZpR0sM7OtNm7h+LNz4SfhIN43scWkmDqxrF9CP1KdtPAtSo36Dptte0TJGxpUS52f5pB9xnCSb38mq86c+xgUSTetQIDAQAB",
   "minimum_chrome_version": "105",
   "permissions": [
     "tabs",

@@ -228,9 +228,14 @@ browser mutation, and the extension revalidates source/page/item state before
 one non-retried navigation. Clearing the UI, expiry, a failed refresh, or a
 dispatched open clears the reference. No model or other command may reuse it.
 
-Any broader follow-up mode should retain only a small interaction state with:
+Build 21 makes each listed row a keyboard- and VoiceOver-accessible typed open
+action through the same policy and revalidation path. “Open that YouTube video”
+is recognized but asks for a displayed number or exact title: with several
+visible recommendations there is no singular typed referent to bind. This is an
+intent clarification, not a reason to add probabilistic memory or let a model
+choose an item.
 
-Follow-up mode should retain only a small interaction state with:
+Any broader follow-up mode should retain only a small interaction state with:
 
 - The originating channel and authenticated source.
 - Typed references to recent results, tabs, documents, or actions.
@@ -280,9 +285,12 @@ Keep one reliable loop at every checkpoint:
 5. Complete for Build 20: add only the optional-permission YouTube Home schema
    and its 90-second ordinal/title follow-up. General DOM/page context remains a
    separate future gate.
-6. Establish confirmation and broader bounded-session behavior before remote mutation.
-7. Spike one chat adapter with read-only authority.
-8. Evaluate a local wake phrase only after idle-resource and privacy gates exist.
+6. Complete for Build 21 source: add recoverable Chrome registration, stable
+   unpacked-extension identity, direct typed result actions, and explicit
+   ambiguous-reference clarification without adding an LLM.
+7. Establish confirmation and broader bounded-session behavior before remote mutation.
+8. Spike one chat adapter with read-only authority.
+9. Evaluate a local wake phrase only after idle-resource and privacy gates exist.
 
 This order is a planning default, not a promise that every mode will ship.
 Measured usefulness and safety determine whether each phase proceeds.

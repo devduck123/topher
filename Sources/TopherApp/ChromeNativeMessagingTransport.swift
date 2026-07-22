@@ -31,14 +31,16 @@ private struct ChromeBridgeHello: Codable {
   let extensionOrigin: String
 }
 
-private struct ChromeNativeHostManifest: Decodable {
+struct ChromeNativeHostManifest: Codable, Equatable {
   let name: String
+  let description: String?
   let path: String
   let type: String
   let allowedOrigins: [String]
 
   enum CodingKeys: String, CodingKey {
     case name
+    case description
     case path
     case type
     case allowedOrigins = "allowed_origins"
@@ -91,7 +93,7 @@ struct ChromeNativeHostRegistrationValidator: Sendable {
     return true
   }
 
-  private static func isExactExtensionOrigin(_ value: String) -> Bool {
+  static func isExactExtensionOrigin(_ value: String) -> Bool {
     guard
       value.hasPrefix("chrome-extension://"),
       value.hasSuffix("/"),
@@ -102,7 +104,7 @@ struct ChromeNativeHostRegistrationValidator: Sendable {
     return value[identifierStart..<identifierEnd].allSatisfy { ("a"..."p").contains($0) }
   }
 
-  private static func isSecureRegularFile(
+  static func isSecureRegularFile(
     _ url: URL,
     mustBeExecutable: Bool,
     requiresCurrentUserOwnership: Bool

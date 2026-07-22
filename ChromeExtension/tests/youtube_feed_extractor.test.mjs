@@ -24,8 +24,22 @@ function fakeCard(record) {
     closest: () => null,
     getBoundingClientRect: () => record.rect,
     querySelector: (selector) => {
-      if (selector.includes("video-title")) return titleAnchor;
-      if (selector.includes("channel-name")) return channel;
+      if (
+        (record.titleMarkup === "lockup" && selector === "h3 a[href^='/watch']")
+        || (record.titleMarkup !== "lockup" && selector === "a#video-title-link[href]")
+      ) {
+        return titleAnchor;
+      }
+      if (
+        record.channelMarkup === "attributed-handle"
+        && selector === "yt-content-metadata-view-model a[href^='/@']"
+      ) {
+        return channel;
+      }
+      if (record.channelMarkup !== "missing" && record.channelMarkup !== "attributed-handle"
+        && selector === "ytd-channel-name a") {
+        return channel;
+      }
       return null;
     },
   };
@@ -61,6 +75,37 @@ test("packaged extractor returns only relevant strict watch cards from a sanitiz
   assert.equal(result.eligibleItemCount, 3);
   assert.equal(result.incompleteItemCount, 1);
   assert.equal(result.candidateScanWasTruncated, false);
+});
+
+test("packaged extractor keeps current lockup and legacy channel seams isolated", () => {
+  const records = [
+    {
+      href: "/watch?v=abcDEF123_-",
+      title: "Current structure",
+      channel: "Current Channel",
+      titleMarkup: "lockup",
+      channelMarkup: "attributed-handle",
+      rect: {top: 20, bottom: 220, width: 320, height: 200},
+    },
+    {
+      href: "/watch?v=ZYX987abc_-",
+      title: "Legacy structure",
+      channel: "Legacy Channel",
+      titleMarkup: "legacy",
+      channelMarkup: "legacy",
+      rect: {top: 240, bottom: 440, width: 320, height: 200},
+    },
+  ];
+
+  const result = loadExtractor().extract(
+    {querySelectorAll: () => records.map(fakeCard)},
+    {innerHeight: 800},
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result.items.map((item) => item.title))), [
+    "Current structure",
+    "Legacy structure",
+  ]);
 });
 
 test("packaged extractor bounds cards and deduplicates video IDs", () => {

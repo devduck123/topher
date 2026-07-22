@@ -274,6 +274,18 @@ public struct TranscriptInterpretation: Equatable, Sendable {
   public let confidence: Double?
   public let reason: TranscriptInterpretationReason?
 
+  public init(
+    rawTranscript: String,
+    selectedTranscript: String,
+    confidence: Double?,
+    reason: TranscriptInterpretationReason?
+  ) {
+    self.rawTranscript = rawTranscript
+    self.selectedTranscript = selectedTranscript
+    self.confidence = confidence
+    self.reason = reason
+  }
+
   public var wasCorrected: Bool { reason != nil }
 }
 

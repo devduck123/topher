@@ -89,6 +89,19 @@ final class CommandResolverTests: XCTestCase {
     )
   }
 
+  func testYouTubePronounFollowupRequestsAnExplicitListedReference() {
+    for transcript in [
+      "Open that YouTube video",
+      "Play that YouTube recommendation.",
+    ] {
+      XCTAssertEqual(
+        resolver.resolve(transcript),
+        .unsupported(reason: .youTubeSelectionRequired),
+        transcript
+      )
+    }
+  }
+
   func testChromeTabActivationRequiresATitleAndDoesNotAcceptBroaderBrowserWork() {
     XCTAssertEqual(
       resolver.resolve("Switch to the Chrome tab titled"),

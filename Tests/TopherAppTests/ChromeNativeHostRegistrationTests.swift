@@ -33,6 +33,95 @@ final class ChromeNativeHostRegistrationTests: XCTestCase {
     }
   }
 
+  func testControllerInstallsAndRepairsThePackagedExtensionRegistration() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let manifestURL = root.appendingPathComponent(
+      "NativeMessagingHosts/dev.topher.chrome_bridge.json"
+    )
+    let helperURL = root.appendingPathComponent(
+      "Topher.app/Contents/Helpers/TopherChromeBridgeHost"
+    )
+    try FileManager.default.createDirectory(
+      at: helperURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    XCTAssertTrue(FileManager.default.createFile(atPath: helperURL.path, contents: Data()))
+    XCTAssertEqual(chmod(helperURL.path, 0o755), 0)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let controller = ChromeNativeHostRegistrationController(
+      manifestURL: manifestURL,
+      expectedHelperURL: helperURL,
+      fileManager: .default
+    )
+    XCTAssertEqual(controller.readiness(), .needsRegistration)
+
+    try controller.installOrRepair()
+    XCTAssertEqual(controller.readiness(), .ready)
+    let installed = try JSONDecoder().decode(
+      ChromeNativeHostManifest.self,
+      from: Data(contentsOf: manifestURL)
+    )
+    XCTAssertEqual(installed.allowedOrigins, [ChromeBridgeConstants.extensionOrigin])
+    XCTAssertEqual(installed.path, helperURL.standardizedFileURL.path)
+    XCTAssertEqual(
+      try FileManager.default.attributesOfItem(atPath: manifestURL.path)[.posixPermissions]
+        as? NSNumber,
+      NSNumber(value: 0o600)
+    )
+
+    try writeManifest(
+      at: manifestURL,
+      helperPath: "/Applications/Previous/Topher.app/Contents/Helpers/TopherChromeBridgeHost",
+      allowedOrigins: [ChromeBridgeConstants.extensionOrigin]
+    )
+    XCTAssertEqual(controller.readiness(), .needsRepair)
+    try controller.installOrRepair()
+    XCTAssertEqual(controller.readiness(), .ready)
+  }
+
+  func testControllerMigratesALegacyTopherExtensionOrigin() throws {
+    try withRegistration { _, manifestURL, helperURL in
+      let controller = ChromeNativeHostRegistrationController(
+        manifestURL: manifestURL,
+        expectedHelperURL: helperURL,
+        fileManager: .default
+      )
+      XCTAssertEqual(controller.readiness(), .needsRepair)
+      try controller.installOrRepair()
+      XCTAssertEqual(controller.readiness(), .ready)
+      let migrated = try JSONDecoder().decode(
+        ChromeNativeHostManifest.self,
+        from: Data(contentsOf: manifestURL)
+      )
+      XCTAssertEqual(migrated.allowedOrigins, [ChromeBridgeConstants.extensionOrigin])
+    }
+  }
+
+  func testControllerRefusesAConflictingHelperRegistration() throws {
+    try withRegistration { _, manifestURL, helperURL in
+      try writeManifest(
+        at: manifestURL,
+        helperPath: "/Applications/Other.app/Contents/Helpers/OtherHost",
+        allowedOrigins: [origin]
+      )
+      let controller = ChromeNativeHostRegistrationController(
+        manifestURL: manifestURL,
+        expectedHelperURL: helperURL,
+        fileManager: .default
+      )
+      XCTAssertEqual(controller.readiness(), .blocked)
+      XCTAssertThrowsError(try controller.installOrRepair())
+      let original =
+        try JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL))
+        as? [String: Any]
+      XCTAssertEqual(
+        original?["path"] as? String,
+        "/Applications/Other.app/Contents/Helpers/OtherHost"
+      )
+    }
+  }
+
   func testRejectsSymlinkedManifestAndHelper() throws {
     try withRegistration { validator, manifestURL, helperURL in
       let realManifest = manifestURL.deletingLastPathComponent().appendingPathComponent("real.json")

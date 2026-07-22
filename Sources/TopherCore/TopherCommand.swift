@@ -24,6 +24,7 @@ public enum UnsupportedCommandReason: String, Codable, Equatable, Sendable {
   case dictationModeRequired
   case emptyInput
   case missingValue
+  case youTubeSelectionRequired
   case uncertainDomain
   case unknownTarget
   case unsupportedAction

@@ -12,6 +12,8 @@
     "h3 a[href^='/watch']",
   ];
   const CHANNEL_SELECTORS = [
+    "yt-content-metadata-view-model a[href^='/@']",
+    "yt-content-metadata-view-model a[href^='/channel/']",
     "ytd-channel-name a",
     "#channel-name a",
     "#channel-name",

@@ -10,8 +10,9 @@ own measured safety and reliability gates.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The Build 20 tree defines 334 Swift tests, 29 extension tests, and 40
-   registration-helper assertions. Normal and Thread Sanitizer suites, Xcode
+2. The Build 21 tree defines 341 Swift tests, 30 extension tests, 43
+   registration-helper assertions, and 47 sanitized dogfood cases. Normal and
+   Thread Sanitizer suites, Xcode
    Debug and universal Release builds, static analysis, signature, entitlement,
    and architecture checks are captured in its evidence record. Installation,
    process, live dictation, and live Chrome/YouTube checks remain separate
@@ -179,6 +180,20 @@ dependency, and installed-app denial/error recovery is verified.
   oversized data, truncation, ambiguity, expiry, DOM drift, restart/disconnect,
   cancellation/timeout, version mismatch, and exactly-once/unknown outcomes.
   Live Chrome/YouTube acceptance remains a separate named gate.
+- Complete in build 21: give the unpacked development extension one packaged
+  public-key identity; bundle its reviewed source with the app; add explicit
+  per-user native-host Set Up/Repair readiness UX; reveal the bundle and open
+  Chrome Extensions through fixed actions; and refuse unsafe or conflicting
+  registrations. Setup performs no silent extension load or host grant.
+- Complete in build 21: update the isolated extractor for current semantic
+  `yt-content-metadata-view-model` channel attribution while keeping the legacy
+  fixture seam; make listed rows accessible typed actions; and turn “Open that
+  YouTube video” into a deterministic number/title clarification instead of a
+  guessed effect. No LLM is required for context, selection, or execution.
+- Build 21 automated gates and a content-free live selector-structure check are
+  recorded separately. Installing the build, registering/loading the extension,
+  granting/removing permission, and completing the real command round trip in
+  the user's Chrome profile remain explicit manual acceptance.
 
 Exit: every proposed MVP command works without an LLM, Accessibility, or Screen
 Recording.
@@ -385,7 +400,10 @@ not parallel implementation projects. The canonical contracts are
   optional exact-origin access and a fixed packaged extractor. Keep it
   demand-driven, content-bounded, in-memory, explicitly clearable, and isolated
   from general DOM automation.
-- Future: prove live extension/native-host/YouTube recovery, then require
+- Complete for build 21 source: add explicit native-host readiness and safe
+  setup/repair, bundle a stable-ID unpacked extension, and update the isolated
+  selector seam for current YouTube Home channel metadata.
+- Future: prove live extension/native-host/YouTube round-trip acceptance, then require
   another permission and privacy decision before any additional DOM/page
   context schema.
 

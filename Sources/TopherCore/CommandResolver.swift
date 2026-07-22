@@ -295,6 +295,12 @@ public struct CommandResolver: Sendable {
     }
 
     let request = normalizedRequest(transcript)
+    if [
+      "open that youtube video", "play that youtube video",
+      "open that youtube recommendation", "play that youtube recommendation",
+    ].contains(request) {
+      return .unsupported(reason: .youTubeSelectionRequired)
+    }
     let prefixes = [
       "open youtube recommendation number", "open youtube video number",
       "open recommendation number", "open item", "open number", "open the", "play the",

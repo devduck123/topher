@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {webcrypto} from "node:crypto";
+import {createHash, webcrypto} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 
@@ -145,7 +145,11 @@ test("manifest keeps YouTube host access optional and requests only the required
   assert.deepEqual(manifest.optional_host_permissions, ["https://www.youtube.com/*"]);
   assert.equal("content_scripts" in manifest, false);
   assert.equal("externally_connectable" in manifest, false);
-  assert.equal("key" in manifest, false);
+  const publicKey = Buffer.from(manifest.key, "base64");
+  const identifier = Array.from(createHash("sha256").update(publicKey).digest().subarray(0, 16))
+    .flatMap((byte) => ["abcdefghijklmnop"[byte >> 4], "abcdefghijklmnop"[byte & 15]])
+    .join("");
+  assert.equal(identifier, "mhbppdheppcibhhcnhnfockmfpcfhndj");
   assert.equal(manifest.action.default_popup, "popup.html");
 });
 

@@ -584,7 +584,7 @@ private func chromeFailureMessage(_ error: Error) -> String {
       "Chrome may have switched tabs, but Topher did not receive confirmation and will not retry automatically."
   case .bridgeUnavailable:
     return
-      "Chrome context is unavailable. Start Chrome, load Topher's extension, and check native-host registration."
+      "Chrome isn’t connected. Open Topher Settings → General → Chrome and YouTube, finish Set Up, then reload the extension in Chrome."
   case .busy:
     return "Chrome context is busy. Wait a moment and try again."
   case .canceled:

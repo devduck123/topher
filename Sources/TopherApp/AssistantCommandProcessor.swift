@@ -134,6 +134,36 @@ final class AssistantCommandProcessor {
       )
     }
 
+    return await execute(
+      command,
+      interpretation: interpretation,
+      executionStarted: executionStarted
+    )
+  }
+
+  /// Runs an application-owned typed command from explicit local UI without
+  /// manufacturing a transcript or bypassing policy.
+  func process(
+    command: TopherCommand,
+    executionStarted: @MainActor () -> Void = {}
+  ) async -> AssistantCommandProcessingResult {
+    await execute(
+      command,
+      interpretation: TranscriptInterpretation(
+        rawTranscript: "",
+        selectedTranscript: "",
+        confidence: nil,
+        reason: nil
+      ),
+      executionStarted: executionStarted
+    )
+  }
+
+  private func execute(
+    _ command: TopherCommand,
+    interpretation: TranscriptInterpretation,
+    executionStarted: @MainActor () -> Void
+  ) async -> AssistantCommandProcessingResult {
     let commandMetadata = traceMetadata(for: command)
 
     switch policy.evaluate(command) {

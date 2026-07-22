@@ -1,6 +1,8 @@
 import Foundation
 
 public enum ChromeBridgeConstants {
+  public static let extensionID = "mhbppdheppcibhhcnhnfockmfpcfhndj"
+  public static let extensionOrigin = "chrome-extension://\(extensionID)/"
   public static let nativeHostName = "dev.topher.chrome_bridge"
   public static let runtimeDirectoryName = "ChromeBridge"
   public static let socketFileName = "native-messaging.sock"

@@ -48,7 +48,7 @@ Release entitlements, and a valid local ad-hoc signature. Installation in
 `/Applications`, launch, status-item creation, and process liveness were
 verified.
 
-The current 0.5.0 development tree still adds only the Release audio-input
+The current 0.5.1 development tree still adds only the Release audio-input
 entitlement required for microphone capture. Global dictation also
 adds an explicit Accessibility TCC boundary for narrow focused-field dictation;
 Accessibility does not add a code-signing entitlement. See the latest dated

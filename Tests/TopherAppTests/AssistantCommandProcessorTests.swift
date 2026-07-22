@@ -271,13 +271,16 @@ final class AssistantCommandProcessorTests: XCTestCase {
     )
     XCTAssertNil(missing.presentationUpdate)
 
-    let open = await processor.process("Open the second one")
+    let open = await processor.process(
+      command: .openYouTubeFeedItem(.ordinal(2))
+    )
     XCTAssertEqual(
       open.outcome,
       .completed(.succeeded(message: "Opened “Second recommendation” in the YouTube tab."))
     )
     XCTAssertEqual(open.presentationUpdate, .clearYouTubeFeed)
     XCTAssertEqual(open.trace.commandKind, .openYouTubeFeedItem)
+    XCTAssertTrue(open.interpretation.rawTranscript.isEmpty)
     let operations = await stub.operations()
     XCTAssertEqual(operations, [.getYouTubeFeed, .openYouTubeVideo])
   }

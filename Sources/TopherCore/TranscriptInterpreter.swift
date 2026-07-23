@@ -294,13 +294,16 @@ public struct TranscriptInterpretation: Equatable, Sendable {
 public struct TranscriptInterpreter: Sendable {
   private let resolver: CommandResolver
   private let vocabulary: TranscriptVocabulary
+  private let resolutionContext: CommandResolutionContext
 
   public init(
     resolver: CommandResolver = .init(),
-    vocabulary: TranscriptVocabulary = .developerDefaults
+    vocabulary: TranscriptVocabulary = .developerDefaults,
+    resolutionContext: CommandResolutionContext = .none
   ) {
     self.resolver = resolver
     self.vocabulary = vocabulary
+    self.resolutionContext = resolutionContext
   }
 
   public func interpret(
@@ -396,7 +399,9 @@ public struct TranscriptInterpreter: Sendable {
   }
 
   private func command(for text: String) -> TopherCommand? {
-    guard case .resolved(let command) = resolver.resolve(text) else { return nil }
+    guard case .resolved(let command) = resolver.resolve(text, context: resolutionContext) else {
+      return nil
+    }
     return command
   }
 
@@ -460,7 +465,12 @@ public struct TranscriptInterpreter: Sendable {
   }
 
   private func commandKey(_ hypothesis: TranscriptHypothesis) -> String? {
-    guard case .resolved(let command) = resolver.resolve(hypothesis.text) else { return nil }
+    guard
+      case .resolved(let command) = resolver.resolve(
+        hypothesis.text,
+        context: resolutionContext
+      )
+    else { return nil }
     return String(reflecting: command)
   }
 

@@ -30,6 +30,29 @@ enum ChromeIntegrationReadiness: Equatable {
   }
 }
 
+enum ChromeExtensionReadiness: Equatable {
+  case checking
+  case disconnected
+  case ready
+  case unavailable
+  case youtubeAccessRequired
+
+  var title: String {
+    switch self {
+    case .checking:
+      "Checking the Topher extension…"
+    case .disconnected:
+      "Topher’s Chrome extension is not connected. Load or reload it in Chrome."
+    case .ready:
+      "Chrome extension connected; YouTube access is granted."
+    case .unavailable:
+      "Finish local Chrome bridge setup first."
+    case .youtubeAccessRequired:
+      "Chrome extension connected; grant YouTube access from its button."
+    }
+  }
+}
+
 enum ChromeIntegrationSetupError: Error {
   case blockedRegistration
   case helperUnavailable

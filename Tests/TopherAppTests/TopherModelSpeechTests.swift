@@ -1031,7 +1031,10 @@ final class TopherModelSpeechTests: XCTestCase {
     model.runManually()
 
     await waitUntil {
-      model.phase == .failure("Which listed YouTube video? Say its number or exact title.")
+      model.phase
+        == .failure(
+          "Ask “What’s on my YouTube feed?” first, then choose from the short-lived list."
+        )
     }
   }
 
@@ -1062,6 +1065,37 @@ final class TopherModelSpeechTests: XCTestCase {
 
     XCTAssertEqual(configureCount, 1)
     XCTAssertEqual(model.chromeIntegrationReadiness, .ready)
+  }
+
+  func testChromeReadinessSeparatesRegistrationFromOptionalYouTubeAccess() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            ChromeBridgeResponse(
+              requestID: request.requestID,
+              status: .success,
+              youTubePermissionGranted: false
+            )
+          })
+        )
+      ),
+      chromeIntegration: ChromeIntegrationSetupClient(
+        readiness: { .ready },
+        configure: {},
+        showExtensionFolder: { true },
+        openExtensionManager: { .succeeded(message: "Opened Chrome Extensions.") }
+      )
+    )
+
+    await waitUntil { model.chromeExtensionReadiness == .youtubeAccessRequired }
+
+    XCTAssertEqual(model.chromeIntegrationReadiness, .ready)
+    XCTAssertEqual(model.chromeExtensionReadiness, .youtubeAccessRequired)
   }
 
   func testEnabledDeveloperDiagnosticsRecordOnlyTheFinalVoiceTranscript() async throws {
@@ -1528,6 +1562,7 @@ final class TopherModelSpeechTests: XCTestCase {
     speechAssets: SpeechAssetPreparationClient,
     voice: VoiceHarness,
     applicationOpener: ApplicationOpenCapability? = nil,
+    chromeContext: ChromeContextCapabilities? = nil,
     chromeIntegration: ChromeIntegrationSetupClient = .unavailable,
     webOpener: WebOpenCapability? = nil,
     listeningTimeout: Duration = .seconds(1),
@@ -1545,6 +1580,7 @@ final class TopherModelSpeechTests: XCTestCase {
   ) -> TopherModel {
     TopherModel(
       applicationOpener: applicationOpener ?? inertApplicationOpener(),
+      chromeContext: chromeContext,
       chromeIntegration: chromeIntegration,
       webOpener: webOpener ?? inertWebOpener(),
       microphonePermission: microphonePermission,

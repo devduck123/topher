@@ -111,6 +111,7 @@ final class TopherModel: ObservableObject {
   @Published private(set) var voiceFeedback: VoiceFeedback = .hidden
   @Published private(set) var accessibilityPermissionState: AccessibilityPermissionState
   @Published private(set) var chromeIntegrationReadiness: ChromeIntegrationReadiness
+  @Published private(set) var chromeExtensionReadiness: ChromeExtensionReadiness
   @Published private(set) var pendingDictationText: String?
   @Published private(set) var youTubeFeedSnapshot: YouTubeFeedSnapshot?
   @Published private(set) var canUndoDictation = false
@@ -139,6 +140,7 @@ final class TopherModel: ObservableObject {
   private var dictationInsertionTask: Task<Void, Never>?
   private var voiceFeedbackDismissalTask: Task<Void, Never>?
   private var youTubeFeedExpiryTask: Task<Void, Never>?
+  private var chromeIntegrationRefreshTask: Task<Void, Never>?
   private var voiceFeedbackGeneration: UInt64 = 0
   private var activePermissionFailure: MicrophonePermissionState?
   private var activeVoicePresentation: VoicePresentation?
@@ -204,7 +206,12 @@ final class TopherModel: ObservableObject {
     self.vocabularyProvider = vocabularyProvider
     voiceReadiness = captureController.readiness
     accessibilityPermissionState = accessibilityPermission.currentState
-    chromeIntegrationReadiness = chromeIntegration.readiness()
+    let initialChromeIntegrationReadiness = chromeIntegration.readiness()
+    chromeIntegrationReadiness = initialChromeIntegrationReadiness
+    chromeExtensionReadiness =
+      initialChromeIntegrationReadiness == .ready
+      ? .checking
+      : .unavailable
 
     captureController.onEvent = { [weak self] event in
       self?.handleCaptureEvent(event)
@@ -240,6 +247,7 @@ final class TopherModel: ObservableObject {
     if permission.currentState == .authorized {
       captureController.refreshReadiness()
     }
+    refreshChromeIntegrationReadiness()
   }
 
   deinit {
@@ -253,6 +261,7 @@ final class TopherModel: ObservableObject {
     dictationInsertionTask?.cancel()
     voiceFeedbackDismissalTask?.cancel()
     youTubeFeedExpiryTask?.cancel()
+    chromeIntegrationRefreshTask?.cancel()
   }
 
   func refreshVoiceReadiness() {
@@ -271,6 +280,20 @@ final class TopherModel: ObservableObject {
 
   func refreshChromeIntegrationReadiness() {
     chromeIntegrationReadiness = chromeIntegration.readiness()
+    chromeIntegrationRefreshTask?.cancel()
+    guard chromeIntegrationReadiness == .ready else {
+      chromeExtensionReadiness = .unavailable
+      return
+    }
+
+    chromeExtensionReadiness = .checking
+    let chromeContext = chromeContext
+    chromeIntegrationRefreshTask = Task { [weak self] in
+      let readiness = await chromeContext.integrationReadiness()
+      guard !Task.isCancelled else { return }
+      self?.chromeExtensionReadiness = readiness
+      self?.chromeIntegrationRefreshTask = nil
+    }
   }
 
   func configureChromeIntegration() {
@@ -1297,8 +1320,12 @@ final class TopherModel: ObservableObject {
       "Use the hold-to-dictate shortcut to insert text into the focused field."
     case .emptyInput, .missingValue:
       "That command is missing a target or search value."
+    case .youTubeFeedRequired:
+      "Ask “What’s on my YouTube feed?” first, then choose from the short-lived list."
+    case .youTubeSelectionAmbiguous:
+      "That could mean a list number or a video title. Say “number three” or “video titled …”."
     case .youTubeSelectionRequired:
-      "Which listed YouTube video? Say its number or exact title."
+      "Which listed YouTube video? Say “the third one,” “number three,” or its exact title."
     case .uncertainDomain:
       "I heard more than one possible domain. Say it again or type the exact domain in Topher."
     case .unknownTarget:

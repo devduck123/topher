@@ -24,11 +24,35 @@ public enum UnsupportedCommandReason: String, Codable, Equatable, Sendable {
   case dictationModeRequired
   case emptyInput
   case missingValue
+  case youTubeFeedRequired
+  case youTubeSelectionAmbiguous
   case youTubeSelectionRequired
   case uncertainDomain
   case unknownTarget
   case unsupportedAction
   case unsupportedPhrasing
+}
+
+/// Narrows otherwise ambiguous language to a recent YouTube feed turn. This
+/// state never contains page data and never grants execution authority.
+public enum YouTubeFollowUpScope: Equatable, Sendable {
+  case unavailable
+  case feedAvailable
+}
+
+public struct CommandResolutionContext: Equatable, Sendable {
+  public static let none = Self(youTubeFollowUpScope: .unavailable, youTubeFeedItemCount: nil)
+
+  public let youTubeFollowUpScope: YouTubeFollowUpScope
+  public let youTubeFeedItemCount: Int?
+
+  public init(
+    youTubeFollowUpScope: YouTubeFollowUpScope,
+    youTubeFeedItemCount: Int? = nil
+  ) {
+    self.youTubeFollowUpScope = youTubeFollowUpScope
+    self.youTubeFeedItemCount = youTubeFeedItemCount
+  }
 }
 
 /// The deterministic resolver either produces a typed executable proposal or

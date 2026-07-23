@@ -76,6 +76,7 @@ actor ChromeBridgeClient {
       response.youTubeFeed == nil,
       response.excludedTabCount == nil,
       response.observationWasTruncated == nil,
+      response.youTubePermissionGranted == nil,
       let tab = response.tab?.validatedSnapshot,
       tab.active
     else {
@@ -98,7 +99,8 @@ actor ChromeBridgeClient {
       wireTabs.count <= maximumCount,
       let excludedTabCount = response.excludedTabCount,
       excludedTabCount >= 0,
-      let observationWasTruncated = response.observationWasTruncated
+      let observationWasTruncated = response.observationWasTruncated,
+      response.youTubePermissionGranted == nil
     else {
       throw responseError(response)
     }
@@ -124,6 +126,7 @@ actor ChromeBridgeClient {
       response.tabs == nil,
       response.excludedTabCount == nil,
       response.observationWasTruncated == nil,
+      response.youTubePermissionGranted == nil,
       let feed = response.youTubeFeed?.validatedSnapshot
     else {
       throw responseError(response)
@@ -142,7 +145,8 @@ actor ChromeBridgeClient {
         response.tabs == nil,
         response.youTubeFeed == nil,
         response.excludedTabCount == nil,
-        response.observationWasTruncated == nil
+        response.observationWasTruncated == nil,
+        response.youTubePermissionGranted == nil
       else {
         throw responseError(response)
       }
@@ -164,13 +168,32 @@ actor ChromeBridgeClient {
         response.tabs == nil,
         response.youTubeFeed == nil,
         response.excludedTabCount == nil,
-        response.observationWasTruncated == nil
+        response.observationWasTruncated == nil,
+        response.youTubePermissionGranted == nil
       else {
         throw responseError(response)
       }
     } catch ChromeContextError.responseTimedOut {
       throw ChromeContextError.navigationOutcomeUnknown
     }
+  }
+
+  func integrationStatus() async throws -> Bool {
+    let request = ChromeBridgeRequest.integrationStatus()
+    let response = try await perform(request, timeout: readTimeout)
+    guard
+      response.status == .success,
+      response.failureCode == nil,
+      response.tab == nil,
+      response.tabs == nil,
+      response.youTubeFeed == nil,
+      response.excludedTabCount == nil,
+      response.observationWasTruncated == nil,
+      let youTubePermissionGranted = response.youTubePermissionGranted
+    else {
+      throw responseError(response)
+    }
+    return youTubePermissionGranted
   }
 
   private func perform(
@@ -252,6 +275,12 @@ struct YouTubeFeedReadExecution: Equatable, Sendable {
   let snapshot: YouTubeFeedSnapshot?
 }
 
+enum YouTubeFeedTitleResolution: Equatable {
+  case noMatch
+  case unique(YouTubeFeedSelection)
+  case ambiguous
+}
+
 @MainActor
 final class ChromeYouTubeFeedCapability {
   static let descriptor = CapabilityDescriptor(
@@ -293,8 +322,8 @@ final class ChromeYouTubeFeedCapability {
       let noun = snapshot.items.count == 1 ? "recommendation" : "recommendations"
       var message =
         "I found \(snapshot.items.count) YouTube \(noun). Open Topher to review the numbered list."
-      if snapshot.observationWasTruncated {
-        message += " The view is bounded; use a number for the safest follow-up."
+      if snapshot.presentationWasTruncated {
+        message += " The visible list is bounded; every shown number remains selectable."
       }
       return YouTubeFeedReadExecution(
         outcome: .succeeded(message: message),
@@ -355,10 +384,10 @@ final class ChromeYouTubeVideoOpenCapability {
       }
       item = match
     case .title(let query):
-      guard !snapshot.observationWasTruncated else {
+      guard snapshot.titleObservationWasComplete else {
         return .failed(
           message:
-            "The YouTube list was bounded, so a title match could be incomplete. Use its number or ask again."
+            "Topher could not safely check every visible title. Use the video’s number or ask again."
         )
       }
       let matches = snapshot.items.filter { query.matches($0.title) }
@@ -370,6 +399,11 @@ final class ChromeYouTubeVideoOpenCapability {
           message: "More than one listed YouTube video has that title. Use its number."
         )
       }
+      guard match.titleMatchIsUnique else {
+        return .failed(
+          message: "More than one current YouTube video has that title. Use its number."
+        )
+      }
       item = match
     }
 
@@ -378,7 +412,7 @@ final class ChromeYouTubeVideoOpenCapability {
     // never authorize a replay.
     sessionStore.clear()
     do {
-      try await client.openYouTubeVideo(snapshot.openTarget(for: item))
+      try await client.openYouTubeVideo(snapshot.openTarget(for: item, selection: selection))
       return .succeeded(message: "Opened “\(boundedTitle(item.title))” in the YouTube tab.")
     } catch {
       return .failed(message: chromeFailureMessage(error))
@@ -516,7 +550,9 @@ struct ChromeContextCapabilities {
   let activateTab: ChromeTabActivationCapability
   let youTubeFeed: ChromeYouTubeFeedCapability
   let openYouTubeVideo: ChromeYouTubeVideoOpenCapability
+  private let client: ChromeBridgeClient
   private let youTubeSessionStore: YouTubeFeedSessionStore
+  private let nowMilliseconds: @Sendable () -> Int64
 
   init(
     client: ChromeBridgeClient,
@@ -525,7 +561,9 @@ struct ChromeContextCapabilities {
     }
   ) {
     let youTubeSessionStore = YouTubeFeedSessionStore()
+    self.client = client
     self.youTubeSessionStore = youTubeSessionStore
+    self.nowMilliseconds = nowMilliseconds
     activeTab = ChromeActiveTabCapability(client: client)
     listTabs = ChromeTabListCapability(client: client)
     activateTab = ChromeTabActivationCapability(
@@ -549,7 +587,67 @@ struct ChromeContextCapabilities {
   }
 
   var hasYouTubeFeedSession: Bool {
-    youTubeSessionStore.snapshot != nil
+    youTubeSessionStore.current(nowMilliseconds: nowMilliseconds()) != nil
+  }
+
+  var commandResolutionContext: CommandResolutionContext {
+    guard youTubeSessionStore.current(nowMilliseconds: nowMilliseconds()) != nil else {
+      return .none
+    }
+    return CommandResolutionContext(
+      youTubeFollowUpScope: .feedAvailable,
+      youTubeFeedItemCount: youTubeSessionStore.snapshot?.items.count
+    )
+  }
+
+  func integrationReadiness() async -> ChromeExtensionReadiness {
+    do {
+      return try await client.integrationStatus()
+        ? .ready
+        : .youtubeAccessRequired
+    } catch {
+      return .disconnected
+    }
+  }
+
+  func resolveBareYouTubeTitle(
+    from transcripts: [String]
+  ) -> YouTubeFeedTitleResolution {
+    guard
+      let snapshot = youTubeSessionStore.current(nowMilliseconds: nowMilliseconds())
+    else { return .noMatch }
+
+    let queries = transcripts.flatMap(youTubeTitleCandidates).compactMap(
+      YouTubeVideoTitleQuery.init)
+    let matches = queries.flatMap { query in
+      snapshot.items.filter { query.matches($0.title) }
+    }
+    let uniqueVideoIDs = Set(matches.map(\.videoID))
+    guard !uniqueVideoIDs.isEmpty else { return .noMatch }
+    guard uniqueVideoIDs.count == 1, let videoID = uniqueVideoIDs.first,
+      let item = snapshot.items.first(where: { $0.videoID == videoID }),
+      let query = YouTubeVideoTitleQuery(item.title)
+    else { return .ambiguous }
+    return .unique(.title(query))
+  }
+
+  func youTubeSelectionsConflict(
+    _ first: YouTubeFeedSelection,
+    _ second: YouTubeFeedSelection
+  ) -> Bool {
+    guard
+      let snapshot = youTubeSessionStore.current(nowMilliseconds: nowMilliseconds()),
+      let firstVideoID = selectedVideoID(first, in: snapshot),
+      let secondVideoID = selectedVideoID(second, in: snapshot)
+    else { return false }
+    return firstVideoID != secondVideoID
+  }
+
+  func youTubeSelectionExists(_ selection: YouTubeFeedSelection) -> Bool {
+    guard
+      let snapshot = youTubeSessionStore.current(nowMilliseconds: nowMilliseconds())
+    else { return false }
+    return selectedVideoID(selection, in: snapshot) != nil
   }
 
   static func unavailable() -> Self {
@@ -563,6 +661,53 @@ struct ChromeContextCapabilities {
     guard isPrimary else { return .unavailable() }
     return liveFactory()
   }
+}
+
+private func selectedVideoID(
+  _ selection: YouTubeFeedSelection,
+  in snapshot: YouTubeFeedSnapshot
+) -> YouTubeVideoID? {
+  switch selection {
+  case .ordinal(let position):
+    return snapshot.items.first(where: { $0.position == position })?.videoID
+  case .title(let query):
+    let matches = snapshot.items.filter { query.matches($0.title) }
+    guard matches.count == 1 else { return nil }
+    return matches[0].videoID
+  }
+}
+
+private func youTubeTitleCandidates(from transcript: String) -> [String] {
+  var value = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+  while let last = value.last, ".?!".contains(last) {
+    value.removeLast()
+    value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+  var candidates = [value]
+  let lowered = value.lowercased()
+  let subjects = [
+    "the youtube video", "that youtube video", "youtube video", "the video", "video",
+    "the one", "one",
+  ]
+  let descriptors =
+    subjects
+    + subjects.flatMap { subject in
+      ["titled", "called", "named"].map { "\(subject) \($0)" }
+    }
+  for action in ["open", "play", "watch", "choose", "select", "pick"]
+  where lowered.hasPrefix(action + " ") {
+    let afterAction = String(value.dropFirst(action.count + 1))
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    candidates.append(afterAction)
+    let loweredAfterAction = afterAction.lowercased()
+    for descriptor in descriptors where loweredAfterAction.hasPrefix(descriptor + " ") {
+      candidates.append(
+        String(afterAction.dropFirst(descriptor.count))
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+      )
+    }
+  }
+  return candidates
 }
 
 private func boundedTitle(_ title: String, maximumCharacters: Int = 160) -> String {

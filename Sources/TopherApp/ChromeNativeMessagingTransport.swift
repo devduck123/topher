@@ -472,12 +472,19 @@ private actor ChromeNativeMessagingBroker {
 
   static func liveExchange() -> ChromeBridgeExchange {
     let broker = ChromeNativeMessagingBroker()
+    Task {
+      await broker.prepareForConnection()
+    }
     return ChromeBridgeExchange(
       send: { request in try await broker.exchange(request) }
     )
   }
 
   private init() {}
+
+  private func prepareForConnection() {
+    startIfNeeded()
+  }
 
   private func startIfNeeded() {
     guard !didAttemptSetup else { return }

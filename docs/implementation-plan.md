@@ -10,8 +10,8 @@ own measured safety and reliability gates.
 ## Prerequisite: reproducible native build — complete
 
 1. Xcode 26.6 is installed and selected with `xcode-select`.
-2. The Build 21 tree defines 341 Swift tests, 30 extension tests, 43
-   registration-helper assertions, and 47 sanitized dogfood cases. Normal and
+2. The Build 22 tree defines 350 Swift tests, 35 extension tests, 43
+   registration-helper assertions, and 55 sanitized dogfood cases. Normal and
    Thread Sanitizer suites, Xcode
    Debug and universal Release builds, static analysis, signature, entitlement,
    and architecture checks are captured in its evidence record. Installation,
@@ -194,6 +194,24 @@ dependency, and installed-app denial/error recovery is verified.
   recorded separately. Installing the build, registering/loading the extension,
   granting/removing permission, and completing the real command round trip in
   the user's Chrome profile remain explicit manual acceptance.
+- Complete in build 22 source: expand model-free feed/read/open grammar for
+  realistic “homepage,” “recommendations,” play/watch, number, ordinal, and
+  exact-title phrasings. Scope bare numbers and titles to the visible feed
+  session; resolve “last” from its bounded item count and a pronoun only for a
+  one-item list; preserve registered-command precedence; refuse no-session
+  pronouns and conflicting ordinal/title evidence without Google fallback or
+  guessed selection.
+- Complete in build 22 source: bump the typed Chrome protocol to version 3;
+  separate presentation truncation from title-observation completeness; use a
+  bounded extension-internal candidate set to prove title uniqueness without
+  returning extra feed strings; and revalidate source/Home route plus the chosen
+  item rather than invalidating on unrelated feed or tab-title/index churn.
+- Complete in build 22 source: create the authenticated primary-process relay
+  socket eagerly while leaving all browser/page acquisition demand-driven. Add
+  a content-free readiness operation so Settings distinguishes local
+  registration, extension disconnection, and missing optional YouTube access.
+  Automated proof is recorded in the Build 22 evidence; live installed
+  Chrome/YouTube acceptance remains explicit and unverified.
 
 Exit: every proposed MVP command works without an LLM, Accessibility, or Screen
 Recording.

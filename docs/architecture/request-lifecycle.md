@@ -64,11 +64,13 @@ global dictation shortcut
      and explicit Copy
 ```
 
-The Chrome boundary extends that same processor with five registered
+The Chrome boundary extends that same processor with five user-command
 capabilities: active-tab read, bounded tab-list read, exact-title tab
-activation, YouTube Home feed read, and listed-video open. A versioned
-MV3/native-messaging provider acquires regular-tab metadata or the narrow typed
-YouTube schema only after one of those deterministic intents resolves. Tab activation
+activation, YouTube Home feed read, and listed-video open. A separate
+content-free readiness operation reports only extension connection and the
+optional YouTube permission bit. A versioned MV3/native-messaging provider
+acquires regular-tab metadata or the narrow typed YouTube schema only after one
+of those deterministic intents resolves. Tab activation
 requeries a bounded list, requires the adapter to prove that every eligible tab
 fit within that observation, refuses zero or multiple exact matches, and asks
 the extension to revalidate the typed tab/window identity, capture time, and
@@ -77,19 +79,26 @@ fingerprint immediately before one non-retried activation attempt.
 The feed read first requires optional YouTube origin access granted by a user
 gesture in the extension popup, then runs one fixed packaged isolated-world
 extractor only on YouTube Home. It returns at most 20 ordered strict video IDs,
-bounded titles/channels, observation IDs, completeness, source identity, and a
-90-second expiry. The app keeps that snapshot only in memory and presents it in
-the menu. Ordinal and normalized exact-title follow-ups resolve locally; titles
-refuse ambiguity and truncated observations. Before navigation, the extension
-revalidates permission, active source tab/page/fingerprint, expiry, and selected
-item presence, then constructs and dispatches one strict watch URL. The app
+bounded titles/channels, observation IDs, separate presentation/title
+completeness, source identity, and a 90-second expiry. The app keeps that
+snapshot only in memory and presents it in the menu. Ordinal and normalized
+exact-title follow-ups resolve locally; titles require one complete unique
+match, including extension-internal bounded candidates that never cross the
+native response. Before navigation, the extension revalidates permission,
+active source tab/Home route, expiry, and the chosen item identity; title
+selection additionally re-proves fresh uniqueness. It does not freeze unrelated
+recommendation order or tab-title/index state. The extension then constructs
+and dispatches one strict watch URL. The app
 consumes the session before dispatch and never retries an unknown outcome.
 An explicit click on a displayed row produces an application-owned typed
 ordinal and enters the same processor, policy, session lookup, and capability;
 it does not synthesize a transcript or bypass revalidation. A bare “that
 YouTube video” phrase has no target when the list contains several items, so the
-resolver returns a fixed clarification and no capability starts. A model cannot
-manufacture the missing referent.
+resolver returns a fixed clarification and no capability starts. The resulting
+visible session may bind a short number, “the last one,” or one bare exact listed
+title until it expires or clears. A pronoun directly selects only if the list has
+one item. Registered commands win, and conflicting ordinal/title evidence
+refuses. A model cannot manufacture the missing referent.
 
 `PushToTalkCaptureController` owns microphone permission, speech assets,
 capture, partial/final transcript state, bounded alternative hypotheses,
@@ -404,8 +413,8 @@ Build 20's YouTube feed session is the first implementation: it contains at
 most 20 typed items, expires after 90 seconds, is visible and explicitly
 clearable in the menu, and is cleared after a dispatched open. It does not
 authorize another page schema or establish general conversational memory.
-Build 21 adds direct typed row actions and explicit pronoun clarification but no
-additional retained state.
+Build 22 adds direct typed row actions and expands the existing session scope to
+terse number/title answers, but adds no page content or retained history.
 
 Do not store raw audio, screenshots, full pages, or message bodies merely to
 support “that one.” Introduce durable history, embeddings, or retrieval only
@@ -462,10 +471,13 @@ contain a query, URL, pasted content, or secret and must be treated accordingly.
 8. Complete in Build 21 source: add explicit native-host setup/repair, a stable
    unpacked extension identity, current selector compatibility, direct typed
    row actions, and deterministic ambiguous-reference clarification.
-9. Add capability-specific confirmation before any message send or remote
+9. Complete in Build 22 source: add session-scoped number/title replies, broader
+   deterministic YouTube phrasing, protocol-v3 selection completeness, truthful
+   content-free readiness, and target-only pre-dispatch revalidation.
+10. Add capability-specific confirmation before any message send or remote
    mutation.
-10. Normalize one read-only chat adapter into the shared request envelope.
-11. Evaluate wake-phrase activation after reliability and idle-energy gates.
+11. Normalize one read-only chat adapter into the shared request envelope.
+12. Evaluate wake-phrase activation after reliability and idle-energy gates.
 
 See [Interaction modes](../product/interaction-modes.md) for the user-facing
 contracts and delivery order.

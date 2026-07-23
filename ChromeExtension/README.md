@@ -20,11 +20,12 @@ Topher command and policy
   -> chrome.tabs / chrome.windows, or one packaged YouTube extractor
 ```
 
-The primary Topher process creates its socket/token only for a resolved Chrome
-request. Context is fetched on demand and never mirrored or stored by the
-extension. Service-worker suspension can discard its in-memory duplicate cache;
-the app never automatically retries a dispatched mutation, so restart does not
-grant permission to replay an open.
+The primary Topher process creates its socket/token eagerly so an already-open
+native host can connect without waiting for the first command. Tab and page
+context is still fetched only after a resolved request and is never mirrored or
+stored by the extension. Service-worker suspension can discard its in-memory
+duplicate cache; the app never automatically retries a dispatched mutation, so
+restart does not grant permission to replay an open.
 
 ## Permissions and privacy
 
@@ -44,12 +45,18 @@ permission prompt. The same popup always shows current state and provides
 **Remove YouTube access**. A spoken or manual Topher request never prompts for
 host access because Chrome requires an explicit extension user gesture.
 
-The YouTube extractor is fixed, packaged, and limited to at most 20 visible or
-nearby recommendation cards. It returns only a strict 11-character video ID,
-bounded title, and bounded channel. Page-provided links never authorize
-navigation: the service worker constructs `https://www.youtube.com/watch?v=ID`
-from the validated ID after immediately revalidating permission, active source
-tab, page URL/fingerprint, expiry, and selected-item presence.
+The YouTube extractor is fixed, packaged, and scans at most 60 visible or nearby
+recommendation cards. At most 20 strict video-ID, bounded-title, bounded-channel
+records cross the native protocol for presentation. A bounded extension-internal
+video-ID/title candidate set proves whether each displayed title is unique; the
+additional strings are discarded before the response crosses into Topher. A
+missing channel can therefore bound presentation without disabling an otherwise
+safe exact-title selection. Page-provided links never authorize navigation: the
+service worker constructs `https://www.youtube.com/watch?v=ID` from the validated
+ID after immediately revalidating permission, the active source tab and Home
+route, expiry, selected-item identity, and fresh title uniqueness when required.
+Unrelated feed reorder/lazy-load churn and tab-title/index changes do not
+invalidate an unchanged target.
 
 `incognito` is `not_allowed`. The manifest has no required host access,
 `activeTab`, content scripts, `externally_connectable`, or storage permission.
@@ -74,6 +81,10 @@ browser-context persistence.
 5. Click Topher's extension button and choose **Grant YouTube access**. Chrome
    owns this separate optional permission prompt. The popup also removes access
    and shows its current state.
+
+Topher Settings reports these layers independently: local native-host
+registration, live extension connection, and the one optional YouTube-access
+bit. The status request reads no tab or page content.
 
 Topher's Set Up action writes only the per-user native-host manifest after the
 explicit button press. It never enables Developer mode, loads the extension,
@@ -145,14 +156,21 @@ extension popup to remove only YouTube access while retaining tab metadata.
    and confirm Topher shows at most 20 numbered title/channel rows. A bounded
    result must say so. The transient HUD should remain concise.
 5. Click a listed row or say “Open the third one.” Confirm the source feed is
-   revalidated and its tab
-   navigates exactly once. Ask for the feed again, then say “Open the YouTube
+   revalidated and its tab navigates exactly once. Ask for the feed again, then
+   say “Open the YouTube
    video titled *exact listed title*.” Confirm normalized exact matching;
-   duplicate titles refuse and request a number. “Open that YouTube video” must
-   request a number or exact title without guessing or navigating.
+   duplicate titles refuse and request a number. Also ask “What’s YouTube
+   recommending?”, say “Open that video,” then answer “number three.” Repeat with
+   “Open video three,” “the third one,” and one bare exact title. Pronouns without
+   a feed must request a fresh list instead of searching Google. A phrase that
+   could mean different ordinal and title targets must refuse and ask for an
+   explicit form. Also try “the last one”; with a one-item list, “open that
+   video” is unambiguous, while a multi-item list must still ask which one.
 6. Read the feed, then navigate, switch tabs, remove permission, let 90 seconds
-   pass, or change the feed before the follow-up. Confirm Topher asks for a
-   fresh feed and performs no navigation.
+   pass, or remove/change the selected item before the follow-up. Confirm Topher
+   asks for a fresh feed and performs no navigation. Separately reorder the tab
+   or allow an unrelated recommendation to lazy-load/change; an unchanged
+   selected item should still open once.
 7. Repeat the read on a watch, search, Shorts, non-YouTube, and incognito page.
    Confirm Topher asks for YouTube Home and never falls back to Accessibility,
    screenshots, OCR, or broader page reading.
@@ -167,7 +185,8 @@ extension popup to remove only YouTube access while retaining tab metadata.
 Automated tests exercise manifest scope, permission grant/removal helpers,
 sanitized DOM fixtures, extractor and protocol bounds, hostile values, strict
 routes/video IDs, version mismatch, cancellation, timeout, duplicate IDs,
-completeness, staleness, permission revocation, DOM drift, authenticated socket
+separate presentation/title completeness, staleness, permission revocation,
+target versus unrelated DOM drift, authenticated socket
 framing, primary-only relay ownership, one-shot mutation, and unknown
 post-dispatch outcomes. They do not prove live Chrome/YouTube acceptance in a
 user's profile.

@@ -1,0 +1,30 @@
+[
+  {
+    "input": "  Résumé — Local AI!  ",
+    "normalized": "resume local ai"
+  },
+  {
+    "input": "ＲＥＳＵＭＥ：ＬＯＣＡＬ　ＡＩ",
+    "normalized": "resume local ai"
+  },
+  {
+    "input": "Café\u0301 & Crème",
+    "normalized": "cafe creme"
+  },
+  {
+    "input": "ﬃ Performance",
+    "normalized": "ffi performance"
+  },
+  {
+    "input": "Привет, мир!",
+    "normalized": "привет мир"
+  },
+  {
+    "input": "مرحبا ٢٠٢٦",
+    "normalized": "مرحبا ٢٠٢٦"
+  },
+  {
+    "input": "👋🎬",
+    "normalized": null
+  }
+]

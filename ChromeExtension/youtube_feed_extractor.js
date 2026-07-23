@@ -81,9 +81,11 @@
     const allCards = documentLike.querySelectorAll(CARD_SELECTOR);
     const scannedCardCount = Math.min(allCards.length, MAXIMUM_SCANNED_CARD_COUNT);
     const items = [];
+    const selectionCandidates = [];
     const seenVideoIDs = new Set();
     let eligibleItemCount = 0;
-    let incompleteItemCount = 0;
+    let incompleteTitleItemCount = 0;
+    let incompletePresentationItemCount = 0;
     const viewportHeight = Number(environment.innerHeight);
 
     for (let index = 0; index < scannedCardCount; index += 1) {
@@ -92,6 +94,8 @@
       const titleAnchor = firstMatch(card, TITLE_SELECTORS);
       const videoID = videoIDFromAnchor(titleAnchor);
       if (videoID === null) continue;
+      if (seenVideoIDs.has(videoID)) continue;
+      seenVideoIDs.add(videoID);
       eligibleItemCount += 1;
 
       const title = boundedNormalizedText(
@@ -103,12 +107,15 @@
         channelNode?.textContent,
         MAXIMUM_CHANNEL_UTF8_BYTES,
       );
-      if (title.length === 0 || channel.length === 0) {
-        incompleteItemCount += 1;
+      if (title.length === 0) {
+        incompleteTitleItemCount += 1;
         continue;
       }
-      if (seenVideoIDs.has(videoID)) continue;
-      seenVideoIDs.add(videoID);
+      selectionCandidates.push({videoID, title});
+      if (channel.length === 0) {
+        incompletePresentationItemCount += 1;
+        continue;
+      }
       if (items.length < MAXIMUM_ITEM_COUNT) {
         items.push({videoID, title, channel});
       }
@@ -116,8 +123,10 @@
 
     return {
       items,
+      selectionCandidates,
       eligibleItemCount,
-      incompleteItemCount,
+      incompleteTitleItemCount,
+      incompletePresentationItemCount,
       candidateScanWasTruncated: allCards.length > scannedCardCount,
     };
   }

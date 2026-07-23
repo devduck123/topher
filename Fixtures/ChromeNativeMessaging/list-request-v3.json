@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "requestID": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "operation": "listTabs",
+  "maximumTabCount": 25
+}

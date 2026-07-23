@@ -1,0 +1,26 @@
+{
+  "version": 3,
+  "requestID": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  "operation": "openYouTubeVideo",
+  "youTubeTarget": {
+    "sourceTabID": 7,
+    "sourceWindowID": 3,
+    "sourceURL": "https://www.youtube.com/",
+    "sourceFingerprint": {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "feedObservationID": {
+      "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "capturedAtMilliseconds": 1721000000000,
+    "expiresAtMilliseconds": 1721000090000,
+    "position": 1,
+    "videoID": {
+      "value": "abcDEF123_-"
+    },
+    "itemObservationID": {
+      "value": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "selectionKind": "ordinal"
+  }
+}

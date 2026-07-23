@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const MAXIMUM_TAB_COUNT = 50;
 export const MAXIMUM_OBSERVED_TAB_COUNT = 500;
 export const MAXIMUM_TITLE_UTF8_BYTES = 2048;
@@ -25,6 +25,7 @@ const OPERATIONS = new Set([
   "activateTab",
   "cancel",
   "getActiveTab",
+  "getIntegrationStatus",
   "getYouTubeFeed",
   "listTabs",
   "openYouTubeVideo",
@@ -120,6 +121,7 @@ export function validateYouTubeOpenTarget(value) {
     && value.position <= MAXIMUM_YOUTUBE_FEED_ITEM_COUNT
     && VIDEO_ID_PATTERN.test(value.videoID?.value ?? "")
     && FINGERPRINT_PATTERN.test(value.itemObservationID?.value ?? "")
+    && (value.selectionKind === "ordinal" || value.selectionKind === "title")
   );
 }
 
@@ -218,10 +220,15 @@ async function feedObservationIDFor(sourceFingerprint, capturedAtMilliseconds, f
     JSON.stringify([
       sourceFingerprint,
       capturedAtMilliseconds,
-      feed.observationWasTruncated,
+      feed.presentationWasTruncated,
+      feed.titleObservationWasComplete,
       feed.items.map((item) => item.observationID),
     ]),
   );
+}
+
+async function youTubeItemObservationIDFor(videoID, title) {
+  return sha256Hex(JSON.stringify([videoID, title]));
 }
 
 export async function fingerprintForTab(tab) {
@@ -229,18 +236,84 @@ export async function fingerprintForTab(tab) {
   return sha256Hex(canonical);
 }
 
+export async function fingerprintForYouTubeSource(tab) {
+  const sourceURL = validatedYouTubeFeedPageURL(tab?.url);
+  if (
+    !Number.isInteger(tab?.id)
+    || tab.id < 0
+    || !Number.isInteger(tab?.windowId)
+    || tab.windowId < 0
+    || sourceURL === null
+  ) {
+    return null;
+  }
+  return sha256Hex(JSON.stringify([tab.id, tab.windowId, sourceURL]));
+}
+
+export function normalizedYouTubeTitle(value) {
+  const title = validatedBoundedText(value, MAXIMUM_YOUTUBE_TITLE_UTF8_BYTES);
+  if (title === null) return null;
+  const normalized = title
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("en-US")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((part) => part.length > 0)
+    .join(" ");
+  return normalized.length === 0 ? null : normalized;
+}
+
 export async function canonicalYouTubeFeedFromExtraction(value) {
   if (
     !isPlainObject(value)
     || !Array.isArray(value.items)
     || value.items.length > MAXIMUM_YOUTUBE_FEED_ITEM_COUNT
+    || !Array.isArray(value.selectionCandidates)
+    || value.selectionCandidates.length > MAXIMUM_YOUTUBE_EXTRACTED_ITEM_COUNT
     || !Number.isInteger(value.eligibleItemCount)
     || value.eligibleItemCount < 0
     || value.eligibleItemCount > MAXIMUM_YOUTUBE_EXTRACTED_ITEM_COUNT
-    || !Number.isInteger(value.incompleteItemCount)
-    || value.incompleteItemCount < 0
-    || value.incompleteItemCount > value.eligibleItemCount
+    || !Number.isInteger(value.incompleteTitleItemCount)
+    || value.incompleteTitleItemCount < 0
+    || value.incompleteTitleItemCount > value.eligibleItemCount
+    || !Number.isInteger(value.incompletePresentationItemCount)
+    || value.incompletePresentationItemCount < 0
+    || value.incompletePresentationItemCount > value.eligibleItemCount
     || typeof value.candidateScanWasTruncated !== "boolean"
+  ) {
+    return null;
+  }
+
+  const selectionCandidates = [];
+  const candidateVideoIDs = new Set();
+  const normalizedTitleCounts = new Map();
+  let everyCandidateTitleIsNormalizable = true;
+  for (const candidate of value.selectionCandidates) {
+    if (
+      !isPlainObject(candidate)
+      || !VIDEO_ID_PATTERN.test(candidate.videoID ?? "")
+      || candidateVideoIDs.has(candidate.videoID)
+    ) {
+      return null;
+    }
+    const title = validatedBoundedText(candidate.title, MAXIMUM_YOUTUBE_TITLE_UTF8_BYTES);
+    if (title === null) return null;
+    candidateVideoIDs.add(candidate.videoID);
+    const normalizedTitle = normalizedYouTubeTitle(title);
+    if (normalizedTitle === null) {
+      everyCandidateTitleIsNormalizable = false;
+    } else {
+      normalizedTitleCounts.set(
+        normalizedTitle,
+        (normalizedTitleCounts.get(normalizedTitle) ?? 0) + 1,
+      );
+    }
+    selectionCandidates.push({videoID: candidate.videoID, title, normalizedTitle});
+  }
+
+  if (
+    value.eligibleItemCount !== selectionCandidates.length + value.incompleteTitleItemCount
+    || value.incompletePresentationItemCount > selectionCandidates.length
   ) {
     return null;
   }
@@ -254,13 +327,19 @@ export async function canonicalYouTubeFeedFromExtraction(value) {
     }
     const title = validatedBoundedText(candidate.title, MAXIMUM_YOUTUBE_TITLE_UTF8_BYTES);
     const channel = validatedBoundedText(candidate.channel, MAXIMUM_YOUTUBE_CHANNEL_UTF8_BYTES);
-    if (title === null || channel === null || videoIDs.has(candidate.videoID)) {
+    const selectionCandidate = selectionCandidates.find(
+      (entry) => entry.videoID === candidate.videoID && entry.title === title,
+    );
+    if (
+      title === null
+      || channel === null
+      || videoIDs.has(candidate.videoID)
+      || selectionCandidate === undefined
+    ) {
       return null;
     }
     videoIDs.add(candidate.videoID);
-    const observationID = await sha256Hex(
-      JSON.stringify([candidate.videoID, title, channel]),
-    );
+    const observationID = await youTubeItemObservationIDFor(candidate.videoID, title);
     if (observationIDs.has(observationID)) return null;
     observationIDs.add(observationID);
     items.push({
@@ -269,16 +348,30 @@ export async function canonicalYouTubeFeedFromExtraction(value) {
       title,
       channel,
       observationID,
+      titleMatchIsUnique:
+        selectionCandidate.normalizedTitle !== null
+        && normalizedTitleCounts.get(selectionCandidate.normalizedTitle) === 1,
     });
   }
 
   if (items.length === 0 || value.eligibleItemCount < items.length) return null;
   return {
     items,
-    observationWasTruncated:
+    selectionCandidates: selectionCandidates.map((candidate) => ({
+      ...candidate,
+      titleMatchIsUnique:
+        candidate.normalizedTitle !== null
+        && normalizedTitleCounts.get(candidate.normalizedTitle) === 1,
+    })),
+    presentationWasTruncated:
       value.candidateScanWasTruncated
-      || value.incompleteItemCount > 0
-      || value.eligibleItemCount > items.length,
+      || value.incompleteTitleItemCount > 0
+      || value.incompletePresentationItemCount > 0
+      || selectionCandidates.length > items.length,
+    titleObservationWasComplete:
+      !value.candidateScanWasTruncated
+      && value.incompleteTitleItemCount === 0
+      && everyCandidateTitleIsNormalizable,
   };
 }
 
@@ -297,7 +390,7 @@ export async function snapshotYouTubeFeed(tab, extracted, capturedAtMilliseconds
     return null;
   }
 
-  const sourceFingerprint = await fingerprintForTab(canonicalTab);
+  const sourceFingerprint = await fingerprintForYouTubeSource(canonicalTab);
   const feedObservationID = await feedObservationIDFor(
     sourceFingerprint,
     capturedAtMilliseconds,
@@ -311,7 +404,8 @@ export async function snapshotYouTubeFeed(tab, extracted, capturedAtMilliseconds
     feedObservationID,
     capturedAtMilliseconds,
     expiresAtMilliseconds: capturedAtMilliseconds + YOUTUBE_FEED_LIFETIME_MILLISECONDS,
-    observationWasTruncated: feed.observationWasTruncated,
+    presentationWasTruncated: feed.presentationWasTruncated,
+    titleObservationWasComplete: feed.titleObservationWasComplete,
     items: feed.items,
   };
 }
@@ -472,7 +566,7 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
     if (active.failureCode !== undefined) {
       return failureResponse(requestID, active.failureCode);
     }
-    const initialFingerprint = await fingerprintForTab(active.tab);
+    const initialFingerprint = await fingerprintForYouTubeSource(active.tab);
 
     let extracted;
     try {
@@ -498,7 +592,7 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
       || revalidatedTab.active !== true
       || revalidatedTab.windowId !== active.tab.windowId
       || validatedYouTubeFeedPageURL(revalidatedTab.url) === null
-      || await fingerprintForTab(revalidatedTab) !== initialFingerprint
+      || await fingerprintForYouTubeSource(revalidatedTab) !== initialFingerprint
     ) {
       return failureResponse(requestID, "youTubeFeedUnavailable");
     }
@@ -536,7 +630,9 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
     }
     const active = await activeYouTubeFeedTab();
     const currentURL = validatedYouTubeFeedPageURL(tab?.url);
-    const currentFingerprint = tab === undefined ? null : await fingerprintForTab(tab);
+    const currentFingerprint = tab === undefined
+      ? null
+      : await fingerprintForYouTubeSource(tab);
     if (
       active.tab?.id !== target.sourceTabID
       || tab?.windowId !== target.sourceWindowID
@@ -558,21 +654,16 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
       return failureResponse(request.requestID, "youTubeFeedChanged");
     }
     const currentFeed = await canonicalYouTubeFeedFromExtraction(extracted);
-    const currentFeedObservationID = currentFeed === null
-      ? null
-      : await feedObservationIDFor(
-        target.sourceFingerprint.value,
-        target.capturedAtMilliseconds,
-        currentFeed,
-      );
-    const selectedItem = currentFeed?.items.find(
-      (item) => item.position === target.position
-        && item.videoID === target.videoID.value
-        && item.observationID === target.itemObservationID.value,
+    const selectedCandidate = currentFeed?.selectionCandidates.find(
+      (candidate) => candidate.videoID === target.videoID.value,
     );
+    const selectedObservationID = selectedCandidate === undefined
+      ? null
+      : await youTubeItemObservationIDFor(selectedCandidate.videoID, selectedCandidate.title);
     if (
-      currentFeedObservationID !== target.feedObservationID.value
-      || selectedItem === undefined
+      selectedObservationID !== target.itemObservationID.value
+      || (target.selectionKind === "title"
+        && (!currentFeed.titleObservationWasComplete || !selectedCandidate.titleMatchIsUnique))
     ) {
       return failureResponse(request.requestID, "youTubeFeedChanged");
     }
@@ -583,7 +674,7 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
     } catch {
       return failureResponse(request.requestID, "youTubeFeedChanged");
     }
-    const revalidatedFingerprint = await fingerprintForTab(revalidatedTab);
+    const revalidatedFingerprint = await fingerprintForYouTubeSource(revalidatedTab);
     const [revalidatedActive, permissionStillGranted] = await Promise.all([
       activeYouTubeFeedTab(),
       hasYouTubePermission(),
@@ -646,6 +737,12 @@ export function createRequestHandler(chromeAPI, nowMilliseconds = () => Date.now
         return failureResponse(request.requestID, excluded);
       }
       return successResponse(request.requestID, {tab: snapshot});
+    }
+
+    if (request.operation === "getIntegrationStatus") {
+      return successResponse(request.requestID, {
+        youTubePermissionGranted: await hasYouTubePermission(),
+      });
     }
 
     if (request.operation === "listTabs") {

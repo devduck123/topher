@@ -183,6 +183,17 @@ private struct GeneralSettingsView: View {
             }
           }
 
+          SettingsPermissionRow(
+            title: "Chrome extension and YouTube access",
+            detail: model.chromeExtensionReadiness.title,
+            systemImage: model.chromeExtensionReadiness == .ready
+              ? "checkmark.circle.fill"
+              : "play.rectangle.on.rectangle",
+            tint: chromeExtensionTint
+          ) {
+            EmptyView()
+          }
+
           Text(
             "Use Set Up or Repair above if offered. Then open Chrome Extensions and enable Developer mode, choose Load unpacked and select Topher’s bundled extension folder, and click its button to grant removable YouTube access."
           )
@@ -286,6 +297,19 @@ private struct GeneralSettingsView: View {
     case .needsRegistration, .needsRepair:
       .orange
     case .blocked, .unavailable:
+      .red
+    }
+  }
+
+  private var chromeExtensionTint: Color {
+    switch model.chromeExtensionReadiness {
+    case .ready:
+      .green
+    case .checking:
+      .blue
+    case .youtubeAccessRequired:
+      .orange
+    case .disconnected, .unavailable:
       .red
     }
   }

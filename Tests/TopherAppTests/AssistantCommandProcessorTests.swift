@@ -255,7 +255,10 @@ final class AssistantCommandProcessorTests: XCTestCase {
     guard case .youTubeFeed(let snapshot) = read.presentationUpdate else {
       return XCTFail("Expected a typed YouTube feed presentation")
     }
-    XCTAssertEqual(snapshot.items.map(\.title), ["First recommendation", "Second recommendation"])
+    XCTAssertEqual(
+      snapshot.items.map(\.title),
+      ["Local-first Mac assistants", "Second recommendation"]
+    )
     XCTAssertEqual(read.trace.commandKind, .readYouTubeFeed)
     XCTAssertEqual(
       read.trace.capabilityIdentifier,
@@ -283,6 +286,199 @@ final class AssistantCommandProcessorTests: XCTestCase {
     XCTAssertTrue(open.interpretation.rawTranscript.isEmpty)
     let operations = await stub.operations()
     XCTAssertEqual(operations, [.getYouTubeFeed, .openYouTubeVideo])
+  }
+
+  func testYouTubeConversationAcceptsNaturalPronounOrdinalAndBareTitleTurns() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(capturedAtMilliseconds: now)
+    let chromeContext = ChromeContextCapabilities(
+      client: ChromeBridgeClient(
+        exchange: ChromeBridgeExchange(send: { request in
+          try await stub.send(request)
+        })
+      ),
+      nowMilliseconds: { now }
+    )
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: chromeContext,
+      webOpener: inertWebOpener()
+    )
+
+    _ = await processor.process("What’s YouTube recommending?")
+    let clarification = await processor.process("Open that video")
+    XCTAssertEqual(
+      clarification.outcome,
+      .unsupported(reason: .youTubeSelectionRequired)
+    )
+    let operationsBeforeSelection = await stub.operations()
+    XCTAssertEqual(operationsBeforeSelection, [.getYouTubeFeed])
+
+    let ordinal = await processor.process("the second one")
+    XCTAssertEqual(
+      ordinal.outcome,
+      .completed(.succeeded(message: "Opened “Second recommendation” in the YouTube tab."))
+    )
+    let ordinalTarget = await stub.lastYouTubeTarget()
+    XCTAssertEqual(ordinalTarget?.selectionKind, .ordinal)
+
+    _ = await processor.process("Show me my YouTube recommendations")
+    let bareTitle = await processor.process("Local-first Mac assistants")
+    XCTAssertEqual(
+      bareTitle.outcome,
+      .completed(.succeeded(message: "Opened “Local-first Mac assistants” in the YouTube tab."))
+    )
+    let titleTarget = await stub.lastYouTubeTarget()
+    XCTAssertEqual(titleTarget?.selectionKind, .title)
+
+    let noSession = await processor.process("Open it")
+    XCTAssertEqual(noSession.outcome, .unsupported(reason: .youTubeFeedRequired))
+  }
+
+  func testYouTubeConversationRefusesOrdinalTitleCollision() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(
+      capturedAtMilliseconds: now,
+      titles: ["Second recommendation", "Another video"]
+    )
+    let chromeContext = ChromeContextCapabilities(
+      client: ChromeBridgeClient(
+        exchange: ChromeBridgeExchange(send: { request in
+          try await stub.send(request)
+        })
+      ),
+      nowMilliseconds: { now }
+    )
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: chromeContext,
+      webOpener: inertWebOpener()
+    )
+
+    _ = await processor.process("What is on my YouTube feed?")
+    let ambiguous = await processor.process("Second recommendation")
+
+    XCTAssertEqual(ambiguous.outcome, .unsupported(reason: .youTubeSelectionAmbiguous))
+    let operations = await stub.operations()
+    XCTAssertEqual(operations, [.getYouTubeFeed])
+  }
+
+  func testYouTubeConversationOpensAnUnambiguousSingleItemPronoun() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(
+      capturedAtMilliseconds: now,
+      titles: ["Only recommendation"]
+    )
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            try await stub.send(request)
+          })
+        ),
+        nowMilliseconds: { now }
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    _ = await processor.process("What is on my YouTube feed?")
+    let open = await processor.process("Open that video")
+
+    XCTAssertEqual(
+      open.outcome,
+      .completed(.succeeded(message: "Opened “Only recommendation” in the YouTube tab."))
+    )
+    let target = await stub.lastYouTubeTarget()
+    XCTAssertEqual(target?.selectionKind, .ordinal)
+  }
+
+  func testYouTubeConversationUsesOneExactListedSpeechAlternativeForATitle() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(capturedAtMilliseconds: now)
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            try await stub.send(request)
+          })
+        ),
+        nowMilliseconds: { now }
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    _ = await processor.process("What’s on my YouTube feed?")
+    let open = await processor.process(
+      "Open the YouTube video titled Local first Mac assistance",
+      alternatives: [
+        TranscriptHypothesis(text: "Open the YouTube video titled Local-first Mac assistants")
+      ],
+      inputSource: .voice
+    )
+
+    XCTAssertEqual(
+      open.outcome,
+      .completed(.succeeded(message: "Opened “Local-first Mac assistants” in the YouTube tab."))
+    )
+    let target = await stub.lastYouTubeTarget()
+    XCTAssertEqual(target?.selectionKind, .title)
+  }
+
+  func testYouTubeConversationRefusesSpeechAlternativesForDifferentListedTitles() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(capturedAtMilliseconds: now)
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            try await stub.send(request)
+          })
+        ),
+        nowMilliseconds: { now }
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    _ = await processor.process("What’s on my YouTube feed?")
+    let open = await processor.process(
+      "Open Local-first Mac assistants",
+      alternatives: [TranscriptHypothesis(text: "Open Second recommendation")],
+      inputSource: .voice
+    )
+
+    XCTAssertEqual(open.outcome, .unsupported(reason: .youTubeSelectionAmbiguous))
+    let operations = await stub.operations()
+    XCTAssertEqual(operations, [.getYouTubeFeed])
+  }
+
+  func testYouTubeConversationAcceptsNaturalVideoTitleWithoutTitledKeyword() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(capturedAtMilliseconds: now)
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            try await stub.send(request)
+          })
+        ),
+        nowMilliseconds: { now }
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    _ = await processor.process("What’s on my YouTube feed?")
+    let open = await processor.process("Open the video Local-first Mac assistants")
+
+    XCTAssertEqual(
+      open.outcome,
+      .completed(.succeeded(message: "Opened “Local-first Mac assistants” in the YouTube tab."))
+    )
+    let target = await stub.lastYouTubeTarget()
+    XCTAssertEqual(target?.selectionKind, .title)
   }
 
   func testBrowserRouteCommandExecutesExactlyOnce() async {
@@ -600,14 +796,23 @@ final class AssistantCommandProcessorTests: XCTestCase {
 
 private actor ProcessorChromeExchangeStub {
   private let capturedAtMilliseconds: Int64
+  private let titles: [String]
   private var receivedOperations: [ChromeBridgeOperation] = []
+  private var receivedYouTubeTargets: [YouTubeVideoOpenTarget] = []
 
-  init(capturedAtMilliseconds: Int64 = 1_721_000_000_000) {
+  init(
+    capturedAtMilliseconds: Int64 = 1_721_000_000_000,
+    titles: [String] = ["Local-first Mac assistants", "Second recommendation"]
+  ) {
     self.capturedAtMilliseconds = capturedAtMilliseconds
+    self.titles = titles
   }
 
   func send(_ request: ChromeBridgeRequest) throws -> ChromeBridgeResponse {
     receivedOperations.append(request.operation)
+    if let target = request.youTubeTarget {
+      receivedYouTubeTargets.append(target)
+    }
     let tab = ChromeBridgeWireTab(
       tabID: 7,
       windowID: 3,
@@ -621,6 +826,12 @@ private actor ProcessorChromeExchangeStub {
     switch request.operation {
     case .getActiveTab:
       return ChromeBridgeResponse(requestID: request.requestID, status: .success, tab: tab)
+    case .getIntegrationStatus:
+      return ChromeBridgeResponse(
+        requestID: request.requestID,
+        status: .success,
+        youTubePermissionGranted: true
+      )
     case .listTabs:
       return ChromeBridgeResponse(
         requestID: request.requestID,
@@ -632,6 +843,8 @@ private actor ProcessorChromeExchangeStub {
     case .activateTab, .cancel, .openYouTubeVideo:
       return ChromeBridgeResponse(requestID: request.requestID, status: .success)
     case .getYouTubeFeed:
+      let videoIDs = ["abcDEF123_-", "ZYX987abc_-"]
+      let observationCharacters = ["c", "d"]
       let feed = ChromeBridgeWireYouTubeFeedSnapshot(
         sourceTabID: 7,
         sourceWindowID: 3,
@@ -640,23 +853,18 @@ private actor ProcessorChromeExchangeStub {
         feedObservationID: String(repeating: "b", count: 64),
         capturedAtMilliseconds: capturedAtMilliseconds,
         expiresAtMilliseconds: capturedAtMilliseconds + 90_000,
-        observationWasTruncated: false,
-        items: [
+        presentationWasTruncated: false,
+        titleObservationWasComplete: true,
+        items: titles.enumerated().map { index, title in
           ChromeBridgeWireYouTubeFeedItem(
-            position: 1,
-            videoID: "abcDEF123_-",
-            title: "First recommendation",
-            channel: "Example Channel",
-            observationID: String(repeating: "c", count: 64)
-          ),
-          ChromeBridgeWireYouTubeFeedItem(
-            position: 2,
-            videoID: "ZYX987abc_-",
-            title: "Second recommendation",
-            channel: "Sample Engineering",
-            observationID: String(repeating: "d", count: 64)
-          ),
-        ]
+            position: index + 1,
+            videoID: videoIDs[index],
+            title: title,
+            channel: index == 0 ? "Example Channel" : "Sample Engineering",
+            observationID: String(repeating: observationCharacters[index], count: 64),
+            titleMatchIsUnique: true
+          )
+        }
       )
       return ChromeBridgeResponse(
         requestID: request.requestID,
@@ -668,5 +876,9 @@ private actor ProcessorChromeExchangeStub {
 
   func operations() -> [ChromeBridgeOperation] {
     receivedOperations
+  }
+
+  func lastYouTubeTarget() -> YouTubeVideoOpenTarget? {
+    receivedYouTubeTargets.last
   }
 }

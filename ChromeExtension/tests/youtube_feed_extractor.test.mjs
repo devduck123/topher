@@ -73,7 +73,13 @@ test("packaged extractor returns only relevant strict watch cards from a sanitiz
     },
   ]);
   assert.equal(result.eligibleItemCount, 3);
-  assert.equal(result.incompleteItemCount, 1);
+  assert.equal(result.incompleteTitleItemCount, 0);
+  assert.equal(result.incompletePresentationItemCount, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.selectionCandidates)), [
+    {videoID: "abcDEF123_-", title: "Local-first Mac assistants"},
+    {videoID: "ZYX987abc_-", title: "Swift concurrency, carefully"},
+    {videoID: "QWE456rty_-", title: "Still loading its channel"},
+  ]);
   assert.equal(result.candidateScanWasTruncated, false);
 });
 
@@ -122,7 +128,7 @@ test("packaged extractor bounds cards and deduplicates video IDs", () => {
   );
 
   assert.equal(result.items.length, 20);
-  assert.equal(result.eligibleItemCount, 60);
+  assert.equal(result.eligibleItemCount, 59);
   assert.equal(result.candidateScanWasTruncated, true);
   assert.equal(new Set(result.items.map((item) => item.videoID)).size, 20);
 });
@@ -173,5 +179,9 @@ test("packaged extractor rejects oversized DOM strings before returning them", (
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.items)), []);
   assert.equal(result.eligibleItemCount, 2);
-  assert.equal(result.incompleteItemCount, 2);
+  assert.equal(result.incompleteTitleItemCount, 1);
+  assert.equal(result.incompletePresentationItemCount, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.selectionCandidates)), [
+    {videoID: "ZYX987abc_-", title: "Bounded title"},
+  ]);
 });

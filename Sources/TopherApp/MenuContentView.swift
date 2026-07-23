@@ -171,8 +171,11 @@ struct MenuContentView: View {
         .padding(.leading, 42)
 
       readinessRow(
-        title: model.chromeIntegrationReadiness.title,
+        title: model.chromeIntegrationReadiness == .ready
+          ? model.chromeExtensionReadiness.title
+          : model.chromeIntegrationReadiness.title,
         systemImage: model.chromeIntegrationReadiness == .ready
+          && model.chromeExtensionReadiness == .ready
           ? "checkmark.circle.fill"
           : "puzzlepiece.extension",
         tint: chromeIntegrationTint
@@ -284,7 +287,16 @@ struct MenuContentView: View {
   private var chromeIntegrationTint: Color {
     switch model.chromeIntegrationReadiness {
     case .ready:
-      .green
+      switch model.chromeExtensionReadiness {
+      case .ready:
+        .green
+      case .checking:
+        .blue
+      case .youtubeAccessRequired:
+        .orange
+      case .disconnected, .unavailable:
+        .red
+      }
     case .needsRegistration, .needsRepair:
       .orange
     case .blocked, .unavailable:
@@ -364,13 +376,13 @@ private struct YouTubeFeedResultsCard: View {
 
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         Image(
-          systemName: snapshot.observationWasTruncated ? "rectangle.stack.badge.minus" : "clock"
+          systemName: snapshot.presentationWasTruncated
+            ? "rectangle.stack.badge.minus"
+            : "clock"
         )
         .accessibilityHidden(true)
         Text(
-          snapshot.observationWasTruncated
-            ? "Bounded view. Say “Open the third one”; title follow-ups may require a fresh list."
-            : "Short-lived list. Say a number or exact listed title before it expires."
+          youTubeFollowUpHint
         )
       }
       .font(.caption2)
@@ -384,6 +396,17 @@ private struct YouTubeFeedResultsCard: View {
         .strokeBorder(.red.opacity(0.16))
     }
     .accessibilityElement(children: .contain)
+  }
+
+  private var youTubeFollowUpHint: String {
+    if !snapshot.titleObservationWasComplete {
+      return
+        "Bounded view. Use a shown number before it expires; title uniqueness was not complete."
+    }
+    if snapshot.presentationWasTruncated {
+      return "Bounded view. Say a shown number or one unique exact title before it expires."
+    }
+    return "Short-lived list. Say “the third one,” “number three,” or one exact title."
   }
 }
 

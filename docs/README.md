@@ -74,6 +74,9 @@ are decision
 Recoverable Chrome registration, stable unpacked identity, current selector
 compatibility, and explicit YouTube reference behavior are decision
 [`0025`](decisions/0025-make-chrome-setup-recoverable-and-youtube-references-explicit.md).
+State-scoped YouTube dialogue, protocol-v3 completeness, target-only
+revalidation, and content-free readiness are decision
+[`0026`](decisions/0026-scope-youtube-dialogue-and-revalidate-the-target.md).
 
 ### Evidence
 
@@ -100,11 +103,11 @@ edit an older record to claim a test that was not run then.
   capture/transcription source and tests → latest relevant evidence.
 - **Permission or context feature:** product vision → interaction modes → request
   lifecycle → security policy → risks → relevant ADRs.
-- **Chrome context work:** decisions 0013, 0024, and 0025 →
+- **Chrome context work:** decisions 0013, 0024, 0025, and 0026 →
   `ChromeExtension/README.md` → Core protocol/App bridge sources and tests →
   latest Chrome evidence record.
 - **Release or installation work:** contributing guide → README security posture
-  → [latest integrated release evidence](evidence/2026-07-21-build-21-youtube-recovery.md)
+  → [latest integrated release evidence](evidence/2026-07-22-build-22-youtube-conversation.md)
   → install helper.
 - **Code review:** changed files and tests → `AGENTS.md` review priorities →
   relevant contract and risk documents.

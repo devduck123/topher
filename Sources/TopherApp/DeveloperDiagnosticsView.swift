@@ -578,6 +578,12 @@ extension UnsupportedCommandReason {
       "Empty input"
     case .missingValue:
       "Missing value"
+    case .youTubeFeedRequired:
+      "YouTube feed required"
+    case .youTubeSelectionAmbiguous:
+      "YouTube selection ambiguous"
+    case .youTubeSelectionRequired:
+      "YouTube selection required"
     case .uncertainDomain:
       "Uncertain spoken domain"
     case .unknownTarget:

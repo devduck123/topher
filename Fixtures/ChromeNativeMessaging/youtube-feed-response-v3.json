@@ -1,0 +1,26 @@
+{
+  "version": 3,
+  "requestID": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  "status": "success",
+  "youTubeFeed": {
+    "sourceTabID": 7,
+    "sourceWindowID": 3,
+    "sourceURL": "https://www.youtube.com/",
+    "sourceFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "feedObservationID": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "capturedAtMilliseconds": 1721000000000,
+    "expiresAtMilliseconds": 1721000090000,
+    "presentationWasTruncated": false,
+    "titleObservationWasComplete": true,
+    "items": [
+      {
+        "position": 1,
+        "videoID": "abcDEF123_-",
+        "title": "Local Mac assistants",
+        "channel": "Example Channel",
+        "observationID": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "titleMatchIsUnique": true
+      }
+    ]
+  }
+}

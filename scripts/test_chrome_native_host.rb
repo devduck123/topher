@@ -10,7 +10,7 @@ require "tmpdir"
 ROOT = File.expand_path("..", __dir__)
 HELPER = File.join(ROOT, "scripts/chrome_native_host.rb")
 HOST_NAME = "dev.topher.chrome_bridge"
-EXTENSION_ID = "abcdefghijklmnopabcdefghijklmnop"
+EXTENSION_ID = "mhbppdheppcibhhcnhnfockmfpcfhndj"
 
 class ChromeNativeHostHelperTest < Minitest::Test
   def setup
@@ -54,6 +54,15 @@ class ChromeNativeHostHelperTest < Minitest::Test
       refute status.success?
       assert_includes stderr, "exactly 32 lowercase letters a-p"
     end
+  end
+
+  def test_rejects_a_different_well_formed_extension_id
+    _stdout, stderr, status = run_helper(
+      "install",
+      extension_id: "abcdefghijklmnopabcdefghijklmnop"
+    )
+    refute status.success?
+    assert_includes stderr, "must match Topher's packaged extension"
   end
 
   def test_refuses_to_replace_or_remove_a_different_registration

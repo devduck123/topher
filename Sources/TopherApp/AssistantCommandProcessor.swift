@@ -83,16 +83,42 @@ final class AssistantCommandProcessor {
     inputSource: AssistantCommandInputSource = .manual,
     executionStarted: @MainActor () -> Void = {}
   ) async -> AssistantCommandProcessingResult {
+    let resolutionContext = chromeContext.commandResolutionContext
     let interpretation = TranscriptInterpreter(
       resolver: resolver,
-      vocabulary: vocabularyProvider()
+      vocabulary: vocabularyProvider(),
+      resolutionContext: resolutionContext
     ).interpret(
       primary: TranscriptHypothesis(text: transcript, confidence: confidence),
       alternatives: alternatives,
       allowKnownDomainNarrowing: inputSource == .voice
     )
 
-    let resolution = resolver.resolve(interpretation.selectedTranscript)
+    var resolution = resolver.resolve(
+      interpretation.selectedTranscript,
+      context: resolutionContext
+    )
+    let bareYouTubeTitleResolution = chromeContext.resolveBareYouTubeTitle(
+      from: [transcript, interpretation.selectedTranscript] + alternatives.map(\.text)
+    )
+    switch bareYouTubeTitleResolution {
+    case .ambiguous where shouldUseYouTubeTitleResolution(for: resolution):
+      resolution = .unsupported(reason: .youTubeSelectionAmbiguous)
+    case .unique(let bareYouTubeTitle):
+      if case .resolved(.openYouTubeFeedItem(let selection)) = resolution,
+        chromeContext.youTubeSelectionsConflict(selection, bareYouTubeTitle)
+      {
+        resolution = .unsupported(reason: .youTubeSelectionAmbiguous)
+      } else if case .resolved(.openYouTubeFeedItem(let selection)) = resolution,
+        !chromeContext.youTubeSelectionExists(selection)
+      {
+        resolution = .resolved(.openYouTubeFeedItem(bareYouTubeTitle))
+      } else if shouldTryBareYouTubeTitle(resolution) {
+        resolution = .resolved(.openYouTubeFeedItem(bareYouTubeTitle))
+      }
+    case .ambiguous, .noMatch:
+      break
+    }
     guard case .resolved(let command) = resolution else {
       let reason =
         if case .unsupported(let unsupportedReason) = resolution {
@@ -134,6 +160,54 @@ final class AssistantCommandProcessor {
       )
     }
 
+    return await execute(
+      command,
+      interpretation: interpretation,
+      executionStarted: executionStarted
+    )
+  }
+
+  private func shouldTryBareYouTubeTitle(_ resolution: CommandResolution) -> Bool {
+    switch resolution {
+    case .resolved(.searchUnknownDestination):
+      true
+    case .unsupported(let reason):
+      reason == .contextRequired
+        || reason == .unsupportedPhrasing
+        || reason == .unknownTarget
+    case .resolved:
+      false
+    }
+  }
+
+  private func shouldUseYouTubeTitleResolution(for resolution: CommandResolution) -> Bool {
+    if case .resolved(.openYouTubeFeedItem) = resolution { return true }
+    return shouldTryBareYouTubeTitle(resolution)
+  }
+
+  /// Runs an application-owned typed command from explicit local UI without
+  /// manufacturing a transcript or bypassing policy.
+  func process(
+    command: TopherCommand,
+    executionStarted: @MainActor () -> Void = {}
+  ) async -> AssistantCommandProcessingResult {
+    await execute(
+      command,
+      interpretation: TranscriptInterpretation(
+        rawTranscript: "",
+        selectedTranscript: "",
+        confidence: nil,
+        reason: nil
+      ),
+      executionStarted: executionStarted
+    )
+  }
+
+  private func execute(
+    _ command: TopherCommand,
+    interpretation: TranscriptInterpretation,
+    executionStarted: @MainActor () -> Void
+  ) async -> AssistantCommandProcessingResult {
     let commandMetadata = traceMetadata(for: command)
 
     switch policy.evaluate(command) {

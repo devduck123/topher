@@ -242,7 +242,8 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     XCTAssertEqual(
       read.outcome,
       .succeeded(
-        message: "I found 2 YouTube recommendations. Open Topher to review the numbered list."
+        message:
+          "I found 2 YouTube recommendations. Click Topher in the menu bar to review the numbered list."
       )
     )
 
@@ -304,29 +305,52 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     XCTAssertEqual(ambiguousOpenCount, 0)
   }
 
-  func testYouTubeTitleSelectionRefusesTruncatedUnsafeAndExpiredSnapshots() async throws {
+  func testYouTubeTitleSelectionUsesSeparateCompletenessAndRefusesExpiredSnapshots() async throws {
     let now: Int64 = 1_000
-    let truncatedStub = ChromeExchangeStub(
+    let boundedStub = ChromeExchangeStub(
       tabs: [],
       youTubeFeed: wireYouTubeFeed(
         capturedAtMilliseconds: now,
-        observationWasTruncated: true
+        presentationWasTruncated: true,
+        titleObservationWasComplete: true
       )
     )
-    let truncated = ChromeContextCapabilities(
-      client: client(truncatedStub),
+    let bounded = ChromeContextCapabilities(
+      client: client(boundedStub),
       nowMilliseconds: { now }
     )
-    _ = await truncated.youTubeFeed.execute()
-    let truncatedQuery = try XCTUnwrap(
+    _ = await bounded.youTubeFeed.execute()
+    let boundedQuery = try XCTUnwrap(
       YouTubeVideoTitleQuery("Local-first Mac assistants")
     )
-    let truncatedOutcome = await truncated.openYouTubeVideo.execute(.title(truncatedQuery))
+    let boundedOutcome = await bounded.openYouTubeVideo.execute(.title(boundedQuery))
     XCTAssertEqual(
-      truncatedOutcome,
+      boundedOutcome,
+      .succeeded(message: "Opened “Local-first Mac assistants” in the YouTube tab.")
+    )
+
+    let incompleteStub = ChromeExchangeStub(
+      tabs: [],
+      youTubeFeed: wireYouTubeFeed(
+        capturedAtMilliseconds: now,
+        presentationWasTruncated: true,
+        titleObservationWasComplete: false
+      )
+    )
+    let incomplete = ChromeContextCapabilities(
+      client: client(incompleteStub),
+      nowMilliseconds: { now }
+    )
+    _ = await incomplete.youTubeFeed.execute()
+    let incompleteQuery = try XCTUnwrap(
+      YouTubeVideoTitleQuery("Local-first Mac assistants")
+    )
+    let incompleteOutcome = await incomplete.openYouTubeVideo.execute(.title(incompleteQuery))
+    XCTAssertEqual(
+      incompleteOutcome,
       .failed(
         message:
-          "The YouTube list was bounded, so a title match could be incomplete. Use its number or ask again."
+          "Topher could not safely check every visible title. Use the video’s number or ask again."
       )
     )
 
@@ -506,6 +530,26 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     }
   }
 
+  func testIntegrationReadinessDistinguishesConnectionFromOptionalPermission() async {
+    let ready = ChromeContextCapabilities(
+      client: client(ChromeExchangeStub(tabs: [], integrationPermissionGranted: true))
+    )
+    let readyResult = await ready.integrationReadiness()
+    XCTAssertEqual(readyResult, .ready)
+
+    let permissionRequired = ChromeContextCapabilities(
+      client: client(ChromeExchangeStub(tabs: [], integrationPermissionGranted: false))
+    )
+    let permissionRequiredResult = await permissionRequired.integrationReadiness()
+    XCTAssertEqual(permissionRequiredResult, .youtubeAccessRequired)
+
+    let malformed = ChromeContextCapabilities(
+      client: client(ChromeExchangeStub(tabs: [], integrationPermissionGranted: nil))
+    )
+    let malformedResult = await malformed.integrationReadiness()
+    XCTAssertEqual(malformedResult, .disconnected)
+  }
+
   func testDisconnectClassificationPreservesUnknownActivationOutcome() {
     XCTAssertEqual(
       chromeBridgeDisconnectError(operation: .activateTab, wasSent: true),
@@ -592,7 +636,9 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
 
   private func wireYouTubeFeed(
     capturedAtMilliseconds: Int64,
-    observationWasTruncated: Bool = false,
+    presentationWasTruncated: Bool = false,
+    titleObservationWasComplete: Bool = true,
+    titleMatchesAreUnique: Bool = true,
     titles: [String] = ["Local-first Mac assistants", "Swift concurrency, carefully"]
   ) -> ChromeBridgeWireYouTubeFeedSnapshot {
     let videoIDs = ["abcDEF123_-", "ZYX987abc_-"]
@@ -606,14 +652,16 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
       feedObservationID: String(repeating: "b", count: 64),
       capturedAtMilliseconds: capturedAtMilliseconds,
       expiresAtMilliseconds: capturedAtMilliseconds + 90_000,
-      observationWasTruncated: observationWasTruncated,
+      presentationWasTruncated: presentationWasTruncated,
+      titleObservationWasComplete: titleObservationWasComplete,
       items: titles.enumerated().map { index, title in
         ChromeBridgeWireYouTubeFeedItem(
           position: index + 1,
           videoID: videoIDs[index],
           title: title,
           channel: channels[index],
-          observationID: String(repeating: observationCharacters[index], count: 64)
+          observationID: String(repeating: observationCharacters[index], count: 64),
+          titleMatchIsUnique: titleMatchesAreUnique
         )
       }
     )
@@ -633,6 +681,7 @@ private actor ChromeExchangeStub {
   private let readDelay: Duration?
   private let activationDelay: Duration?
   private let unexpectedActiveExcludedCount: Int?
+  private let integrationPermissionGranted: Bool?
   private var receivedRequests: [ChromeBridgeRequest] = []
   private var cancellations: [UUID] = []
 
@@ -648,7 +697,8 @@ private actor ChromeExchangeStub {
     mismatchesRequestID: Bool = false,
     readDelay: Duration? = nil,
     activationDelay: Duration? = nil,
-    unexpectedActiveExcludedCount: Int? = nil
+    unexpectedActiveExcludedCount: Int? = nil,
+    integrationPermissionGranted: Bool? = true
   ) {
     self.tabs = tabs
     self.excludedTabCount = excludedTabCount
@@ -662,6 +712,7 @@ private actor ChromeExchangeStub {
     self.readDelay = readDelay
     self.activationDelay = activationDelay
     self.unexpectedActiveExcludedCount = unexpectedActiveExcludedCount
+    self.integrationPermissionGranted = integrationPermissionGranted
   }
 
   func send(_ request: ChromeBridgeRequest) async throws -> ChromeBridgeResponse {
@@ -682,6 +733,13 @@ private actor ChromeExchangeStub {
         status: .success,
         tab: tabs.first,
         excludedTabCount: unexpectedActiveExcludedCount
+      )
+    case .getIntegrationStatus:
+      return ChromeBridgeResponse(
+        version: responseVersion,
+        requestID: responseID,
+        status: .success,
+        youTubePermissionGranted: integrationPermissionGranted
       )
     case .listTabs:
       return ChromeBridgeResponse(

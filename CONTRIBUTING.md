@@ -34,7 +34,9 @@ swift --version
 - `Topher.xcodeproj` owns the deployable `.app` bundle, macOS target settings,
   signing, entitlements, privacy strings, and shared `TopherApp` scheme.
 - The Xcode app target embeds the `TopherChromeBridgeHost` tool in
-  `Contents/Helpers`; SwiftPM also builds the same dedicated executable target.
+  `Contents/Helpers` and copies the reviewed stable-ID `ChromeExtension` folder
+  into `Contents/Resources`; SwiftPM also builds the same dedicated executable
+  target but does not produce those app resources.
 - The SwiftPM `Topher` executable is useful for compiler checks but is not the
   installable application.
 - Run the `TopherApp` scheme in Xcode for interactive debugging.

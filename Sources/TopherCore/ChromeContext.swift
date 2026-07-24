@@ -1,6 +1,8 @@
 import Foundation
 
 public enum ChromeBridgeConstants {
+  public static let extensionID = "mhbppdheppcibhhcnhnfockmfpcfhndj"
+  public static let extensionOrigin = "chrome-extension://\(extensionID)/"
   public static let nativeHostName = "dev.topher.chrome_bridge"
   public static let runtimeDirectoryName = "ChromeBridge"
   public static let socketFileName = "native-messaging.sock"
@@ -277,11 +279,16 @@ public struct YouTubeVideoTitleQuery: Equatable, Sendable {
   }
 
   private static func normalized(_ value: String) -> String {
-    value
-      .folding(
-        options: [.caseInsensitive, .diacriticInsensitive],
-        locale: Locale(identifier: "en_US_POSIX")
-      )
+    let decomposed = value
+      .decomposedStringWithCompatibilityMapping
+      .lowercased(with: Locale(identifier: "en_US_POSIX"))
+    let withoutMarks = String(
+      decomposed.unicodeScalars.filter {
+        !CharacterSet.nonBaseCharacters.contains($0)
+      }
+    )
+    return
+      withoutMarks
       .components(separatedBy: CharacterSet.alphanumerics.inverted)
       .filter { !$0.isEmpty }
       .joined(separator: " ")
@@ -291,6 +298,18 @@ public struct YouTubeVideoTitleQuery: Equatable, Sendable {
 public enum YouTubeFeedSelection: Equatable, Sendable {
   case ordinal(Int)
   case title(YouTubeVideoTitleQuery)
+
+  public var kind: YouTubeFeedSelectionKind {
+    switch self {
+    case .ordinal: .ordinal
+    case .title: .title
+    }
+  }
+}
+
+public enum YouTubeFeedSelectionKind: String, Codable, Equatable, Sendable {
+  case ordinal
+  case title
 }
 
 public struct YouTubeFeedItem: Equatable, Sendable {
@@ -302,13 +321,15 @@ public struct YouTubeFeedItem: Equatable, Sendable {
   public let title: String
   public let channel: String
   public let observationID: YouTubeObservationID
+  public let titleMatchIsUnique: Bool
 
   public init?(
     position: Int,
     videoID: YouTubeVideoID,
     title: String,
     channel: String,
-    observationID: YouTubeObservationID
+    observationID: YouTubeObservationID,
+    titleMatchIsUnique: Bool
   ) {
     let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let trimmedChannel = channel.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -327,6 +348,7 @@ public struct YouTubeFeedItem: Equatable, Sendable {
     self.title = trimmedTitle
     self.channel = trimmedChannel
     self.observationID = observationID
+    self.titleMatchIsUnique = titleMatchIsUnique
   }
 }
 
@@ -340,7 +362,8 @@ public struct YouTubeFeedSnapshot: Equatable, Sendable {
   public let feedObservationID: YouTubeObservationID
   public let capturedAtMilliseconds: Int64
   public let expiresAtMilliseconds: Int64
-  public let observationWasTruncated: Bool
+  public let presentationWasTruncated: Bool
+  public let titleObservationWasComplete: Bool
   public let items: [YouTubeFeedItem]
 
   public init?(
@@ -351,7 +374,8 @@ public struct YouTubeFeedSnapshot: Equatable, Sendable {
     feedObservationID: YouTubeObservationID,
     capturedAtMilliseconds: Int64,
     expiresAtMilliseconds: Int64,
-    observationWasTruncated: Bool,
+    presentationWasTruncated: Bool,
+    titleObservationWasComplete: Bool,
     items: [YouTubeFeedItem]
   ) {
     guard
@@ -374,11 +398,15 @@ public struct YouTubeFeedSnapshot: Equatable, Sendable {
     self.feedObservationID = feedObservationID
     self.capturedAtMilliseconds = capturedAtMilliseconds
     self.expiresAtMilliseconds = expiresAtMilliseconds
-    self.observationWasTruncated = observationWasTruncated
+    self.presentationWasTruncated = presentationWasTruncated
+    self.titleObservationWasComplete = titleObservationWasComplete
     self.items = items
   }
 
-  public func openTarget(for item: YouTubeFeedItem) -> YouTubeVideoOpenTarget {
+  public func openTarget(
+    for item: YouTubeFeedItem,
+    selection: YouTubeFeedSelection
+  ) -> YouTubeVideoOpenTarget {
     YouTubeVideoOpenTarget(
       sourceTabID: sourceTabID,
       sourceWindowID: sourceWindowID,
@@ -389,7 +417,8 @@ public struct YouTubeFeedSnapshot: Equatable, Sendable {
       expiresAtMilliseconds: expiresAtMilliseconds,
       position: item.position,
       videoID: item.videoID,
-      itemObservationID: item.observationID
+      itemObservationID: item.observationID,
+      selectionKind: selection.kind
     )
   }
 }
@@ -405,6 +434,7 @@ public struct YouTubeVideoOpenTarget: Codable, Equatable, Sendable {
   public let position: Int
   public let videoID: YouTubeVideoID
   public let itemObservationID: YouTubeObservationID
+  public let selectionKind: YouTubeFeedSelectionKind
 
   public init(
     sourceTabID: Int,
@@ -416,7 +446,8 @@ public struct YouTubeVideoOpenTarget: Codable, Equatable, Sendable {
     expiresAtMilliseconds: Int64,
     position: Int,
     videoID: YouTubeVideoID,
-    itemObservationID: YouTubeObservationID
+    itemObservationID: YouTubeObservationID,
+    selectionKind: YouTubeFeedSelectionKind
   ) {
     self.sourceTabID = sourceTabID
     self.sourceWindowID = sourceWindowID
@@ -428,6 +459,7 @@ public struct YouTubeVideoOpenTarget: Codable, Equatable, Sendable {
     self.position = position
     self.videoID = videoID
     self.itemObservationID = itemObservationID
+    self.selectionKind = selectionKind
   }
 }
 
@@ -435,13 +467,14 @@ public enum ChromeBridgeOperation: String, Codable, Equatable, Sendable {
   case activateTab
   case cancel
   case getActiveTab
+  case getIntegrationStatus
   case getYouTubeFeed
   case listTabs
   case openYouTubeVideo
 }
 
 public struct ChromeBridgeRequest: Codable, Equatable, Sendable {
-  public static let protocolVersion = 2
+  public static let protocolVersion = 3
   public static let maximumTabCount = 50
   public static let maximumYouTubeFeedItemCount = 20
 
@@ -472,6 +505,10 @@ public struct ChromeBridgeRequest: Codable, Equatable, Sendable {
 
   public static func activeTab(requestID: UUID = UUID()) -> Self {
     Self(requestID: requestID, operation: .getActiveTab)
+  }
+
+  public static func integrationStatus(requestID: UUID = UUID()) -> Self {
+    Self(requestID: requestID, operation: .getIntegrationStatus)
   }
 
   public static func listTabs(
@@ -598,19 +635,22 @@ public struct ChromeBridgeWireYouTubeFeedItem: Codable, Equatable, Sendable {
   public let title: String
   public let channel: String
   public let observationID: String
+  public let titleMatchIsUnique: Bool
 
   public init(
     position: Int,
     videoID: String,
     title: String,
     channel: String,
-    observationID: String
+    observationID: String,
+    titleMatchIsUnique: Bool
   ) {
     self.position = position
     self.videoID = videoID
     self.title = title
     self.channel = channel
     self.observationID = observationID
+    self.titleMatchIsUnique = titleMatchIsUnique
   }
 
   public var validatedItem: YouTubeFeedItem? {
@@ -623,7 +663,8 @@ public struct ChromeBridgeWireYouTubeFeedItem: Codable, Equatable, Sendable {
       videoID: videoID,
       title: title,
       channel: channel,
-      observationID: observationID
+      observationID: observationID,
+      titleMatchIsUnique: titleMatchIsUnique
     )
   }
 }
@@ -636,7 +677,8 @@ public struct ChromeBridgeWireYouTubeFeedSnapshot: Codable, Equatable, Sendable 
   public let feedObservationID: String
   public let capturedAtMilliseconds: Int64
   public let expiresAtMilliseconds: Int64
-  public let observationWasTruncated: Bool
+  public let presentationWasTruncated: Bool
+  public let titleObservationWasComplete: Bool
   public let items: [ChromeBridgeWireYouTubeFeedItem]
 
   public init(
@@ -647,7 +689,8 @@ public struct ChromeBridgeWireYouTubeFeedSnapshot: Codable, Equatable, Sendable 
     feedObservationID: String,
     capturedAtMilliseconds: Int64,
     expiresAtMilliseconds: Int64,
-    observationWasTruncated: Bool,
+    presentationWasTruncated: Bool,
+    titleObservationWasComplete: Bool,
     items: [ChromeBridgeWireYouTubeFeedItem]
   ) {
     self.sourceTabID = sourceTabID
@@ -657,7 +700,8 @@ public struct ChromeBridgeWireYouTubeFeedSnapshot: Codable, Equatable, Sendable 
     self.feedObservationID = feedObservationID
     self.capturedAtMilliseconds = capturedAtMilliseconds
     self.expiresAtMilliseconds = expiresAtMilliseconds
-    self.observationWasTruncated = observationWasTruncated
+    self.presentationWasTruncated = presentationWasTruncated
+    self.titleObservationWasComplete = titleObservationWasComplete
     self.items = items
   }
 
@@ -677,7 +721,8 @@ public struct ChromeBridgeWireYouTubeFeedSnapshot: Codable, Equatable, Sendable 
       feedObservationID: feedObservationID,
       capturedAtMilliseconds: capturedAtMilliseconds,
       expiresAtMilliseconds: expiresAtMilliseconds,
-      observationWasTruncated: observationWasTruncated,
+      presentationWasTruncated: presentationWasTruncated,
+      titleObservationWasComplete: titleObservationWasComplete,
       items: validatedItems
     )
   }
@@ -692,6 +737,7 @@ public struct ChromeBridgeResponse: Codable, Equatable, Sendable {
   public let youTubeFeed: ChromeBridgeWireYouTubeFeedSnapshot?
   public let excludedTabCount: Int?
   public let observationWasTruncated: Bool?
+  public let youTubePermissionGranted: Bool?
   public let failureCode: ChromeBridgeFailureCode?
 
   public init(
@@ -703,6 +749,7 @@ public struct ChromeBridgeResponse: Codable, Equatable, Sendable {
     youTubeFeed: ChromeBridgeWireYouTubeFeedSnapshot? = nil,
     excludedTabCount: Int? = nil,
     observationWasTruncated: Bool? = nil,
+    youTubePermissionGranted: Bool? = nil,
     failureCode: ChromeBridgeFailureCode? = nil
   ) {
     self.version = version
@@ -713,6 +760,7 @@ public struct ChromeBridgeResponse: Codable, Equatable, Sendable {
     self.youTubeFeed = youTubeFeed
     self.excludedTabCount = excludedTabCount
     self.observationWasTruncated = observationWasTruncated
+    self.youTubePermissionGranted = youTubePermissionGranted
     self.failureCode = failureCode
   }
 }

@@ -1019,6 +1019,85 @@ final class TopherModelSpeechTests: XCTestCase {
     XCTAssertEqual(openCount, 1)
   }
 
+  func testYouTubePronounFollowupExplainsTheRequiredReference() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice
+    )
+    model.manualTranscript = "Open that YouTube video"
+
+    model.runManually()
+
+    await waitUntil {
+      model.phase
+        == .failure(
+          "Ask “What’s on my YouTube feed?” first, then choose from the short-lived list."
+        )
+    }
+  }
+
+  func testChromeSetupChangesExternalRegistrationOnlyAfterExplicitAction() {
+    let voice = VoiceHarness()
+    var readiness = ChromeIntegrationReadiness.needsRegistration
+    var configureCount = 0
+    let client = ChromeIntegrationSetupClient(
+      readiness: { readiness },
+      configure: {
+        configureCount += 1
+        readiness = .ready
+      },
+      showExtensionFolder: { true },
+      openExtensionManager: { .succeeded(message: "Opened Chrome Extensions.") }
+    )
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      chromeIntegration: client
+    )
+
+    XCTAssertEqual(model.chromeIntegrationReadiness, .needsRegistration)
+    XCTAssertEqual(configureCount, 0)
+
+    model.configureChromeIntegration()
+
+    XCTAssertEqual(configureCount, 1)
+    XCTAssertEqual(model.chromeIntegrationReadiness, .ready)
+  }
+
+  func testChromeReadinessSeparatesRegistrationFromOptionalYouTubeAccess() async {
+    let voice = VoiceHarness()
+    let model = makeModel(
+      microphonePermission: permission(.authorized),
+      speechAssets: readySpeechAssets(),
+      voice: voice,
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            ChromeBridgeResponse(
+              requestID: request.requestID,
+              status: .success,
+              youTubePermissionGranted: false
+            )
+          })
+        )
+      ),
+      chromeIntegration: ChromeIntegrationSetupClient(
+        readiness: { .ready },
+        configure: {},
+        showExtensionFolder: { true },
+        openExtensionManager: { .succeeded(message: "Opened Chrome Extensions.") }
+      )
+    )
+
+    await waitUntil { model.chromeExtensionReadiness == .youtubeAccessRequired }
+
+    XCTAssertEqual(model.chromeIntegrationReadiness, .ready)
+    XCTAssertEqual(model.chromeExtensionReadiness, .youtubeAccessRequired)
+  }
+
   func testEnabledDeveloperDiagnosticsRecordOnlyTheFinalVoiceTranscript() async throws {
     let temporaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
       "TopherModelDiagnosticsTests-\(UUID().uuidString)",
@@ -1483,6 +1562,8 @@ final class TopherModelSpeechTests: XCTestCase {
     speechAssets: SpeechAssetPreparationClient,
     voice: VoiceHarness,
     applicationOpener: ApplicationOpenCapability? = nil,
+    chromeContext: ChromeContextCapabilities? = nil,
+    chromeIntegration: ChromeIntegrationSetupClient = .unavailable,
     webOpener: WebOpenCapability? = nil,
     listeningTimeout: Duration = .seconds(1),
     dictationListeningTimeout: Duration? = nil,
@@ -1499,6 +1580,8 @@ final class TopherModelSpeechTests: XCTestCase {
   ) -> TopherModel {
     TopherModel(
       applicationOpener: applicationOpener ?? inertApplicationOpener(),
+      chromeContext: chromeContext,
+      chromeIntegration: chromeIntegration,
       webOpener: webOpener ?? inertWebOpener(),
       microphonePermission: microphonePermission,
       speechAssets: speechAssets,

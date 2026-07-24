@@ -39,6 +39,7 @@ struct TopherSettingsView: View {
   private func refreshReadiness() {
     model.refreshVoiceReadiness()
     model.refreshAccessibilityPermission()
+    model.refreshChromeIntegrationReadiness()
   }
 
   private var selectedSection: TopherSettingsSection {
@@ -165,6 +166,59 @@ private struct GeneralSettingsView: View {
         }
       }
 
+      SettingsCard(title: "Chrome and YouTube", systemImage: "play.rectangle.on.rectangle") {
+        VStack(alignment: .leading, spacing: 12) {
+          SettingsPermissionRow(
+            title: "Local Chrome bridge",
+            detail: model.chromeIntegrationReadiness.title,
+            systemImage: model.chromeIntegrationReadiness == .ready
+              ? "checkmark.circle.fill"
+              : "puzzlepiece.extension",
+            tint: chromeIntegrationTint
+          ) {
+            if model.chromeIntegrationReadiness.canConfigure {
+              Button(model.chromeIntegrationReadiness == .needsRepair ? "Repair" : "Set Up") {
+                model.configureChromeIntegration()
+              }
+            }
+          }
+
+          SettingsPermissionRow(
+            title: "Chrome extension and YouTube access",
+            detail: model.chromeExtensionReadiness.title,
+            systemImage: model.chromeExtensionReadiness == .ready
+              ? "checkmark.circle.fill"
+              : "play.rectangle.on.rectangle",
+            tint: chromeExtensionTint
+          ) {
+            EmptyView()
+          }
+
+          Text(
+            "Use Set Up or Repair above if offered. Then open Chrome Extensions and enable Developer mode, choose Load unpacked and select Topher’s bundled extension folder, and click its button to grant removable YouTube access."
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+
+          HStack {
+            Button("Open Chrome Extensions") {
+              model.openChromeExtensionManager()
+            }
+            Button("Show Extension Folder") {
+              model.showChromeExtensionFolder()
+            }
+          }
+
+          Text(
+            "Topher reads YouTube Home only when you ask. Setup never grants page access; that remains a separate explicit Chrome permission."
+          )
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+
       SettingsCard(title: "App behavior", systemImage: "menubar.rectangle") {
         VStack(spacing: 0) {
           HStack(alignment: .top, spacing: 12) {
@@ -219,6 +273,7 @@ private struct GeneralSettingsView: View {
     { _ in
       model.refreshVoiceReadiness()
       model.refreshAccessibilityPermission()
+      model.refreshChromeIntegrationReadiness()
     }
   }
 
@@ -231,6 +286,30 @@ private struct GeneralSettingsView: View {
     case .needsPermission, .needsAssets, .denied, .restricted:
       .orange
     case .unavailable:
+      .red
+    }
+  }
+
+  private var chromeIntegrationTint: Color {
+    switch model.chromeIntegrationReadiness {
+    case .ready:
+      .green
+    case .needsRegistration, .needsRepair:
+      .orange
+    case .blocked, .unavailable:
+      .red
+    }
+  }
+
+  private var chromeExtensionTint: Color {
+    switch model.chromeExtensionReadiness {
+    case .ready:
+      .green
+    case .checking:
+      .blue
+    case .youtubeAccessRequired:
+      .orange
+    case .disconnected, .unavailable:
       .red
     }
   }

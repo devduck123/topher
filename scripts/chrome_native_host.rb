@@ -9,6 +9,7 @@ require "tempfile"
 
 HOST_NAME = "dev.topher.chrome_bridge"
 HELPER_NAME = "TopherChromeBridgeHost"
+PACKAGED_EXTENSION_ID = "mhbppdheppcibhhcnhnfockmfpcfhndj"
 EXTENSION_ID_PATTERN = /\A[a-p]{32}\z/
 DEFAULT_DESTINATION = File.expand_path(
   "~/Library/Application Support/Google/Chrome/NativeMessagingHosts"
@@ -20,10 +21,10 @@ def fail_helper(message)
 end
 
 def parse_options(arguments)
-  options = {destination: DEFAULT_DESTINATION}
+  options = {destination: DEFAULT_DESTINATION, extension_id: PACKAGED_EXTENSION_ID}
   parser = OptionParser.new do |value|
-    value.banner = "Usage: scripts/chrome_native_host.rb COMMAND --extension-id ID --app /absolute/Topher.app"
-    value.on("--extension-id ID", "Exact 32-character unpacked extension ID") do |id|
+    value.banner = "Usage: scripts/chrome_native_host.rb COMMAND --app /absolute/Topher.app"
+    value.on("--extension-id ID", "Override for verification; must match the packaged ID") do |id|
       options[:extension_id] = id
     end
     value.on("--app PATH", "Absolute path to the built Topher.app") do |path|
@@ -46,6 +47,8 @@ def validate_inputs!(options)
   extension_id = options[:extension_id]
   fail_helper("--extension-id must contain exactly 32 lowercase letters a-p") unless
     extension_id&.match?(EXTENSION_ID_PATTERN)
+  fail_helper("--extension-id must match Topher's packaged extension") unless
+    extension_id == PACKAGED_EXTENSION_ID
 
   app = options[:app]
   fail_helper("--app must be an absolute path") unless app && Pathname.new(app).absolute?

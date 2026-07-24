@@ -110,6 +110,8 @@ final class TopherModel: ObservableObject {
   @Published private(set) var voiceReadiness: VoiceReadiness
   @Published private(set) var voiceFeedback: VoiceFeedback = .hidden
   @Published private(set) var accessibilityPermissionState: AccessibilityPermissionState
+  @Published private(set) var chromeIntegrationReadiness: ChromeIntegrationReadiness
+  @Published private(set) var chromeExtensionReadiness: ChromeExtensionReadiness
   @Published private(set) var pendingDictationText: String?
   @Published private(set) var youTubeFeedSnapshot: YouTubeFeedSnapshot?
   @Published private(set) var canUndoDictation = false
@@ -122,6 +124,7 @@ final class TopherModel: ObservableObject {
 
   private let commandProcessor: AssistantCommandProcessor
   private let chromeContext: ChromeContextCapabilities
+  private let chromeIntegration: ChromeIntegrationSetupClient
   private let captureController: PushToTalkCaptureController
   private let developerDiagnostics: DeveloperDiagnosticsController?
   private let voiceFeedbackResultDuration: Duration
@@ -137,6 +140,7 @@ final class TopherModel: ObservableObject {
   private var dictationInsertionTask: Task<Void, Never>?
   private var voiceFeedbackDismissalTask: Task<Void, Never>?
   private var youTubeFeedExpiryTask: Task<Void, Never>?
+  private var chromeIntegrationRefreshTask: Task<Void, Never>?
   private var voiceFeedbackGeneration: UInt64 = 0
   private var activePermissionFailure: MicrophonePermissionState?
   private var activeVoicePresentation: VoicePresentation?
@@ -150,6 +154,7 @@ final class TopherModel: ObservableObject {
     policy: CommandPolicy = .init(),
     applicationOpener: ApplicationOpenCapability? = nil,
     chromeContext: ChromeContextCapabilities? = nil,
+    chromeIntegration: ChromeIntegrationSetupClient? = nil,
     webOpener: WebOpenCapability? = nil,
     microphonePermission: MicrophonePermissionClient? = nil,
     speechAssets: SpeechAssetPreparationClient? = nil,
@@ -178,7 +183,9 @@ final class TopherModel: ObservableObject {
     )
 
     let chromeContext = chromeContext ?? .unavailable()
+    let chromeIntegration = chromeIntegration ?? .live()
     self.chromeContext = chromeContext
+    self.chromeIntegration = chromeIntegration
     commandProcessor = AssistantCommandProcessor(
       resolver: resolver,
       vocabularyProvider: vocabularyProvider,
@@ -199,6 +206,12 @@ final class TopherModel: ObservableObject {
     self.vocabularyProvider = vocabularyProvider
     voiceReadiness = captureController.readiness
     accessibilityPermissionState = accessibilityPermission.currentState
+    let initialChromeIntegrationReadiness = chromeIntegration.readiness()
+    chromeIntegrationReadiness = initialChromeIntegrationReadiness
+    chromeExtensionReadiness =
+      initialChromeIntegrationReadiness == .ready
+      ? .checking
+      : .unavailable
 
     captureController.onEvent = { [weak self] event in
       self?.handleCaptureEvent(event)
@@ -234,6 +247,7 @@ final class TopherModel: ObservableObject {
     if permission.currentState == .authorized {
       captureController.refreshReadiness()
     }
+    refreshChromeIntegrationReadiness()
   }
 
   deinit {
@@ -247,6 +261,7 @@ final class TopherModel: ObservableObject {
     dictationInsertionTask?.cancel()
     voiceFeedbackDismissalTask?.cancel()
     youTubeFeedExpiryTask?.cancel()
+    chromeIntegrationRefreshTask?.cancel()
   }
 
   func refreshVoiceReadiness() {
@@ -263,11 +278,88 @@ final class TopherModel: ObservableObject {
     }
   }
 
+  func refreshChromeIntegrationReadiness() {
+    chromeIntegrationReadiness = chromeIntegration.readiness()
+    chromeIntegrationRefreshTask?.cancel()
+    guard chromeIntegrationReadiness == .ready else {
+      chromeExtensionReadiness = .unavailable
+      return
+    }
+
+    chromeExtensionReadiness = .checking
+    let chromeContext = chromeContext
+    chromeIntegrationRefreshTask = Task { [weak self] in
+      let readiness = await chromeContext.integrationReadiness()
+      guard !Task.isCancelled else { return }
+      self?.chromeExtensionReadiness = readiness
+      self?.chromeIntegrationRefreshTask = nil
+    }
+  }
+
+  func configureChromeIntegration() {
+    guard chromeIntegrationReadiness.canConfigure, !phase.isBusy else { return }
+    do {
+      try chromeIntegration.configure()
+      refreshChromeIntegrationReadiness()
+      phase = .success(
+        "Chrome bridge registered. Load or reload Topher’s extension in Chrome, then grant YouTube access from its button."
+      )
+    } catch {
+      refreshChromeIntegrationReadiness()
+      phase = .failure(
+        "Topher could not safely repair Chrome setup. Remove the conflicting Topher native-host file, then try Set Up again."
+      )
+    }
+  }
+
+  func showChromeExtensionFolder() {
+    guard !phase.isBusy else { return }
+    if chromeIntegration.showExtensionFolder() {
+      phase = .success("Opened Topher’s bundled Chrome extension folder in Finder.")
+    } else {
+      phase = .failure("The bundled Chrome extension folder is unavailable in this build.")
+    }
+  }
+
+  func openChromeExtensionManager() {
+    guard !phase.isBusy else { return }
+    let integration = chromeIntegration
+    Task { [weak self] in
+      let outcome = await integration.openExtensionManager()
+      guard let self else { return }
+      apply(outcome, source: .manual)
+    }
+  }
+
   func clearYouTubeFeedResults() {
     youTubeFeedExpiryTask?.cancel()
     youTubeFeedExpiryTask = nil
     youTubeFeedSnapshot = nil
     chromeContext.clearYouTubeFeedSession()
+  }
+
+  func openYouTubeFeedItem(at position: Int) {
+    guard canStartNewInteraction else { return }
+    guard (1...ChromeBridgeRequest.maximumYouTubeFeedItemCount).contains(position) else {
+      phase = .failure("That number is not in the current YouTube list.")
+      return
+    }
+
+    activeVoicePresentation = nil
+    activeVoiceMode = nil
+    activePermissionFailure = nil
+    hideVoiceFeedback()
+    phase = .executing
+    let processor = commandProcessor
+    commandExecutionTask = Task { [weak self] in
+      let result = await processor.process(
+        command: .openYouTubeFeedItem(.ordinal(position))
+      )
+      guard !Task.isCancelled, let self else { return }
+      commandExecutionTask = nil
+      apply(result.presentationUpdate)
+      apply(result.outcome, source: .manual)
+    }
   }
 
   func requestAccessibilityPermission() {
@@ -1228,6 +1320,12 @@ final class TopherModel: ObservableObject {
       "Use the hold-to-dictate shortcut to insert text into the focused field."
     case .emptyInput, .missingValue:
       "That command is missing a target or search value."
+    case .youTubeFeedRequired:
+      "Ask “What’s on my YouTube feed?” first, then choose from the short-lived list."
+    case .youTubeSelectionAmbiguous:
+      "That could mean a list number or a video title. Say “number three” or “video titled …”."
+    case .youTubeSelectionRequired:
+      "Which listed YouTube video? Say “the third one,” “number three,” or its exact title."
     case .uncertainDomain:
       "I heard more than one possible domain. Say it again or type the exact domain in Topher."
     case .unknownTarget:

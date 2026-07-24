@@ -113,14 +113,14 @@
       "checks": ["No capability executes"]
     },
     {
-      "id": "assistant-context-youtube-feed",
+      "id": "assistant-context-youtube-comments",
       "mode": "assistant",
       "category": "future-context",
-      "utterance": "What's on my YouTube feed?",
-      "setup": "Chrome may be open to YouTube.",
+      "utterance": "Summarize the comments on this YouTube video.",
+      "setup": "Chrome may be open to a YouTube watch page.",
       "expectedStatus": "contextRequired",
-      "expectedResult": "Explain that structured browser context is not implemented yet.",
-      "checks": ["No screen or page data is captured", "No capability executes"]
+      "expectedResult": "Explain that comment and page-body understanding is not an implemented capability.",
+      "checks": ["No comments or page-body data are captured", "No screenshot or OCR fallback runs", "No capability executes"]
     },
     {
       "id": "dictation-notes-short",
@@ -383,6 +383,26 @@
       "checks": ["The HUD remains concise", "The list appears in Topher", "A bounded view is labeled", "No page content appears in ordinary logs"]
     },
     {
+      "id": "assistant-youtube-feed-conversational-read",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Can you tell me what's in my YouTube feed?",
+      "setup": "Grant optional YouTube access and make YouTube Home the active non-incognito Chrome tab.",
+      "expectedStatus": "supported",
+      "expectedResult": "Treat the polite conversational wording as the same bounded on-demand feed read.",
+      "checks": ["No model is required", "One bounded extraction", "The same numbered-list UX appears"]
+    },
+    {
+      "id": "assistant-youtube-feed-check-read",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Check my YouTube feed.",
+      "setup": "Grant optional YouTube access and make YouTube Home the active non-incognito Chrome tab.",
+      "expectedStatus": "supported",
+      "expectedResult": "Treat the ordinary check wording as the same bounded on-demand feed read and direct the user to Topher's menu-bar list.",
+      "checks": ["No model is required", "One bounded extraction", "The menu-bar handoff is explicit"]
+    },
+    {
       "id": "assistant-youtube-feed-permission-denied",
       "mode": "assistant",
       "category": "youtube-feed-context",
@@ -391,6 +411,16 @@
       "expectedStatus": "supported",
       "expectedResult": "Do not inspect the page; explain how to grant YouTube access from the extension button.",
       "checks": ["Chrome owns the permission prompt", "No broad host access is requested", "No screenshot or accessibility fallback runs"]
+    },
+    {
+      "id": "assistant-youtube-feed-natural-read",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "What's YouTube recommending?",
+      "setup": "Grant optional YouTube access and make YouTube Home the active non-incognito Chrome tab.",
+      "expectedStatus": "supported",
+      "expectedResult": "Read the same bounded YouTube Home recommendation schema as the canonical feed question.",
+      "checks": ["No model is required", "No broader YouTube route is inspected", "Results remain short-lived"]
     },
     {
       "id": "assistant-youtube-feed-ordinal-open",
@@ -403,11 +433,21 @@
       "checks": ["Exactly one tab update", "No new arbitrary URL", "The short-lived list is consumed", "No automatic retry after an unknown outcome"]
     },
     {
+      "id": "assistant-youtube-feed-conversational-ordinal-open",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Let's watch the third one.",
+      "setup": "Immediately after a successful feed read with at least three listed items, keep the same YouTube Home tab active.",
+      "expectedStatus": "supported",
+      "expectedResult": "Resolve the conversational lead-in to the same observed third item and navigate exactly once after revalidation.",
+      "checks": ["No semantic guessing", "Exactly one tab update", "The short-lived list is consumed"]
+    },
+    {
       "id": "assistant-youtube-feed-title-open",
       "mode": "assistant",
       "category": "youtube-feed-context",
       "utterance": "Open the YouTube video titled Fixture Alpha.",
-      "setup": "Immediately after an untruncated feed read containing exactly one normalized title match for 'Fixture Alpha', keep the same YouTube Home tab active.",
+      "setup": "Immediately after a feed read whose bounded candidate scan proves exactly one normalized title match for 'Fixture Alpha', keep the same YouTube Home tab active.",
       "expectedStatus": "supported",
       "expectedResult": "Revalidate and open the uniquely matching listed video exactly once.",
       "checks": ["Matching is normalized but not fuzzy", "The page-provided URL is ignored", "The destination is constructed from a strict video ID"]
@@ -417,10 +457,80 @@
       "mode": "assistant",
       "category": "youtube-feed-context",
       "utterance": "Open the YouTube video titled Fixture Duplicate.",
-      "setup": "Immediately after an untruncated feed read containing two normalized matches for 'Fixture Duplicate'.",
+      "setup": "Immediately after a feed read whose bounded candidate scan contains two normalized matches for 'Fixture Duplicate'.",
       "expectedStatus": "supported",
       "expectedResult": "Refuse before navigation and ask for a numbered selection.",
       "checks": ["No tab update", "The numbered list remains available", "No model chooses between duplicates"]
+    },
+    {
+      "id": "assistant-youtube-feed-pronoun-clarification",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open that YouTube video.",
+      "setup": "Immediately after a successful feed read containing multiple listed recommendations.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Keep the numbered list available and ask the user to choose a listed number or exact title.",
+      "checks": ["No guessed referent", "No tab update", "No model is required", "The recovery instruction is actionable"]
+    },
+    {
+      "id": "assistant-youtube-feed-generic-pronoun-clarification",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open that video.",
+      "setup": "Immediately after a successful feed read containing multiple listed recommendations.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Keep the short-lived feed session and ask for a number or exact title instead of searching the web.",
+      "checks": ["No Google fallback", "No guessed referent", "No tab update"]
+    },
+    {
+      "id": "assistant-youtube-feed-bare-ordinal-after-clarification",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Number three.",
+      "setup": "Read a feed with at least three items, ask to open 'that video', receive Topher's clarification, and answer within the same unexpired session.",
+      "expectedStatus": "supported",
+      "expectedResult": "Resolve only against the current feed session and open the third observed video exactly once after revalidation.",
+      "checks": ["No general conversational memory", "Exactly one tab update", "The session is consumed"]
+    },
+    {
+      "id": "assistant-youtube-feed-bare-title",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Fixture Alpha.",
+      "setup": "Immediately after a feed read that proves one listed video has the normalized exact title 'Fixture Alpha'.",
+      "expectedStatus": "supported",
+      "expectedResult": "Treat the exact title as a scoped feed selection, revalidate it, and open it exactly once.",
+      "checks": ["A registered non-YouTube command still wins", "Ambiguous title or ordinal collisions are refused", "No fuzzy match"]
+    },
+    {
+      "id": "assistant-youtube-feed-pronoun-without-session",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open it.",
+      "setup": "Start without a current YouTube feed session.",
+      "expectedStatus": "unsupported",
+      "expectedResult": "Ask the user to read the YouTube feed first; do not fall back to a Google search.",
+      "checks": ["No browser mutation", "No search fallback", "Recovery is specific"]
+    },
+    {
+      "id": "assistant-youtube-feed-last-item",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Watch the last one.",
+      "setup": "Immediately after a successful feed read with multiple listed items, keep the same YouTube Home tab active.",
+      "expectedStatus": "supported",
+      "expectedResult": "Resolve 'last' from the bounded visible session and open that listed item exactly once after revalidation.",
+      "checks": ["No unbounded page count", "Exactly one tab update", "The session is consumed"]
+    },
+    {
+      "id": "assistant-youtube-feed-single-item-pronoun",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Open that video.",
+      "setup": "Immediately after a successful feed read containing exactly one listed recommendation.",
+      "expectedStatus": "supported",
+      "expectedResult": "Treat the pronoun as unambiguous, revalidate the only listed item, and open it exactly once.",
+      "checks": ["No guessed selection", "Exactly one tab update", "A multi-item list still asks for a number or title"]
     },
     {
       "id": "assistant-youtube-feed-stale",

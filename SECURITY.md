@@ -42,10 +42,21 @@ development build. There is not yet a notarized public binary release.
 - YouTube titles, channels, video IDs, and observation metadata are untrusted
   retrieved data. They are length/count/schema validated, never interpreted as
   instructions, and live only in one 90-second in-memory feed session. Ordinal
-  selection is limited to that list; normalized exact-title selection refuses
-  ambiguity and incomplete observations. The extension revalidates optional
-  permission, active source tab/page/fingerprint, expiry, and selected-item
-  presence before one navigation constructed from a strict video ID.
+  selection is limited to the displayed list. Normalized exact-title selection
+  requires a complete bounded title observation and fresh uniqueness, even
+  when presentation is separately bounded by missing channel metadata. The
+  extension revalidates optional permission, active source tab/Home route,
+  expiry, selected-item identity, and title uniqueness when applicable before
+  one navigation constructed from a strict video ID. Unrelated feed drift and
+  tab-title/index churn cannot invalidate or substitute the selected target.
+- A bare reference such as “that YouTube video” cannot select among multiple
+  observed items. Topher requests a listed ordinal or exact title and preserves
+  the short-lived visible list. A bare number or exact listed title is accepted
+  only against that session; registered non-YouTube commands still win,
+  ordinal/title collisions refuse, and neither deterministic fallback nor a
+  future model may guess the referent. A pronoun may select only when the list
+  contains exactly one item. Speech alternatives may recover only one exact
+  listed title; alternatives that name different items cannot authorize an open.
 - No arbitrary shell, AppleScript, browser JavaScript, or generated code runs.
 - Permissions are requested incrementally for implemented features.
 - Accessibility is requested only from an explicit dictation action. Focus,
@@ -110,8 +121,21 @@ development build. There is not yet a notarized public binary release.
   cookies, history, account data, comments, descriptions, forms, file-URL
   access, arbitrary/page/model-generated JavaScript, continuous observation,
   or stored browser snapshots. Native-host registration binds one exact
-  extension origin to an absolute checked helper inside the current Topher
-  bundle. Only the primary Topher process may construct the app-side relay.
+  packaged extension origin to an absolute checked helper inside the current
+  Topher bundle. The committed manifest key is public development identity,
+  not a credential; its private key is not stored. A content-free protocol
+  status operation distinguishes a disconnected extension from missing YouTube
+  access without reading tabs or pages. Readiness inspection does not mutate
+  external state. Only an explicit **Set Up** or **Repair** action
+  may create or update the per-user manifest, and only when an existing
+  manifest is absent or is a secure current-user Topher registration with one
+  valid origin and the exact Topher app/helper path shape. This permits
+  explicit migration from a pre-stable-ID Topher build. Multiple origins,
+  non-Topher helper paths, symlinks, insecure modes, and malformed data are
+  refused. Setup never loads the extension or grants page access. Only the
+  primary Topher process may construct the app-side relay. It creates the
+  authenticated local socket eagerly, but every tab or page observation remains
+  demand-driven.
   Recording is visibly indicated, stored with restrictive POSIX modes,
   automatically pruned, and immediately clearable. The command can itself
   contain a spoken or pasted credential; Topher never separately appends

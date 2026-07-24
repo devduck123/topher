@@ -25,8 +25,10 @@ struct MenuContentView: View {
           if let youTubeFeedSnapshot = model.youTubeFeedSnapshot {
             YouTubeFeedResultsCard(
               snapshot: youTubeFeedSnapshot,
-              clear: model.clearYouTubeFeedResults
+              clear: model.clearYouTubeFeedResults,
+              open: model.openYouTubeFeedItem
             )
+            .disabled(model.phase.isBusy)
           }
 
           if !diagnostics.latestRecords.isEmpty {
@@ -169,6 +171,27 @@ struct MenuContentView: View {
         .padding(.leading, 42)
 
       readinessRow(
+        title: model.chromeIntegrationReadiness == .ready
+          ? model.chromeExtensionReadiness.title
+          : model.chromeIntegrationReadiness.title,
+        systemImage: model.chromeIntegrationReadiness == .ready
+          && model.chromeExtensionReadiness == .ready
+          ? "checkmark.circle.fill"
+          : "puzzlepiece.extension",
+        tint: chromeIntegrationTint
+      ) {
+        if model.chromeIntegrationReadiness.canConfigure {
+          Button(model.chromeIntegrationReadiness == .needsRepair ? "Repair" : "Set Up") {
+            model.configureChromeIntegration()
+          }
+          .controlSize(.small)
+        }
+      }
+
+      Divider()
+        .padding(.leading, 42)
+
+      readinessRow(
         title: model.accessibilityPermissionState == .authorized
           ? "Global text insertion ready"
           : "Accessibility required for dictation",
@@ -261,11 +284,32 @@ struct MenuContentView: View {
     }
   }
 
+  private var chromeIntegrationTint: Color {
+    switch model.chromeIntegrationReadiness {
+    case .ready:
+      switch model.chromeExtensionReadiness {
+      case .ready:
+        .green
+      case .checking:
+        .blue
+      case .youtubeAccessRequired:
+        .orange
+      case .disconnected, .unavailable:
+        .red
+      }
+    case .needsRegistration, .needsRepair:
+      .orange
+    case .blocked, .unavailable:
+      .red
+    }
+  }
+
   private func refreshReadiness() {
     isAssistantShortcutConfigured = KeyboardShortcuts.getShortcut(for: .pushToTalk) != nil
     isDictationShortcutConfigured = KeyboardShortcuts.getShortcut(for: .dictation) != nil
     model.refreshVoiceReadiness()
     model.refreshAccessibilityPermission()
+    model.refreshChromeIntegrationReadiness()
   }
 
   private func openDeveloperSettings() {
@@ -280,6 +324,7 @@ struct MenuContentView: View {
 private struct YouTubeFeedResultsCard: View {
   let snapshot: YouTubeFeedSnapshot
   let clear: () -> Void
+  let open: (Int) -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -298,37 +343,48 @@ private struct YouTubeFeedResultsCard: View {
       }
 
       ForEach(snapshot.items, id: \.observationID.value) { item in
-        HStack(alignment: .top, spacing: 9) {
-          Text("\(item.position)")
-            .font(.caption.monospacedDigit().weight(.semibold))
-            .foregroundStyle(.secondary)
-            .frame(width: 20, alignment: .trailing)
+        Button {
+          open(item.position)
+        } label: {
+          HStack(alignment: .top, spacing: 9) {
+            Text("\(item.position)")
+              .font(.caption.monospacedDigit().weight(.semibold))
+              .foregroundStyle(.secondary)
+              .frame(width: 20, alignment: .trailing)
 
-          VStack(alignment: .leading, spacing: 2) {
-            Text(item.title)
-              .font(.caption.weight(.medium))
-              .fixedSize(horizontal: false, vertical: true)
-            Text(item.channel)
+            VStack(alignment: .leading, spacing: 2) {
+              Text(item.title)
+                .font(.caption.weight(.medium))
+                .lineLimit(3)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
+              Text(item.channel)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "arrow.up.right.square")
               .font(.caption2)
               .foregroundStyle(.secondary)
-              .lineLimit(1)
+              .accessibilityHidden(true)
           }
-
-          Spacer(minLength: 0)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.position). \(item.title), by \(item.channel)")
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open \(item.position). \(item.title), by \(item.channel)")
       }
 
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         Image(
-          systemName: snapshot.observationWasTruncated ? "rectangle.stack.badge.minus" : "clock"
+          systemName: snapshot.presentationWasTruncated
+            ? "rectangle.stack.badge.minus"
+            : "clock"
         )
         .accessibilityHidden(true)
         Text(
-          snapshot.observationWasTruncated
-            ? "Bounded view. Say “Open the third one”; title follow-ups may require a fresh list."
-            : "Short-lived list. Say a number or exact listed title before it expires."
+          youTubeFollowUpHint
         )
       }
       .font(.caption2)
@@ -342,6 +398,17 @@ private struct YouTubeFeedResultsCard: View {
         .strokeBorder(.red.opacity(0.16))
     }
     .accessibilityElement(children: .contain)
+  }
+
+  private var youTubeFollowUpHint: String {
+    if !snapshot.titleObservationWasComplete {
+      return
+        "Bounded view. Use a shown number within 90 seconds; title uniqueness was not complete."
+    }
+    if snapshot.presentationWasTruncated {
+      return "Bounded view. Within 90 seconds, say a shown number or one unique exact title."
+    }
+    return "Within 90 seconds, say “the third one,” “number three,” or one exact title."
   }
 }
 

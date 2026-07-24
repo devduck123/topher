@@ -14,20 +14,27 @@ insertion remain separate request kinds and authority boundaries.
 Topher is open source under the [MIT License](LICENSE). It is an early personal
 project, not a notarized application release for general installation.
 
-Status: the 0.5.0 Build 20 source adds bounded YouTube feed context and
-short-lived ordinal/title follow-ups to the integrated dictation and Chrome-tab
-foundation. Automated and build evidence is recorded in the Build 20 evidence
-checkpoint. The Release bundle continues to embed the universal native Chrome
-host at `Contents/Helpers`.
-Build 18's exact Release artifact remains the installed dogfood bundle; Builds
-19 and 20 have not been installed or live-tested. Direct Apple
+Status: the 0.5.2 Build 22 source makes the bounded YouTube feed flow a useful,
+model-free conversational slice. It recognizes common feed questions, scopes
+terse ordinals and exact-title answers to one visible 90-second session, asks a
+specific question for “that video,” and refuses title/ordinal collisions instead
+of guessing. Protocol v3 separates a visually bounded result from proof of title
+uniqueness and revalidates the selected video rather than requiring an unrelated
+dynamic recommendation to remain frozen. Setup now distinguishes local host
+registration, extension connection, and optional YouTube permission. The
+Release bundle continues to embed
+the universal native Chrome host at `Contents/Helpers`.
+The exact 0.5.0 Build 20 Release artifact remains the installed dogfood bundle;
+Build 22 has not been installed or end-to-end live-tested. Direct Apple
 `SpeechAnalyzer`/`SpeechTranscriber` is integrated as the provisional engine for
 local dogfooding. A live Core Audio
 callback-isolation failure was captured, fixed, and covered by an off-main
 regression test. Accuracy, latency, permission-recovery, sleep/wake, and
 repeated-session acceptance remain explicit post-merge dogfood gates; this
 source merge is not evidence that those paths passed.
-Live Chrome extension/native-host and YouTube acceptance is also unverified.
+Read-only inspection confirmed the new semantic selector against the current
+YouTube Home structure without recording feed strings, but live Topher → native
+host → extension → YouTube command acceptance remains unverified.
 The comparative speech benchmark is still open.
 
 ## Implemented in this slice
@@ -154,22 +161,47 @@ The comparative speech benchmark is still open.
   ambiguity and incomplete-observation refusal, a five-second fingerprinted
   snapshot, extension-side revalidation immediately before mutation, and one
   non-retried activation attempt.
-- “What’s on my YouTube feed?” using the active regular Chrome tab only. After
-  explicit optional YouTube permission, a packaged isolated-world extractor
+- “What’s on my YouTube feed?”, “What’s YouTube recommending?”, “Check my
+  YouTube feed,” and other reviewed feed/home/list variants using the active
+  regular Chrome tab only.
+  After explicit optional YouTube permission, a packaged isolated-world extractor
   returns at most 20 visible or nearby Home recommendations as strict video ID,
   bounded title, and bounded channel records. Topher shows a numbered,
   accessible, short-lived list in its menu while keeping the HUD concise.
-- “Open the third one” and “Open the YouTube video titled X” resolve only
-  against the latest 90-second in-memory feed. Title matching is normalized
-  exact and refuses ambiguity or truncated observations. Before one non-retried
-  tab navigation, the extension rechecks permission, active source tab/page,
-  fingerprint, expiry, and selected-item presence, then constructs the watch URL
-  from the validated video ID rather than trusting a page-provided URL.
+- “Open the third one,” “Let’s watch the third one,” “I’ll take number seven,”
+  “Open video three,” “number three,” “the last one,” “the one called X,” and
+  one bare exact listed title resolve only against the latest visible 90-second
+  in-memory feed. Bare answers never become global conversational memory. Title
+  matching is normalized exact and proceeds only when the extension's bounded
+  candidate scan proves uniqueness, even if a missing channel or the 20-row
+  presentation cap made the visible list bounded.
+  Bounded on-device speech alternatives can recover a title only when they
+  converge on one exact listed video; conflicting alternatives refuse.
+  Before one non-retried tab navigation, the extension rechecks permission,
+  active source tab/Home route, stable source identity, expiry, selected-item
+  identity, and fresh title uniqueness when required. It constructs the watch
+  URL from the validated video ID rather than trusting a page-provided URL.
+- Each displayed recommendation is also an accessible button that sends only
+  its observed ordinal through the same policy, revalidation, and exactly-once
+  capability path. “Open that YouTube video,” “Open that video,” and “Open it”
+  ask for a listed number or exact title when a feed session exists; without a
+  session they ask the user to read the feed first and never fall through to web
+  search. If the feed contains exactly one item, the pronoun is unambiguous and
+  opens that item. Otherwise a clarification can be answered with a bare
+  number/ordinal or one exact title. Topher does not ask a model to guess.
+- A layered Chrome-and-YouTube readiness surface can explicitly register or safely
+  repair the per-user native-host manifest for the current app bundle, open
+  Chrome Extensions, reveal Topher's bundled stable-ID extension folder, report
+  whether that extension is connected, and report the optional YouTube access
+  bit without reading a tab or page.
+  Setup never loads the extension or grants page access silently; the optional
+  YouTube permission remains a separate grant/removal in Chrome's popup.
 - A bundled native-messaging relay with a 64-KiB application protocol limit,
   launch-scoped same-user socket handshake, exact extension-origin registration,
   checked absolute helper path, typed cancellation, timeouts, concurrency limits,
-  duplicate-response handling, version mismatch recovery, demand-driven app-side
-  startup, and explicit unknown outcomes when a dispatched activation disconnects.
+  duplicate-response handling, version mismatch recovery, eager primary-process
+  socket readiness with demand-driven page acquisition, and explicit unknown
+  outcomes when a dispatched activation disconnects.
 - A separate policy decision before execution.
 - Safe rejection of malformed address-like input, ambiguous installed-app
   names, and explicitly requested applications that are not installed.
@@ -294,11 +326,15 @@ or rearranging unused status items; a crowded MacBook menu bar can clip app
 items behind the notch. Launch the app bundle through Xcode, Finder, or `open`
 rather than invoking `Contents/MacOS/Topher` directly.
 
-Chrome context requires a separate unpacked extension and per-user native-host
-registration. Build the app first, then follow the checked setup and uninstall
-steps in [the Chrome extension guide](ChromeExtension/README.md). The repository
-contains no fixed unpacked extension ID and setup does not need to replace the
-user's `/Applications` build.
+Chrome context requires Chrome to load Topher's unpacked extension and a
+per-user native-host registration. Build and launch the app, open **Settings →
+General → Chrome and YouTube**, press **Set Up**, then use **Open Chrome
+Extensions** and **Show Extension Folder** for the guided Chrome steps. The
+repository-owned public manifest key gives development builds one stable
+extension ID; no copied ID or Terminal command is required. Setup does not
+replace the user's `/Applications` build or grant YouTube page access. The
+checked CLI install/uninstall path remains documented in
+[the Chrome extension guide](ChromeExtension/README.md).
 
 For an interactive smoke test:
 
@@ -320,19 +356,29 @@ For an interactive smoke test:
    Chrome tab titled Example Domain,” and “YouTube for dining with Derek.”
    Chrome context commands require the separate setup above and an exact
    current tab title.
-6. In the extension popup, remove YouTube access and ask “What’s on my YouTube
+6. Under **Settings → General → Chrome and YouTube**, confirm Topher identifies
+   an absent, current, moved, or conflicting native-host registration correctly.
+   Press **Set Up** or **Repair** only when expected, load/reload the revealed
+   unpacked extension in Chrome, then use its popup for page access.
+7. In the extension popup, remove YouTube access and ask “What’s on my YouTube
    feed?” Confirm Topher gives grant instructions without inspecting the page.
-   Grant access, make YouTube Home active, and ask again. Confirm a numbered list
-   of at most 20 titles/channels appears in Topher. Say “Open the third one” and
-   confirm one revalidated navigation. Repeat by an exact unique title; confirm
-   duplicate, stale, changed, expired, revoked, and non-Home states refuse with
-   actionable recovery.
-7. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
+   Grant access, make YouTube Home active, and ask again. Confirm Settings first
+   reports the extension connection and permission separately, then a numbered
+   list of at most 20 titles/channels appears in Topher. Click one row or say “Open
+   the third one” and confirm one revalidated navigation. Repeat by an exact
+   unique title. Ask “What’s YouTube recommending?”, then try “Open that video”
+   followed by “number three.” Ask again and use one bare exact listed title.
+   Also try “the last one.” Confirm a one-item feed accepts “open that video,”
+   while a multi-item feed requests clarification without navigating. Duplicate,
+   title/ordinal collision, stale target, expired, revoked, and non-Home states
+   must refuse with actionable recovery. Confirm unrelated recommendation churn
+   or a tab reorder does not invalidate an otherwise unchanged selected video.
+8. Say “Open Acme Streaming” and confirm Topher visibly reports its Google
    fallback. Say a malformed address or an explicitly missing app and confirm
    it fails closed.
-8. Open **Settings → Developer**, enter a manual command, and use **Run
+9. Open **Settings → Developer**, enter a manual command, and use **Run
    Command** as a development fallback. Confirm blank input cannot run.
-9. Record a different hold-to-dictate shortcut, explicitly allow Topher under
+10. Record a different hold-to-dictate shortcut, explicitly allow Topher under
    **Privacy & Security → Accessibility**, focus a normal editable field in
    another app, hold the dictation shortcut, say a sentence, and release.
    Confirm text is inserted once without Return being pressed. Repeat in an
@@ -538,6 +584,8 @@ mental model.
 - [Combined semantic-signal and Notion caret decision](docs/decisions/0022-combine-semantic-signals-and-bound-notion-caret-insertion.md)
 - [Stable caret and shared technical-notation decision](docs/decisions/0023-stabilize-caret-and-share-technical-notation.md)
 - [Bounded YouTube feed-context decision](docs/decisions/0024-bounded-youtube-feed-context.md)
+- [Recoverable Chrome setup and explicit YouTube references](docs/decisions/0025-make-chrome-setup-recoverable-and-youtube-references-explicit.md)
+- [Scoped YouTube dialogue and target revalidation](docs/decisions/0026-scope-youtube-dialogue-and-revalidate-the-target.md)
 - [Build 16 verification evidence](docs/evidence/2026-07-16-build-16-semantic-web-append-and-menu-feedback.md)
 - [Build 17 verification evidence](docs/evidence/2026-07-18-build-17-focus-and-semantic-composer.md)
 - [Build 18 verification evidence](docs/evidence/2026-07-18-build-18-semantic-signals-and-notion-caret.md)
@@ -546,6 +594,9 @@ mental model.
 - [Chrome extension setup and manual acceptance](ChromeExtension/README.md)
 - [Chrome context foundation verification](docs/evidence/2026-07-18-chrome-context-foundation.md)
 - [Build 20 YouTube feed-context verification](docs/evidence/2026-07-19-build-20-youtube-feed-context.md)
+- [Build 21 YouTube recovery verification](docs/evidence/2026-07-21-build-21-youtube-recovery.md)
+- [Build 22 YouTube conversation verification](docs/evidence/2026-07-22-build-22-youtube-conversation.md)
+- [Build 22 merge-readiness audit](docs/evidence/2026-07-24-build-22-youtube-merge-audit.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)

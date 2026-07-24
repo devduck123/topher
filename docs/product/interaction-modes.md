@@ -1,6 +1,6 @@
 # Interaction modes
 
-Status: product contract and planning reference, 2026-07-15
+Status: product contract and planning reference, 2026-07-22
 
 Topher should accept requests through several channels over time, but those
 channels must converge on one policy-controlled assistant rather than becoming
@@ -219,18 +219,31 @@ access, and sensitive visual capture should require local confirmation.
 
 ## Conversational follow-up
 
-Build 20 implements one deliberately non-general instance: a successful
+Build 22 implements one deliberately non-general instance: a successful
 YouTube Home read creates a visible, in-memory session for no more than 90
-seconds. “Open the third one” resolves by list position. “Open the YouTube video
-titled X” uses normalized exact matching, refuses ambiguity, and is unavailable
-when the observation was truncated. A dispatch consumes the session before the
-browser mutation, and the extension revalidates source/page/item state before
-one non-retried navigation. Clearing the UI, expiry, a failed refresh, or a
+seconds. Natural feed requests such as “What videos are on my YouTube homepage?”
+and “What’s YouTube recommending?” resolve to the same bounded capability.
+“Open video three” resolves by displayed position. “Open the YouTube video
+titled X” uses normalized exact matching, refuses ambiguity, and requires a
+complete bounded title observation even when the presented list is separately
+bounded. A dispatch consumes the session before the browser mutation, and the
+extension revalidates source/Home-route/selected-item state before one
+non-retried navigation. Clearing the UI, expiry, a failed refresh, or a
 dispatched open clears the reference. No model or other command may reuse it.
 
-Any broader follow-up mode should retain only a small interaction state with:
+Each listed row is also a keyboard- and VoiceOver-accessible typed open action
+through the same policy and revalidation path. “Open that YouTube video” is
+recognized but asks for a displayed number or exact title: with several visible
+recommendations there is no singular typed referent to bind. While that prompt
+is visible, short answers such as “number three,” “the last one,” or one bare
+exact listed title resolve against only this session. A pronoun directly selects
+only when the session contains exactly one item. Registered commands still take
+precedence, mismatched ordinal-plus-title phrases refuse, and a pronoun without
+a current session asks for a fresh feed instead of becoming a Google search.
+This is deterministic dialogue state, not probabilistic memory, and it does not
+justify letting a model choose an item.
 
-Follow-up mode should retain only a small interaction state with:
+Any broader follow-up mode should retain only a small interaction state with:
 
 - The originating channel and authenticated source.
 - Typed references to recent results, tabs, documents, or actions.
@@ -280,9 +293,16 @@ Keep one reliable loop at every checkpoint:
 5. Complete for Build 20: add only the optional-permission YouTube Home schema
    and its 90-second ordinal/title follow-up. General DOM/page context remains a
    separate future gate.
-6. Establish confirmation and broader bounded-session behavior before remote mutation.
-7. Spike one chat adapter with read-only authority.
-8. Evaluate a local wake phrase only after idle-resource and privacy gates exist.
+6. Complete for Build 21 source: add recoverable Chrome registration, stable
+   unpacked-extension identity, direct typed result actions, and explicit
+   ambiguous-reference clarification without adding an LLM.
+7. Complete for Build 22 source: broaden the deterministic YouTube grammar,
+   scope terse number/title answers to the visible feed session, separate title
+   completeness from presentation bounds, and revalidate only the chosen target
+   rather than freezing unrelated feed layout.
+8. Establish confirmation and broader bounded-session behavior before remote mutation.
+9. Spike one chat adapter with read-only authority.
+10. Evaluate a local wake phrase only after idle-resource and privacy gates exist.
 
 This order is a planning default, not a promise that every mode will ship.
 Measured usefulness and safety determine whether each phase proceeds.

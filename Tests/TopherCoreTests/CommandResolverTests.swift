@@ -37,6 +37,26 @@ final class CommandResolverTests: XCTestCase {
       "Show me my YouTube feed.",
       "Read my YouTube feed",
       "What's on my YouTube home page?",
+      "What videos are on my YouTube homepage?",
+      "What are the videos on my YouTube home page?",
+      "What’s YouTube recommending?",
+      "What are my YouTube recommendations?",
+      "What videos do I have on my YouTube feed?",
+      "Show me my YouTube recommendations",
+      "Please list my YouTube feed",
+      "List the videos on my YouTube feed",
+      "Read out my YouTube feed",
+      "Can you tell me what’s in my YouTube feed?",
+      "Show me what is on the YouTube homepage",
+      "What’s new on my YouTube home page?",
+      "What’s recommended on YouTube?",
+      "Show me recommended videos on YouTube",
+      "Check my YouTube feed",
+      "Let me see YouTube Home",
+      "Show me the videos on my YouTube feed",
+      "What videos are in my YouTube feed?",
+      "What is YouTube showing me?",
+      "What videos is YouTube recommending to me?",
     ] {
       XCTAssertEqual(
         resolver.resolve(transcript),
@@ -47,6 +67,10 @@ final class CommandResolverTests: XCTestCase {
   }
 
   func testRecognizesYouTubeFeedOrdinalFollowupsThroughTwenty() {
+    let feedContext = CommandResolutionContext(
+      youTubeFollowUpScope: .feedAvailable,
+      youTubeFeedItemCount: 20
+    )
     let cases: [(String, Int)] = [
       ("Open the third one", 3),
       ("Play the 2nd video", 2),
@@ -54,22 +78,38 @@ final class CommandResolverTests: XCTestCase {
       ("Open item twenty", 20),
       ("Open item one", 1),
       ("Open number 1", 1),
+      ("Open video three", 3),
+      ("Watch number four", 4),
+      ("Select item #5", 5),
+      ("Pick result nine", 9),
+      ("Go with number ten", 10),
+      ("the sixth one", 6),
+      ("number seven", 7),
+      ("eight", 8),
+      ("Watch the last one", 20),
+      ("Let’s watch the third one", 3),
+      ("Can we play number four", 4),
+      ("I want the fifth one", 5),
+      ("I’d like to open video six", 6),
+      ("I’ll take number seven", 7),
+      ("Open the YouTube video number three", 3),
+      ("Play the third YouTube video", 3),
     ]
     for (transcript, position) in cases {
       XCTAssertEqual(
-        resolver.resolve(transcript),
+        resolver.resolve(transcript, context: feedContext),
         .resolved(.openYouTubeFeedItem(.ordinal(position))),
         transcript
       )
     }
 
     XCTAssertEqual(
-      resolver.resolve("Open the twenty-first one"),
+      resolver.resolve("Open the twenty-first one", context: feedContext),
       .unsupported(reason: .contextRequired)
     )
     XCTAssertEqual(
-      resolver.resolve("Open number 21"),
-      .unsupported(reason: .contextRequired)
+      resolver.resolve("Open number 21", context: feedContext),
+      .resolved(.openYouTubeFeedItem(.ordinal(21)))
     )
   }
 
@@ -80,12 +120,66 @@ final class CommandResolverTests: XCTestCase {
       .resolved(.openYouTubeFeedItem(.title(title)))
     )
     XCTAssertEqual(
+      resolver.resolve("Watch the YouTube video called Swift Concurrency — Carefully."),
+      .resolved(.openYouTubeFeedItem(.title(title)))
+    )
+    XCTAssertEqual(
+      resolver.resolve("Open that YouTube video titled Swift Concurrency — Carefully."),
+      .resolved(.openYouTubeFeedItem(.title(title)))
+    )
+    XCTAssertEqual(
+      resolver.resolve(
+        "Open the video named Swift Concurrency — Carefully.",
+        context: CommandResolutionContext(youTubeFollowUpScope: .feedAvailable)
+      ),
+      .resolved(.openYouTubeFeedItem(.title(title)))
+    )
+    XCTAssertEqual(
+      resolver.resolve(
+        "Play YouTube video Swift Concurrency — Carefully.",
+        context: CommandResolutionContext(youTubeFollowUpScope: .feedAvailable)
+      ),
+      .resolved(.openYouTubeFeedItem(.title(title)))
+    )
+    XCTAssertEqual(
       resolver.resolve("Open the YouTube video titled"),
       .unsupported(reason: .missingValue)
     )
     XCTAssertEqual(
       resolver.resolve("Open any YouTube recommendation"),
       .unsupported(reason: .unsupportedAction)
+    )
+  }
+
+  func testYouTubePronounFollowupRequestsAnExplicitListedReference() {
+    let feedContext = CommandResolutionContext(youTubeFollowUpScope: .feedAvailable)
+    for transcript in [
+      "Open that YouTube video",
+      "Play that YouTube recommendation.",
+      "Open that video",
+      "Watch that one",
+      "Play it",
+    ] {
+      XCTAssertEqual(
+        resolver.resolve(transcript, context: feedContext),
+        .unsupported(reason: .youTubeSelectionRequired),
+        transcript
+      )
+    }
+
+    XCTAssertEqual(
+      resolver.resolve("Open that video"),
+      .unsupported(reason: .youTubeFeedRequired)
+    )
+    XCTAssertEqual(
+      resolver.resolve(
+        "Open that video",
+        context: CommandResolutionContext(
+          youTubeFollowUpScope: .feedAvailable,
+          youTubeFeedItemCount: 1
+        )
+      ),
+      .resolved(.openYouTubeFeedItem(.ordinal(1)))
     )
   }
 

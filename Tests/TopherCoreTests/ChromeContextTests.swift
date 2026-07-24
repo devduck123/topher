@@ -4,6 +4,19 @@ import XCTest
 @testable import TopherCore
 
 final class ChromeContextTests: XCTestCase {
+  private struct YouTubeTitleNormalizationCase: Decodable {
+    let input: String
+    let normalized: String?
+  }
+
+  func testPackagedChromeExtensionIdentityIsStableAcrossTheTypedBoundary() {
+    XCTAssertEqual(ChromeBridgeConstants.extensionID, "mhbppdheppcibhhcnhnfockmfpcfhndj")
+    XCTAssertEqual(
+      ChromeBridgeConstants.extensionOrigin,
+      "chrome-extension://mhbppdheppcibhhcnhnfockmfpcfhndj/"
+    )
+  }
+
   func testTitleQueryUsesExactNormalizedMatching() throws {
     let query = try XCTUnwrap(ChromeTabTitleQuery("  Résumé — GitHub  "))
 
@@ -98,9 +111,21 @@ final class ChromeContextTests: XCTestCase {
   func testYouTubeTitleQueryUsesBoundedNormalizedExactMatching() throws {
     let query = try XCTUnwrap(YouTubeVideoTitleQuery("  Résumé: Local AI! "))
     XCTAssertTrue(query.matches("resume local ai"))
+    XCTAssertTrue(query.matches("ＲＥＳＵＭＥ：ＬＯＣＡＬ　ＡＩ"))
     XCTAssertFalse(query.matches("Résumé local AI explained"))
     XCTAssertNil(YouTubeVideoTitleQuery("\u{0}"))
     XCTAssertNil(YouTubeVideoTitleQuery(String(repeating: "a", count: 513)))
+  }
+
+  func testYouTubeTitleNormalizationMatchesTheSharedCrossLanguageCorpus() throws {
+    let cases = try JSONDecoder().decode(
+      [YouTubeTitleNormalizationCase].self,
+      from: fixtureData("youtube-title-normalization.json")
+    )
+
+    for entry in cases {
+      XCTAssertEqual(YouTubeVideoTitleQuery(entry.input)?.normalizedValue, entry.normalized)
+    }
   }
 
   func testYouTubeWireSnapshotValidatesEveryFieldAndLifetime() throws {
@@ -112,21 +137,25 @@ final class ChromeContextTests: XCTestCase {
       feedObservationID: String(repeating: "b", count: 64),
       capturedAtMilliseconds: 1_000,
       expiresAtMilliseconds: 91_000,
-      observationWasTruncated: false,
+      presentationWasTruncated: false,
+      titleObservationWasComplete: true,
       items: [
         ChromeBridgeWireYouTubeFeedItem(
           position: 1,
           videoID: "abcDEF123_-",
           title: "Local-first Mac assistants",
           channel: "Example Channel",
-          observationID: String(repeating: "c", count: 64)
+          observationID: String(repeating: "c", count: 64),
+          titleMatchIsUnique: true
         )
       ]
     )
     let snapshot = try XCTUnwrap(wire.validatedSnapshot)
     XCTAssertEqual(snapshot.items.first?.videoID.watchURL.host, "www.youtube.com")
     XCTAssertEqual(
-      snapshot.openTarget(for: snapshot.items[0]).sourceURL, "https://www.youtube.com/")
+      snapshot.openTarget(for: snapshot.items[0], selection: .ordinal(1)).sourceURL,
+      "https://www.youtube.com/"
+    )
 
     XCTAssertNil(
       ChromeBridgeWireYouTubeFeedSnapshot(
@@ -137,7 +166,8 @@ final class ChromeContextTests: XCTestCase {
         feedObservationID: String(repeating: "b", count: 64),
         capturedAtMilliseconds: 1_000,
         expiresAtMilliseconds: 91_001,
-        observationWasTruncated: false,
+        presentationWasTruncated: false,
+        titleObservationWasComplete: true,
         items: wire.items
       ).validatedSnapshot
     )
@@ -150,31 +180,33 @@ final class ChromeContextTests: XCTestCase {
         feedObservationID: String(repeating: "b", count: 64),
         capturedAtMilliseconds: 1_000,
         expiresAtMilliseconds: 91_000,
-        observationWasTruncated: false,
+        presentationWasTruncated: false,
+        titleObservationWasComplete: true,
         items: [
           ChromeBridgeWireYouTubeFeedItem(
             position: 1,
             videoID: "invalid",
             title: "Title",
             channel: "Channel",
-            observationID: String(repeating: "c", count: 64)
+            observationID: String(repeating: "c", count: 64),
+            titleMatchIsUnique: true
           )
         ]
       ).validatedSnapshot
     )
   }
 
-  func testVersionTwoYouTubeFixturesRoundTripTypedProtocol() throws {
+  func testVersionThreeYouTubeFixturesRoundTripTypedProtocol() throws {
     let feedResponse = try JSONDecoder().decode(
       ChromeBridgeResponse.self,
-      from: fixtureData("youtube-feed-response-v2.json")
+      from: fixtureData("youtube-feed-response-v3.json")
     )
     let snapshot = try XCTUnwrap(feedResponse.youTubeFeed?.validatedSnapshot)
     XCTAssertEqual(snapshot.items.first?.title, "Local Mac assistants")
 
     let openRequest = try JSONDecoder().decode(
       ChromeBridgeRequest.self,
-      from: fixtureData("open-youtube-request-v2.json")
+      from: fixtureData("open-youtube-request-v3.json")
     )
     XCTAssertEqual(openRequest.version, ChromeBridgeRequest.protocolVersion)
     XCTAssertEqual(openRequest.operation, .openYouTubeVideo)

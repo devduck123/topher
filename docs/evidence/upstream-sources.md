@@ -1,6 +1,6 @@
 # Upstream evidence ledger
 
-Retrieved 2026-07-14 and refreshed for Chrome context on 2026-07-19. Prefer
+Retrieved 2026-07-14 and refreshed for Chrome recovery on 2026-07-22. Prefer
 these primary sources when refreshing the investigation.
 
 ## Apple
@@ -38,6 +38,7 @@ intentionally has no 27 declarations.
 ## Chrome
 
 - [Manifest format](https://developer.chrome.com/docs/extensions/reference/manifest)
+- [Manifest `key`](https://developer.chrome.com/docs/extensions/reference/manifest/key)
 - [`chrome.tabs`](https://developer.chrome.com/docs/extensions/reference/api/tabs)
 - [Incognito manifest modes](https://developer.chrome.com/docs/extensions/reference/manifest/incognito)
 - [Content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)
@@ -46,4 +47,5 @@ intentionally has no 27 declarations.
 - [Extension service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
 - [`chrome.permissions`](https://developer.chrome.com/docs/extensions/reference/api/permissions)
 - [`chrome.scripting`](https://developer.chrome.com/docs/extensions/reference/api/scripting)
+- [Temporary `activeTab` permission](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab)
 - [Declare optional permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions#optional_permissions)

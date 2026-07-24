@@ -107,7 +107,7 @@ edit an older record to claim a test that was not run then.
   `ChromeExtension/README.md` → Core protocol/App bridge sources and tests →
   latest Chrome evidence record.
 - **Release or installation work:** contributing guide → README security posture
-  → [latest integrated release evidence](evidence/2026-07-22-build-22-youtube-conversation.md)
+  → [latest integrated release evidence](evidence/2026-07-24-build-22-youtube-merge-audit.md)
   → install helper.
 - **Code review:** changed files and tests → `AGENTS.md` review priorities →
   relevant contract and risk documents.

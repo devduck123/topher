@@ -242,7 +242,8 @@ final class ChromeContextCapabilitiesTests: XCTestCase {
     XCTAssertEqual(
       read.outcome,
       .succeeded(
-        message: "I found 2 YouTube recommendations. Open Topher to review the numbered list."
+        message:
+          "I found 2 YouTube recommendations. Click Topher in the menu bar to review the numbered list."
       )
     )
 

@@ -51,6 +51,12 @@ final class CommandResolverTests: XCTestCase {
       "What’s new on my YouTube home page?",
       "What’s recommended on YouTube?",
       "Show me recommended videos on YouTube",
+      "Check my YouTube feed",
+      "Let me see YouTube Home",
+      "Show me the videos on my YouTube feed",
+      "What videos are in my YouTube feed?",
+      "What is YouTube showing me?",
+      "What videos is YouTube recommending to me?",
     ] {
       XCTAssertEqual(
         resolver.resolve(transcript),
@@ -81,6 +87,13 @@ final class CommandResolverTests: XCTestCase {
       ("number seven", 7),
       ("eight", 8),
       ("Watch the last one", 20),
+      ("Let’s watch the third one", 3),
+      ("Can we play number four", 4),
+      ("I want the fifth one", 5),
+      ("I’d like to open video six", 6),
+      ("I’ll take number seven", 7),
+      ("Open the YouTube video number three", 3),
+      ("Play the third YouTube video", 3),
     ]
     for (transcript, position) in cases {
       XCTAssertEqual(

@@ -212,6 +212,13 @@ dependency, and installed-app denial/error recovery is verified.
   registration, extension disconnection, and missing optional YouTube access.
   Automated proof is recorded in the Build 22 evidence; live installed
   Chrome/YouTube acceptance remains explicit and unverified.
+- Complete in the build 22 merge audit: cover additional evidence-preserving
+  feed questions and follow-ups such as “Check my YouTube feed,” “Let’s watch
+  the third one,” “I’ll take number seven,” and “the one called X”; make the
+  menu-bar result handoff explicit; and cap long visual titles at three lines
+  without truncating the bounded accessible label or changing matching data.
+  This adds no fuzzy matching, semantic guessing, model dependency, context
+  field, permission, or browser authority.
 
 Exit: every proposed MVP command works without an LLM, Accessibility, or Screen
 Recording.

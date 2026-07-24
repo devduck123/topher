@@ -321,7 +321,7 @@ final class ChromeYouTubeFeedCapability {
       sessionStore.replace(with: snapshot)
       let noun = snapshot.items.count == 1 ? "recommendation" : "recommendations"
       var message =
-        "I found \(snapshot.items.count) YouTube \(noun). Open Topher to review the numbered list."
+        "I found \(snapshot.items.count) YouTube \(noun). Click Topher in the menu bar to review the numbered list."
       if snapshot.presentationWasTruncated {
         message += " The visible list is bounded; every shown number remains selectable."
       }
@@ -683,28 +683,47 @@ private func youTubeTitleCandidates(from transcript: String) -> [String] {
     value.removeLast()
     value = value.trimmingCharacters(in: .whitespacesAndNewlines)
   }
-  var candidates = [value]
-  let lowered = value.lowercased()
+  var baseCandidates = [value]
+  let originalLowered = value.lowercased()
+  if let prefix = [
+    "i'd like to ", "i’d like to ", "i'll take ", "i’ll take ", "i want to ", "let's ",
+    "lets ", "can we ", "could we ", "i'd like ", "i’d like ", "i want ",
+  ].first(where: originalLowered.hasPrefix) {
+    baseCandidates.append(
+      String(value.dropFirst(prefix.count))
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    )
+  }
+  var candidates = baseCandidates
   let subjects = [
     "the youtube video", "that youtube video", "youtube video", "the video", "video",
-    "the one", "one",
+    "that video", "this video", "the one", "that one", "this one", "one",
   ]
   let descriptors =
     subjects
     + subjects.flatMap { subject in
       ["titled", "called", "named"].map { "\(subject) \($0)" }
     }
-  for action in ["open", "play", "watch", "choose", "select", "pick"]
-  where lowered.hasPrefix(action + " ") {
-    let afterAction = String(value.dropFirst(action.count + 1))
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    candidates.append(afterAction)
-    let loweredAfterAction = afterAction.lowercased()
-    for descriptor in descriptors where loweredAfterAction.hasPrefix(descriptor + " ") {
+  for candidate in baseCandidates {
+    let lowered = candidate.lowercased()
+    for descriptor in descriptors where lowered.hasPrefix(descriptor + " ") {
       candidates.append(
-        String(afterAction.dropFirst(descriptor.count))
+        String(candidate.dropFirst(descriptor.count))
           .trimmingCharacters(in: .whitespacesAndNewlines)
       )
+    }
+    for action in ["open", "play", "watch", "choose", "select", "pick"]
+    where lowered.hasPrefix(action + " ") {
+      let afterAction = String(candidate.dropFirst(action.count + 1))
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      candidates.append(afterAction)
+      let loweredAfterAction = afterAction.lowercased()
+      for descriptor in descriptors where loweredAfterAction.hasPrefix(descriptor + " ") {
+        candidates.append(
+          String(afterAction.dropFirst(descriptor.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+      }
     }
   }
   return candidates

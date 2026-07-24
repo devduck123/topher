@@ -248,7 +248,8 @@ final class AssistantCommandProcessorTests: XCTestCase {
       read.outcome,
       .completed(
         .succeeded(
-          message: "I found 2 YouTube recommendations. Open Topher to review the numbered list."
+          message:
+            "I found 2 YouTube recommendations. Click Topher in the menu bar to review the numbered list."
         )
       )
     )
@@ -472,6 +473,33 @@ final class AssistantCommandProcessorTests: XCTestCase {
 
     _ = await processor.process("What’s on my YouTube feed?")
     let open = await processor.process("Open the video Local-first Mac assistants")
+
+    XCTAssertEqual(
+      open.outcome,
+      .completed(.succeeded(message: "Opened “Local-first Mac assistants” in the YouTube tab."))
+    )
+    let target = await stub.lastYouTubeTarget()
+    XCTAssertEqual(target?.selectionKind, .title)
+  }
+
+  func testYouTubeConversationAcceptsAClarifiedTitleWithoutRepeatingAnAction() async {
+    let now: Int64 = 1_721_000_000_000
+    let stub = ProcessorChromeExchangeStub(capturedAtMilliseconds: now)
+    let processor = AssistantCommandProcessor(
+      applicationOpener: inertApplicationOpener(),
+      chromeContext: ChromeContextCapabilities(
+        client: ChromeBridgeClient(
+          exchange: ChromeBridgeExchange(send: { request in
+            try await stub.send(request)
+          })
+        ),
+        nowMilliseconds: { now }
+      ),
+      webOpener: inertWebOpener()
+    )
+
+    _ = await processor.process("What’s on my YouTube feed?")
+    let open = await processor.process("The one called Local-first Mac assistants")
 
     XCTAssertEqual(
       open.outcome,

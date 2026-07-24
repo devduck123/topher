@@ -286,12 +286,16 @@ public struct CommandResolver: Sendable {
     let targets = [
       "my youtube feed", "the youtube feed", "my youtube home page",
       "my youtube homepage", "the youtube home page", "the youtube homepage",
-      "youtube home page", "youtube homepage", "youtube recommendations",
-      "my youtube recommendations",
+      "youtube home page", "youtube homepage", "my youtube home", "the youtube home",
+      "youtube home", "my youtube home screen", "the youtube home screen",
+      "youtube home screen", "youtube recommendations", "my youtube recommendations",
     ]
     let readPrefixes = [
       "what s on", "what is on", "what videos are on", "what are the videos on",
-      "show", "show me", "list", "list the videos on", "read", "read out", "read me",
+      "what videos are in", "what are the videos in", "show", "show me",
+      "show me videos on", "show me the videos on", "show me videos in",
+      "show me the videos in", "list", "list the videos on", "check", "check out",
+      "let me see", "read", "read out", "read me",
     ]
     var requests = Set(readPrefixes.flatMap { prefix in targets.map { "\(prefix) \($0)" } })
     let conversationalPrefixes = [
@@ -309,6 +313,8 @@ public struct CommandResolver: Sendable {
       "what videos do i have on my youtube feed", "what is recommended on youtube",
       "what s recommended on youtube", "show me recommended videos on youtube",
       "show me what youtube recommends", "tell me what youtube is recommending",
+      "what is youtube showing me", "what s youtube showing me",
+      "what videos is youtube recommending", "what videos is youtube recommending to me",
     ])
     return requests
   }()
@@ -318,7 +324,17 @@ public struct CommandResolver: Sendable {
     context: CommandResolutionContext
   ) -> CommandResolution? {
     let scope = context.youTubeFollowUpScope
-    let rawRequest = rawCommandRequest(transcript)
+    var rawRequest = rawCommandRequest(transcript)
+    if scope != .unavailable {
+      rawRequest =
+        removingRawPrefix(
+          from: rawRequest,
+          candidates: [
+            "let's", "lets", "can we", "could we", "I want to", "I'd like to", "I want",
+            "I'll take", "I’d like to", "I’ll take", "I'd like", "I’d like",
+          ]
+        ) ?? rawRequest
+    }
     if let rawTitle = removingRawPrefix(
       from: rawRequest,
       candidates: [
@@ -345,7 +361,17 @@ public struct CommandResolver: Sendable {
       return .resolved(.openYouTubeFeedItem(.title(query)))
     }
 
-    let request = normalizedRequest(transcript)
+    var request = normalizedRequest(transcript)
+    if scope != .unavailable {
+      request =
+        removingFirstPrefix(
+          from: request,
+          candidates: [
+            "let s", "can we", "could we", "i want to", "i d like to", "i want",
+            "i ll take", "i d like",
+          ]
+        ) ?? request
+    }
     let pronounRequests = [
       "open that youtube video", "play that youtube video", "watch that youtube video",
       "open that youtube recommendation", "play that youtube recommendation",
@@ -363,11 +389,23 @@ public struct CommandResolver: Sendable {
     }
 
     let explicitYouTubePrefixes = [
+      "open the youtube recommendation number", "open the youtube video number",
+      "open that youtube recommendation number", "open that youtube video number",
       "open youtube recommendation number", "open youtube video number",
+      "play the youtube recommendation number", "play the youtube video number",
+      "play that youtube recommendation number", "play that youtube video number",
       "play youtube recommendation number", "play youtube video number",
+      "watch the youtube recommendation number", "watch the youtube video number",
+      "watch that youtube recommendation number", "watch that youtube video number",
       "watch youtube recommendation number", "watch youtube video number",
+      "open the youtube recommendation", "open the youtube video",
+      "open that youtube recommendation", "open that youtube video",
       "open youtube recommendation", "open youtube video",
+      "play the youtube recommendation", "play the youtube video",
+      "play that youtube recommendation", "play that youtube video",
       "play youtube recommendation", "play youtube video",
+      "watch the youtube recommendation", "watch the youtube video",
+      "watch that youtube recommendation", "watch that youtube video",
       "watch youtube recommendation", "watch youtube video",
     ]
     if let reference = removingFirstPrefix(from: request, candidates: explicitYouTubePrefixes) {
@@ -381,8 +419,14 @@ public struct CommandResolver: Sendable {
         let rawTitle = removingRawPrefix(
           from: rawRequest,
           candidates: [
+            "open the youtube recommendation", "open the youtube video",
+            "open that youtube recommendation", "open that youtube video",
             "open youtube recommendation", "open youtube video",
+            "play the youtube recommendation", "play the youtube video",
+            "play that youtube recommendation", "play that youtube video",
             "play youtube recommendation", "play youtube video",
+            "watch the youtube recommendation", "watch the youtube video",
+            "watch that youtube recommendation", "watch that youtube video",
             "watch youtube recommendation", "watch youtube video",
           ]
         ),
@@ -496,7 +540,10 @@ public struct CommandResolver: Sendable {
     }
     value = removingFirstSuffix(
       from: value,
-      candidates: ["one", "video", "recommendation", "item", "result"]
+      candidates: [
+        "youtube recommendation", "youtube video", "one", "video", "recommendation", "item",
+        "result",
+      ]
     )
     value = removingFirstPrefix(from: value, candidates: ["number", "no"]) ?? value
     if let ordinal = Self.youTubeOrdinalValues[value] {

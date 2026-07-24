@@ -393,6 +393,16 @@
       "checks": ["No model is required", "One bounded extraction", "The same numbered-list UX appears"]
     },
     {
+      "id": "assistant-youtube-feed-check-read",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Check my YouTube feed.",
+      "setup": "Grant optional YouTube access and make YouTube Home the active non-incognito Chrome tab.",
+      "expectedStatus": "supported",
+      "expectedResult": "Treat the ordinary check wording as the same bounded on-demand feed read and direct the user to Topher's menu-bar list.",
+      "checks": ["No model is required", "One bounded extraction", "The menu-bar handoff is explicit"]
+    },
+    {
       "id": "assistant-youtube-feed-permission-denied",
       "mode": "assistant",
       "category": "youtube-feed-context",
@@ -421,6 +431,16 @@
       "expectedStatus": "supported",
       "expectedResult": "Revalidate the feed and navigate the source tab exactly once to the third listed video's application-constructed watch URL.",
       "checks": ["Exactly one tab update", "No new arbitrary URL", "The short-lived list is consumed", "No automatic retry after an unknown outcome"]
+    },
+    {
+      "id": "assistant-youtube-feed-conversational-ordinal-open",
+      "mode": "assistant",
+      "category": "youtube-feed-context",
+      "utterance": "Let's watch the third one.",
+      "setup": "Immediately after a successful feed read with at least three listed items, keep the same YouTube Home tab active.",
+      "expectedStatus": "supported",
+      "expectedResult": "Resolve the conversational lead-in to the same observed third item and navigate exactly once after revalidation.",
+      "checks": ["No semantic guessing", "Exactly one tab update", "The short-lived list is consumed"]
     },
     {
       "id": "assistant-youtube-feed-title-open",

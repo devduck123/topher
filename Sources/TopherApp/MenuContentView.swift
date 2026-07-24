@@ -355,6 +355,8 @@ private struct YouTubeFeedResultsCard: View {
             VStack(alignment: .leading, spacing: 2) {
               Text(item.title)
                 .font(.caption.weight(.medium))
+                .lineLimit(3)
+                .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
               Text(item.channel)
                 .font(.caption2)
@@ -401,12 +403,12 @@ private struct YouTubeFeedResultsCard: View {
   private var youTubeFollowUpHint: String {
     if !snapshot.titleObservationWasComplete {
       return
-        "Bounded view. Use a shown number before it expires; title uniqueness was not complete."
+        "Bounded view. Use a shown number within 90 seconds; title uniqueness was not complete."
     }
     if snapshot.presentationWasTruncated {
-      return "Bounded view. Say a shown number or one unique exact title before it expires."
+      return "Bounded view. Within 90 seconds, say a shown number or one unique exact title."
     }
-    return "Short-lived list. Say “the third one,” “number three,” or one exact title."
+    return "Within 90 seconds, say “the third one,” “number three,” or one exact title."
   }
 }
 

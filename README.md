@@ -161,18 +161,20 @@ The comparative speech benchmark is still open.
   ambiguity and incomplete-observation refusal, a five-second fingerprinted
   snapshot, extension-side revalidation immediately before mutation, and one
   non-retried activation attempt.
-- “What’s on my YouTube feed?”, “What’s YouTube recommending?”, and other
-  reviewed feed/homepage/list variants using the active regular Chrome tab only.
+- “What’s on my YouTube feed?”, “What’s YouTube recommending?”, “Check my
+  YouTube feed,” and other reviewed feed/home/list variants using the active
+  regular Chrome tab only.
   After explicit optional YouTube permission, a packaged isolated-world extractor
   returns at most 20 visible or nearby Home recommendations as strict video ID,
   bounded title, and bounded channel records. Topher shows a numbered,
   accessible, short-lived list in its menu while keeping the HUD concise.
-- “Open the third one,” “Open video three,” “number three,” “the last one,”
-  “Open the video called X,” and one bare exact listed title resolve only against
-  the latest visible 90-second in-memory feed. Bare answers never become global
-  conversational memory. Title matching is normalized exact and proceeds only
-  when the extension's bounded candidate scan proves uniqueness, even if a
-  missing channel or the 20-row presentation cap made the visible list bounded.
+- “Open the third one,” “Let’s watch the third one,” “I’ll take number seven,”
+  “Open video three,” “number three,” “the last one,” “the one called X,” and
+  one bare exact listed title resolve only against the latest visible 90-second
+  in-memory feed. Bare answers never become global conversational memory. Title
+  matching is normalized exact and proceeds only when the extension's bounded
+  candidate scan proves uniqueness, even if a missing channel or the 20-row
+  presentation cap made the visible list bounded.
   Bounded on-device speech alternatives can recover a title only when they
   converge on one exact listed video; conflicting alternatives refuse.
   Before one non-retried tab navigation, the extension rechecks permission,
@@ -583,6 +585,7 @@ mental model.
 - [Stable caret and shared technical-notation decision](docs/decisions/0023-stabilize-caret-and-share-technical-notation.md)
 - [Bounded YouTube feed-context decision](docs/decisions/0024-bounded-youtube-feed-context.md)
 - [Recoverable Chrome setup and explicit YouTube references](docs/decisions/0025-make-chrome-setup-recoverable-and-youtube-references-explicit.md)
+- [Scoped YouTube dialogue and target revalidation](docs/decisions/0026-scope-youtube-dialogue-and-revalidate-the-target.md)
 - [Build 16 verification evidence](docs/evidence/2026-07-16-build-16-semantic-web-append-and-menu-feedback.md)
 - [Build 17 verification evidence](docs/evidence/2026-07-18-build-17-focus-and-semantic-composer.md)
 - [Build 18 verification evidence](docs/evidence/2026-07-18-build-18-semantic-signals-and-notion-caret.md)
@@ -593,6 +596,7 @@ mental model.
 - [Build 20 YouTube feed-context verification](docs/evidence/2026-07-19-build-20-youtube-feed-context.md)
 - [Build 21 YouTube recovery verification](docs/evidence/2026-07-21-build-21-youtube-recovery.md)
 - [Build 22 YouTube conversation verification](docs/evidence/2026-07-22-build-22-youtube-conversation.md)
+- [Build 22 merge-readiness audit](docs/evidence/2026-07-24-build-22-youtube-merge-audit.md)
 - [Interaction modes](docs/product/interaction-modes.md)
 - [Request lifecycle and context](docs/architecture/request-lifecycle.md)
 - [Technical investigation](docs/technical-investigation.md)
